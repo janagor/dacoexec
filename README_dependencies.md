@@ -29,12 +29,18 @@ RefreshEnv.cmd # reload the environment
 ```
 
 ### Necessary Dependencies
-1. A C++ compiler that supports C++17.
-See [cppreference.com](https://en.cppreference.com/w/cpp/compiler_support)
-to see which features are supported by each compiler.
-The following compilers should work:
+1. A C++20 compiler. The library target requires `cxx_std_20`.
 
-  * [gcc 7+](https://gcc.gnu.org/)
+The compilers covered by CI are:
+
+  * GCC 12 and GCC 16
+  * Clang 16 with libc++, and Clang 22
+  * MSVC toolset 14.43 (compiler 19.43)
+  * Apple Clang from Xcode 16 or newer
+
+Nix shells for those GCC and Clang versions are documented in [README_building.md](README_building.md). The install notes below are examples for putting a compiler on `PATH`; a compiler older than the floor above is not supported.
+
+  * [GCC](https://gcc.gnu.org/)
 	<details>
 	<summary>Install command</summary>
 
@@ -51,7 +57,7 @@ The following compilers should work:
 			brew install gcc
 	</details>
 
-  * [clang 6+](https://clang.llvm.org/)
+  * [Clang 16+](https://clang.llvm.org/)
 	<details>
 	<summary>Install command</summary>
 
@@ -76,7 +82,7 @@ The following compilers should work:
 			brew install llvm
 	</details>
 
-  * [Visual Studio 2019 or higher](https://visualstudio.microsoft.com/)
+  * [Visual Studio with MSVC 14.43 or newer](https://visualstudio.microsoft.com/)
 	<details>
 	<summary>Install command + Environment setup</summary>
 

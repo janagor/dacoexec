@@ -1,3 +1,52 @@
+## Build the library
+
+`dacoexec` is a header-only C++20 library. A standalone build defaults to C++20 with extensions disabled. The public target is `dacoexec::dacoexec`.
+
+```shell
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_STANDARD=20 \
+  -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+  -DCMAKE_CXX_EXTENSIONS=OFF \
+  -Ddacoexec_BUILD_TESTS=ON \
+  -Ddacoexec_INSTALL=ON
+
+cmake --build build
+ctest --test-dir build --output-on-failure
+cmake --install build --prefix /tmp/dacoexec-install
+```
+
+Build a project that only has the installed package:
+
+```shell
+cmake -S test/fixtures/install_consumer \
+  -B /tmp/dacoexec-consumer \
+  -DCMAKE_PREFIX_PATH=/tmp/dacoexec-install
+
+cmake --build /tmp/dacoexec-consumer
+ctest --test-dir /tmp/dacoexec-consumer --output-on-failure
+```
+
+Nix provides the compilers used in development and in the compatibility matrix:
+
+```shell
+nix develop                  # Clang 22
+nix develop .#clang          # Clang 22
+nix develop .#gcc            # GCC 16
+nix develop .#clang16        # Clang 16 and its libc++
+nix develop .#gcc12          # GCC 12
+```
+
+Inside a shell, the existing presets still apply. They select C++20 and build the tests:
+
+```shell
+cmake --preset unixlike-clang-debug
+cmake --build out/build/unixlike-clang-debug
+ctest --test-dir out/build/unixlike-clang-debug --output-on-failure
+```
+
+Use `unixlike-gcc-debug` and `unixlike-gcc-release` for GCC, and the `windows-msvc-*` / `windows-clang-*` presets on Windows. A consumer that only calls `find_package(dacoexec)` does not need Mold, LLD, or Nix.
+
 ## Build Instructions
 
 A full build has different steps:
