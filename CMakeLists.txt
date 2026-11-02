@@ -1,131 +1,172 @@
 cmake_minimum_required(VERSION 3.29)
 
-# Disable modules support, this is broken with clang-tidy at the moment
+# Disable modules support. C++ module scanning is not part of this library and
+# currently breaks clang-tidy.
 cmake_policy(SET CMP0155 OLD)
 
-# This template attempts to be "fetch_content"-able
-# so that it works well with tools like CPM or other
-# manual dependency management
-
-# Only set the cxx_standard if it is not set by someone else
-if(NOT DEFINED CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 23)
+# Standalone builds default to C++20. An enclosing project may already have
+# selected a language mode; do not override it.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  if(NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 20)
+  endif()
+  set(CMAKE_CXX_EXTENSIONS OFF)
 endif()
 
-# strongly encouraged to enable this globally to avoid conflicts between
-# -Wpedantic being enabled and -std=c++20 and -std=gnu++20 for example
-# when compiling with PCH enabled
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Set the project name and language
 project(
   dacoexec
   VERSION 0.0.2
-  DESCRIPTION ""
+  DESCRIPTION "Header-only C++20 library"
   HOMEPAGE_URL "https://github.com/janagor/dacoexec"
-  LANGUAGES CXX C)
+  LANGUAGES CXX)
+
+# Set by CI to prove the selected compiler, not merely the generator.
+# CMAKE_CXX_COMPILER_VERSION is established by project() and is not written to
+# CMakeCache.txt.
+if(dacoexec_REQUIRE_CXX_COMPILER_VERSION)
+  string(
+    REPLACE "."
+            "\\."
+            _dacoexec_required_compiler_regex
+            "${dacoexec_REQUIRE_CXX_COMPILER_VERSION}")
+  if(NOT
+     CMAKE_CXX_COMPILER_VERSION
+     MATCHES
+     "^${_dacoexec_required_compiler_regex}($|\\.)")
+    message(FATAL_ERROR "CMAKE_CXX_COMPILER_VERSION is '${CMAKE_CXX_COMPILER_VERSION}' (${CMAKE_CXX_COMPILER_ID}), "
+                        "expected ${dacoexec_REQUIRE_CXX_COMPILER_VERSION}")
+  endif()
+  message(STATUS "Verified ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
 
 include(cmake/PreventInSourceBuilds.cmake)
-include(cmake/Emscripten.cmake)
+
 include(ProjectOptions.cmake)
 
 dacoexec_setup_options()
 
-dacoexec_global_options()
+if(dacoexec_BUILD_CLI AND NOT EXISTS "${PROJECT_SOURCE_DIR}/src/cli/CMakeLists.txt")
+  message(FATAL_ERROR "dacoexec_BUILD_CLI is not implemented yet. The production CLI is added in a later revision.")
+endif()
+
+if(dacoexec_BUILD_FUZZ_TESTS)
+  message(
+    FATAL_ERROR
+      "dacoexec_BUILD_FUZZ_TESTS is not implemented yet. The inherited sample harness is not a dacoexec codec test.")
+endif()
+
+if(dacoexec_BUILD_BENCHMARKS)
+  message(
+    FATAL_ERROR "dacoexec_BUILD_BENCHMARKS is not implemented yet. Codec benchmarks are added in a later revision.")
+endif()
+
+# IPO and directory-wide hardening must run for a standalone build, and only
+# then. Fetched dependencies are configured after this call.
+if(PROJECT_IS_TOP_LEVEL)
+  dacoexec_global_options()
+endif()
+
 include(Dependencies.cmake)
 dacoexec_setup_dependencies()
 
 dacoexec_local_options()
 
-# don't know if this should be set globally from here or not...
-set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-
-set(GIT_SHA
-    "Unknown"
-    CACHE STRING "SHA this build was generated from")
-string(
-  SUBSTRING "${GIT_SHA}"
-            0
-            8
-            GIT_SHORT_SHA)
-
-target_compile_features(dacoexec_options INTERFACE cxx_std_${CMAKE_CXX_STANDARD})
-
 add_library(dacoexec::dacoexec_options ALIAS dacoexec_options)
 add_library(dacoexec::dacoexec_warnings ALIAS dacoexec_warnings)
 
-#add_library(dacoexec::dacoexec_options INTERFACE IMPORTED)
-#add_library(dacoexec::dacoexec_warnings INTERFACE IMPORTED)
+add_library(dacoexec INTERFACE)
+add_library(dacoexec::dacoexec ALIAS dacoexec)
 
-# configure files based on CMake configuration options
-add_subdirectory(configured_files)
+set_target_properties(dacoexec PROPERTIES EXPORT_NAME dacoexec)
+target_compile_features(dacoexec INTERFACE cxx_std_20)
 
-# Adding the src:
+file(
+  GLOB_RECURSE
+  DACOEXEC_HEADERS
+  CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/include/dacoexec/*.hpp")
+if(NOT DACOEXEC_HEADERS)
+  message(FATAL_ERROR "No public headers found under include/dacoexec")
+endif()
+
+target_sources(
+  dacoexec
+  INTERFACE FILE_SET
+            public_headers
+            TYPE
+            HEADERS
+            BASE_DIRS
+            "${PROJECT_SOURCE_DIR}/include"
+            FILES
+            ${DACOEXEC_HEADERS})
+
+include(GNUInstallDirs)
+target_include_directories(dacoexec INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+                                              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+if(DEFINED CMAKE_CXX_STANDARD)
+  set(_dacoexec_language_mode "C++${CMAKE_CXX_STANDARD}")
+else()
+  set(_dacoexec_language_mode "compiler default; public target requires C++20")
+endif()
+message(STATUS "dacoexec ${PROJECT_VERSION}")
+message(STATUS "  compiler      : ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} (${CMAKE_CXX_COMPILER})")
+message(STATUS "  language mode : ${_dacoexec_language_mode}")
+message(STATUS "  tests         : ${dacoexec_BUILD_TESTS}")
+message(STATUS "  install       : ${dacoexec_INSTALL}")
+
 add_subdirectory(src)
 
-# Create unified web deployment directory (for WASM builds)
-if(EMSCRIPTEN)
-  dacoexec_create_web_dist()
+if(PROJECT_IS_TOP_LEVEL AND dacoexec_ENABLE_FORMATTING)
+  include(cmake/Format.cmake)
+  dacoexec_enable_formatting()
 endif()
 
-# Don't even look at tests if we're not top level
-if(NOT PROJECT_IS_TOP_LEVEL)
-  return()
-endif()
-
-include(cmake/Format.cmake)
-vkgsplat_enable_formatting()
-
-# Adding the tests:
-include(CTest)
-
-if(BUILD_TESTING)
-  message(AUTHOR_WARNING "Building Tests. Be sure to check out test/constexpr_tests.cpp for constexpr testing")
-  add_subdirectory(test)
-endif()
-
-if(dacoexec_BUILD_FUZZ_TESTS)
-  message(AUTHOR_WARNING "Building Fuzz Tests, using fuzzing sanitizer https://www.llvm.org/docs/LibFuzzer.html")
-  if(NOT dacoexec_ENABLE_SANITIZER_ADDRESS AND NOT dacoexec_ENABLE_SANITIZER_THREAD)
-    message(WARNING "You need asan or tsan enabled for meaningful fuzz testing")
+if(dacoexec_tests_enabled)
+  include(CTest)
+  if(BUILD_TESTING)
+    message(STATUS "Building tests")
+    add_subdirectory(test)
   endif()
-  add_subdirectory(fuzz_test)
-
 endif()
 
-# If MSVC is being used, and ASAN is enabled, we need to set the debugger environment
-# so that it behaves well with MSVC's debugger, and we can run the target from visual studio
-if(MSVC)
+if(MSVC AND PROJECT_IS_TOP_LEVEL)
+  include(cmake/Utilities.cmake)
   get_all_installable_targets(all_targets)
-  message("all_targets=${all_targets}")
-  set_target_properties(${all_targets} PROPERTIES VS_DEBUGGER_ENVIRONMENT "PATH=$(VC_ExecutablePath_x64);%PATH%")
+  foreach(target IN LISTS all_targets)
+    get_target_property(target_type ${target} TYPE)
+    if(target_type STREQUAL "EXECUTABLE")
+      set_target_properties(${target} PROPERTIES VS_DEBUGGER_ENVIRONMENT "PATH=$(VC_ExecutablePath_x64);%PATH%")
+    endif()
+  endforeach()
 endif()
 
-# set the startup project for the "play" button in MSVC
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT intro)
+if(dacoexec_INSTALL AND NOT CMAKE_SKIP_INSTALL_RULES)
+  include(CMakePackageConfigHelpers)
 
-if(CMAKE_SKIP_INSTALL_RULES)
-  return()
+  set(DACOEXEC_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/dacoexec")
+
+  install(
+    TARGETS dacoexec
+    EXPORT dacoexecTargets
+    FILE_SET public_headers
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+
+  install(
+    EXPORT dacoexecTargets
+    FILE dacoexecTargets.cmake
+    NAMESPACE dacoexec::
+    DESTINATION "${DACOEXEC_CMAKE_INSTALL_DIR}")
+
+  configure_package_config_file(
+    "${PROJECT_SOURCE_DIR}/cmake/dacoexecConfig.cmake.in" "${PROJECT_BINARY_DIR}/dacoexecConfig.cmake"
+    INSTALL_DESTINATION "${DACOEXEC_CMAKE_INSTALL_DIR}")
+
+  write_basic_package_version_file(
+    "${PROJECT_BINARY_DIR}/dacoexecConfigVersion.cmake"
+    VERSION "${PROJECT_VERSION}"
+    COMPATIBILITY SameMajorVersion)
+
+  install(FILES "${PROJECT_BINARY_DIR}/dacoexecConfig.cmake" "${PROJECT_BINARY_DIR}/dacoexecConfigVersion.cmake"
+          DESTINATION "${DACOEXEC_CMAKE_INSTALL_DIR}")
 endif()
-
-include(cmake/PackageProject.cmake)
-
-# Add other targets that you want installed here, by default we just package the one executable
-# we know we want to ship
-dacoexec_package_project(
-  TARGETS
-  intro
-  dacoexec_options
-  dacoexec_warnings
-  # FIXME: this does not work! CK
-  # PRIVATE_DEPENDENCIES_CONFIGURED project_options project_warnings
-)
-
-# Experience shows that explicit package naming can help make it easier to sort
-# out potential ABI related issues before they start, while helping you
-# track a build to a specific GIT SHA
-set(CPACK_PACKAGE_FILE_NAME
-    "${CMAKE_PROJECT_NAME}-${CMAKE_PROJECT_VERSION}-${GIT_SHORT_SHA}-${CMAKE_SYSTEM_NAME}-${CMAKE_BUILD_TYPE}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}"
-)
-
-include(CPack)

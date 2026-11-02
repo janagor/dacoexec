@@ -1,4 +1,4 @@
-function(vkgsplat_enable_formatting)
+function(dacoexec_enable_formatting)
   if(NOT PROJECT_IS_TOP_LEVEL)
     return()
   endif()
@@ -9,6 +9,10 @@ function(vkgsplat_enable_formatting)
   set(CMAKE_FORMAT_EXCLUDE
       "cmake/CPM\\.cmake"
       CACHE STRING "Regex of cmake files excluded from cmake-format" FORCE)
+
+  if(NOT COMMAND cpmaddpackage)
+    include("${PROJECT_SOURCE_DIR}/cmake/CPM.cmake")
+  endif()
 
   cpmaddpackage(
     NAME

@@ -1,2 +1,3 @@
-add_subdirectory(sample_library)
-add_subdirectory(ftxui_sample)
+if(dacoexec_BUILD_CLI)
+  add_subdirectory(cli)
+endif()
