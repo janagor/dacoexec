@@ -10,262 +10,495 @@ on:
       - develop
 
 env:
-  # Linux/macOS: match Nix/Docker.
   CLANG_TIDY_VERSION: "22.1.8"
-  # Windows: setup-cpp asset list has no LLVM 22 yet; compiler and clang-tidy must match.
   LLVM_VERSION_WINDOWS: "21.1.8"
-  # windows-latest ships VS 2026; setup-cpp CMake 3.31 needs a newer build for this generator.
+  # windows-latest ships Visual Studio 2026. CMake 3.31 does not know that generator.
   VS_GENERATOR: "Visual Studio 18 2026"
   CMAKE_VERSION_VS: "4.4.2"
+  # MSVC 19.43 is toolset 14.43 (VS 2022 17.13), not whatever toolset ships with VS 2026.
+  MSVC_TOOLSET_VERSION: "14.43"
+  MSVC_TOOLSET_COMPONENT: "Microsoft.VisualStudio.Component.VC.14.43.17.13.x86.x64"
   VERBOSE: 1
 
-
 jobs:
-  Test:
-    name: ${{matrix.os}} ${{matrix.compiler}} ${{matrix.build_type}} ${{matrix.packaging_maintainer_mode == 'ON' && '(maintainer mode)' || ''}}
-    runs-on: ${{ matrix.os }}
+  linux:
+    name: Linux ${{ matrix.name }} ${{ matrix.build_type }}
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
-
-      # Recommendations:
-      #   * support at least 2 operating systems
-      #   * support at least 2 compilers
-      #   * make sure all supported configurations for your project are built
-      #
-      # Disable/enable builds in this list to meet the above recommendations
-      # and your own projects needs
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-        compiler:
-          # you can specify the version after `-` like "llvm-15.0.2".
-          - llvm-22.1.8
-          - gcc-16
-        generator:
-          - "Ninja Multi-Config"
-        build_type:
-          - Release
-          - Debug
-        packaging_maintainer_mode:
-          - ON
-          - OFF
-        build_shared:
-          - OFF
-
-        exclude:
-          # mingw is determined by this author to be too buggy to support
-          - os: windows-latest
-            compiler: gcc-16
-          # setup-cpp has no LLVM 22 Windows packages; use 21.1.8 there instead (see include)
-          - os: windows-latest
-            compiler: llvm-22.1.8
-
         include:
-          # Add appropriate variables for gcov version required. This will intentionally break
-          # if you try to use a compiler that does not have gcov set
-          - compiler: gcc-16
-            gcov_executable: gcov-16
-            enable_ipo: On
-
-          - compiler: llvm-22.1.8
-            enable_ipo: Off
-            gcov_executable: "llvm-cov gcov"
-
-          - os: windows-latest
-            compiler: llvm-21.1.8
-            generator: "Ninja Multi-Config"
+          - name: gcc-12
             build_type: Debug
-            packaging_maintainer_mode: ON
-            build_shared: OFF
-            enable_ipo: Off
-            gcov_executable: "llvm-cov gcov"
-
-          - os: windows-latest
-            compiler: llvm-21.1.8
-            generator: "Ninja Multi-Config"
+            setup_compiler: ""
+            apt_packages: g++-12
+            cc: gcc-12
+            cxx: g++-12
+            version_regex: "g\\+\\+.* 12\\."
+            install_consumer: ON
+            subproject: ON
+          - name: gcc-12
+            build_type: Release
+            setup_compiler: ""
+            apt_packages: g++-12
+            cc: gcc-12
+            cxx: g++-12
+            version_regex: "g\\+\\+.* 12\\."
+            install_consumer: ON
+            subproject: OFF
+          - name: gcc-16
             build_type: Debug
-            packaging_maintainer_mode: OFF
-            build_shared: OFF
-            enable_ipo: Off
-            gcov_executable: "llvm-cov gcov"
-
-          - os: windows-latest
-            compiler: llvm-21.1.8
-            generator: "Ninja Multi-Config"
+            setup_compiler: gcc-16
+            apt_packages: ""
+            cc: gcc
+            cxx: g++
+            version_regex: "g\\+\\+.* 16\\."
+            install_consumer: ON
+            subproject: OFF
+          - name: gcc-16
             build_type: Release
-            packaging_maintainer_mode: ON
-            build_shared: OFF
-            enable_ipo: Off
-            gcov_executable: "llvm-cov gcov"
-
-          - os: windows-latest
-            compiler: llvm-21.1.8
-            generator: "Ninja Multi-Config"
-            build_type: Release
-            packaging_maintainer_mode: OFF
-            build_shared: OFF
-            enable_ipo: Off
-            gcov_executable: "llvm-cov gcov"
-
-          - os: macos-latest
-            enable_ipo: Off
-
-          # Set up preferred package generators, for given build configurations
-          - build_type: Release
-            packaging_maintainer_mode: On
-            package_generator: TBZ2
-
-          # This exists solely to make sure a non-multiconfig build works
-          - os: ubuntu-latest
-            compiler: gcc-16
-            generator: "Unix Makefiles"
+            setup_compiler: gcc-16
+            apt_packages: ""
+            cc: gcc
+            cxx: g++
+            version_regex: "g\\+\\+.* 16\\."
+            install_consumer: ON
+            subproject: OFF
+          - name: clang-16-libcxx
             build_type: Debug
-            gcov_executable: gcov-16
-            packaging_maintainer_mode: On
-            enable_ipo: Off
-
-          # Windows msvc builds
-          - os: windows-latest
-            compiler: msvc
-            generator: "Visual Studio 18 2026"
+            setup_compiler: ""
+            apt_packages: ""
+            llvm16: true
+            cc: clang
+            cxx: clang++
+            version_regex: "clang version 16\\."
+            stdlib: libc++
+            install_consumer: ON
+            subproject: OFF
+          - name: clang-16-libcxx
+            build_type: Release
+            setup_compiler: ""
+            apt_packages: ""
+            llvm16: true
+            cc: clang
+            cxx: clang++
+            version_regex: "clang version 16\\."
+            stdlib: libc++
+            install_consumer: ON
+            subproject: OFF
+          - name: clang-22
             build_type: Debug
-            packaging_maintainer_mode: On
-            build_shared: OFF
-            enable_ipo: On
-
-          - os: windows-latest
-            compiler: msvc
-            generator: "Visual Studio 18 2026"
+            setup_compiler: llvm-22.1.8
+            apt_packages: ""
+            cc: clang
+            cxx: clang++
+            version_regex: "clang version 22\\."
+            install_consumer: ON
+            subproject: ON
+          - name: clang-22
             build_type: Release
-            packaging_maintainer_mode: On
-            build_shared: OFF
-            enable_ipo: On
-
-          - os: windows-latest
-            compiler: msvc
-            generator: "Visual Studio 18 2026"
-            build_type: Debug
-            packaging_maintainer_mode: Off
-            build_shared: OFF
-            enable_ipo: On
-
-          - os: windows-latest
-            compiler: msvc
-            generator: "Visual Studio 18 2026"
-            build_type: Release
-            packaging_maintainer_mode: Off
-            build_shared: OFF
-            enable_ipo: On
-            package_generator: ZIP
-
-          - os: windows-latest
-            compiler: msvc
-            generator: "Visual Studio 18 2026"
-            build_type: Release
-            packaging_maintainer_mode: On
-            build_shared: On
-            enable_ipo: On
-
+            setup_compiler: llvm-22.1.8
+            apt_packages: ""
+            cc: clang
+            cxx: clang++
+            version_regex: "clang version 22\\."
+            install_consumer: ON
+            subproject: OFF
 
     steps:
-      - name: Check for llvm version mismatches
-        if: ${{ runner.os == 'Linux' && contains(matrix.compiler, 'llvm') && !contains(matrix.compiler, env.CLANG_TIDY_VERSION) }}
-        uses: actions/github-script@v9
-        with:
-          script: |
-            core.setFailed('There is a mismatch between configured llvm compiler and clang-tidy version chosen')
+      - uses: actions/checkout@v6
 
+      - name: Install apt packages
+        if: matrix.apt_packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Install Clang 16 with its libc++
+        if: matrix.llvm16
+        run: |
+          set -euo pipefail
+          url="https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.6/clang+llvm-16.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz"
+          root="${HOME}/llvm-16.0.6"
+          mkdir -p "${root}"
+          curl -fsSL "${url}" | tar -xJ -C "${root}" --strip-components=1
+          header=""
+          for candidate in "${root}/include/c++/v1/__config" "${root}/include/c++/v1/cstddef"; do
+            if [ -f "${candidate}" ]; then
+              header="${candidate}"
+              break
+            fi
+          done
+          if [ -z "${header}" ]; then
+            echo "Clang 16 tarball has no libc++ headers" >&2
+            exit 1
+          fi
+          libdir=""
+          for candidate in "${root}/lib" "${root}/lib/x86_64-unknown-linux-gnu"; do
+            if compgen -G "${candidate}/libc++.so*" > /dev/null || [ -f "${candidate}/libc++.a" ]; then
+              libdir="${candidate}"
+              break
+            fi
+          done
+          if [ -z "${libdir}" ]; then
+            echo "Clang 16 tarball has no libc++ library" >&2
+            exit 1
+          fi
+          {
+            echo '#include <cstddef>'
+            echo '#include <iostream>'
+            echo '#include <span>'
+            echo 'int main() {'
+            echo '  std::byte const byte{0};'
+            echo '  std::span<std::byte const> view{&byte, 1};'
+            echo '  std::cout << view.size() << std::endl;'
+            echo '  return 0;'
+            echo '}'
+          } > /tmp/dacoexec-libcxx.cpp
+          "${root}/bin/clang++" -std=c++20 -stdlib=libc++ \
+            -L"${libdir}" -Wl,-rpath,"${libdir}" \
+            /tmp/dacoexec-libcxx.cpp -o /tmp/dacoexec-libcxx
+          /tmp/dacoexec-libcxx
+          ldd /tmp/dacoexec-libcxx | grep -F "${libdir}"
+          echo "${root}/bin" >> "${GITHUB_PATH}"
+          echo "LLVM16_ROOT=${root}" >> "${GITHUB_ENV}"
+          echo "LLVM16_LIBDIR=${libdir}" >> "${GITHUB_ENV}"
+
+      - name: Setup Cache
+        uses: ./.github/actions/setup_cache
+        with:
+          compiler: ${{ matrix.name }}
+          build_type: ${{ matrix.build_type }}
+          generator: Ninja
+
+      - name: Setup Cpp
+        if: matrix.setup_compiler != ''
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: ${{ matrix.setup_compiler }}
+          cmake: true
+          ninja: true
+          ccache: true
+
+      - name: Setup Cpp tools
+        if: matrix.setup_compiler == ''
+        uses: aminya/setup-cpp@v1
+        with:
+          cmake: true
+          ninja: true
+          ccache: true
+
+      - name: Print toolchain versions
+        run: |
+          set -euo pipefail
+          cmake --version
+          if [ "${{ matrix.llvm16 }}" = "true" ]; then
+            export CC="${LLVM16_ROOT}/bin/clang"
+            export CXX="${LLVM16_ROOT}/bin/clang++"
+          else
+            export CC="${{ matrix.cc }}"
+            export CXX="${{ matrix.cxx }}"
+          fi
+          echo "CC=${CC}"
+          echo "CXX=${CXX}"
+          "${CXX}" --version
+          "${CXX}" --version | grep -E '${{ matrix.version_regex }}'
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          args=(
+            -S . -B build -G Ninja
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+            -DCMAKE_CXX_STANDARD=20
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON
+            -DCMAKE_CXX_EXTENSIONS=OFF
+            -Ddacoexec_BUILD_TESTS=ON
+            -Ddacoexec_WARNINGS_AS_ERRORS=ON
+            -Ddacoexec_TEST_INSTALL_CONSUMER=${{ matrix.install_consumer }}
+            -Ddacoexec_TEST_SUBPROJECT_CONSUMER=${{ matrix.subproject }}
+          )
+          if [ "${{ matrix.llvm16 }}" = "true" ]; then
+            args+=(
+              "-DCMAKE_C_COMPILER=${LLVM16_ROOT}/bin/clang"
+              "-DCMAKE_CXX_COMPILER=${LLVM16_ROOT}/bin/clang++"
+              "-DCMAKE_CXX_FLAGS=-stdlib=libc++"
+              "-DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++ -L${LLVM16_LIBDIR} -Wl,-rpath,${LLVM16_LIBDIR}"
+            )
+          else
+            args+=(
+              "-DCMAKE_C_COMPILER=${{ matrix.cc }}"
+              "-DCMAKE_CXX_COMPILER=${{ matrix.cxx }}"
+            )
+          fi
+          cmake "${args[@]}"
+          if [ "${{ matrix.stdlib }}" = "libc++" ]; then
+            grep -q 'stdlib=libc++' build/CMakeCache.txt
+          fi
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+  windows-msvc:
+    name: Windows MSVC ${{ matrix.build_type }} (toolset ${{ env.MSVC_TOOLSET_VERSION }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install MSVC ${{ env.MSVC_TOOLSET_VERSION }}
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $installPath) { throw "Visual Studio C++ tools were not found" }
+          Write-Host "Visual Studio: $installPath"
+          $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          & $setup modify --installPath $installPath --add ${{ env.MSVC_TOOLSET_COMPONENT }} --quiet --norestart --wait
+          if ($LASTEXITCODE -ne 0) { throw "Failed to install MSVC toolset ${{ env.MSVC_TOOLSET_VERSION }} ($LASTEXITCODE)" }
+          $cl = Get-ChildItem -Path $installPath -Recurse -Filter cl.exe |
+            Where-Object { $_.FullName -match '\\14\.43\\' } |
+            Select-Object -First 1
+          if (-not $cl) { throw "cl.exe from toolset 14.43 was not found after installation" }
+          Write-Host "Using $($cl.FullName)"
+          & $cl.FullName
+
+      - name: Setup Cache
+        uses: ./.github/actions/setup_cache
+        with:
+          compiler: msvc-14.43
+          build_type: ${{ matrix.build_type }}
+          generator: ${{ env.VS_GENERATOR }}
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1
+        with:
+          vcvarsall: true
+          cmake: ${{ env.CMAKE_VERSION_VS }}
+          ninja: true
+
+      - name: Configure
+        run: |
+          cmake --version
+          cmake -S . -B build -G "${{ env.VS_GENERATOR }}" -A x64 -T "v143,version=${{ env.MSVC_TOOLSET_VERSION }}" `
+            -DCMAKE_CXX_STANDARD=20 `
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON `
+            -DCMAKE_CXX_EXTENSIONS=OFF `
+            -Ddacoexec_BUILD_TESTS=ON `
+            -Ddacoexec_WARNINGS_AS_ERRORS=ON `
+            -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=19.43 `
+            -Ddacoexec_TEST_INSTALL_CONSUMER=ON `
+            -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }}
+
+      - name: Test
+        working-directory: build
+        run: ctest -C ${{ matrix.build_type }} --output-on-failure
+
+  windows-clang-cl:
+    name: Windows clang-cl 21 Debug
+    runs-on: windows-latest
+    steps:
       - uses: actions/checkout@v6
 
       - name: Setup Cache
         uses: ./.github/actions/setup_cache
         with:
-          compiler: ${{ matrix.compiler }}
-          build_type: ${{ matrix.build_type }}
-          packaging_maintainer_mode: ${{ matrix.packaging_maintainer_mode }}
-          generator: ${{ matrix.generator }}
-
-      - name: Project Name
-        uses: cardinalby/export-env-action@v2
-        with:
-          envFile: '.github/constants.env'
-
+          compiler: llvm-${{ env.LLVM_VERSION_WINDOWS }}
+          build_type: Debug
+          generator: Ninja
 
       - name: Setup Cpp
         uses: aminya/setup-cpp@v1
         with:
-          compiler: ${{ matrix.compiler }}
-          vcvarsall: ${{ contains(matrix.os, 'windows' )}}
-
-          cmake: ${{ runner.os != 'Windows' || !contains(matrix.generator, 'Visual Studio') && true || env.CMAKE_VERSION_VS }}
+          compiler: llvm-${{ env.LLVM_VERSION_WINDOWS }}
+          vcvarsall: true
+          cmake: true
           ninja: true
-          vcpkg: false
-          ccache: true
-          clangtidy: ${{ matrix.packaging_maintainer_mode == 'ON' && (runner.os == 'Windows' && env.LLVM_VERSION_WINDOWS || env.CLANG_TIDY_VERSION) || false }}
 
-
-          cppcheck: true
-
-          gcovr: true
-          opencppcoverage: true
-
-      - name: Configure CMake
+      - name: Print toolchain versions
         run: |
           cmake --version
-          cmake -S . -B ./build -G "${{matrix.generator}}" -D${{ env.PROJECT_NAME }}_ENABLE_IPO=${{matrix.enable_ipo }} -DCMAKE_BUILD_TYPE:STRING=${{matrix.build_type}} -D${{ env.PROJECT_NAME }}_PACKAGING_MAINTAINER_MODE:BOOL=${{matrix.packaging_maintainer_mode}} -D${{ env.PROJECT_NAME }}_ENABLE_COVERAGE:BOOL=${{ matrix.build_type == 'Debug' }} -DGIT_SHA:STRING=${{ github.sha }}
+          clang-cl --version
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Debug `
+            -DCMAKE_C_COMPILER=clang-cl `
+            -DCMAKE_CXX_COMPILER=clang-cl `
+            -DCMAKE_CXX_STANDARD=20 `
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON `
+            -DCMAKE_CXX_EXTENSIONS=OFF `
+            -Ddacoexec_BUILD_TESTS=ON `
+            -Ddacoexec_WARNINGS_AS_ERRORS=ON `
+            -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=21 `
+            -Ddacoexec_TEST_INSTALL_CONSUMER=OFF `
+            -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
 
       - name: Build
-        # Execute the build.  You can specify a specific target with "--target <NAME>"
+        run: cmake --build build
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+  macos:
+    name: macOS Apple Clang Release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Require Xcode 16 or newer
         run: |
-          cmake --build ./build --config ${{matrix.build_type}}
+          set -euo pipefail
+          xcodebuild -version
+          cmake --version || true
+          major="$(xcodebuild -version | awk '/^Xcode / { split($2, a, "."); print a[1] }')"
+          echo "Xcode major version: ${major}"
+          if [ "${major}" -lt 16 ]; then
+            echo "Apple Clang from Xcode 16 or newer is required"
+            exit 1
+          fi
+          clang++ --version
 
-      - name: Unix - Test
-        if: runner.os != 'Windows'
-        working-directory: ./build
-        # Execute tests defined by the CMake configuration.
-        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-        run: ctest -C ${{matrix.build_type}}
-
-      - name: Unix - Coverage
-        if: runner.os != 'Windows' && matrix.build_type == 'Debug'
-        working-directory: ./build
-        run: |
-          gcovr -j ${{env.nproc}} --root ../ --print-summary --xml-pretty --xml coverage.xml . --gcov-executable '${{ matrix.gcov_executable }}'
-
-      - name: Windows - Test
-        if: runner.os == 'Windows'
-        working-directory: ./build
-        run: ctest -C ${{matrix.build_type}}
-
-      - name: Windows - Coverage
-        if: runner.os == 'Windows' && matrix.build_type == 'Debug'
-        working-directory: ./build
-        run: |
-          OpenCppCoverage.exe --export_type cobertura:coverage.xml --cover_children -- ctest -C ${{matrix.build_type}}
-
-      - name: CPack
-        if: matrix.package_generator != ''
-        working-directory: ./build
-        run: |
-          cpack -C ${{matrix.build_type}} -G ${{matrix.package_generator}}
-
-      - name: Publish Tagged Release
-        uses: softprops/action-gh-release@v3
-        if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.package_generator != '' }}
+      - name: Setup Cache
+        uses: ./.github/actions/setup_cache
         with:
-          files: |
-            build/*-*${{ matrix.build_type }}*-*.*
+          compiler: apple-clang
+          build_type: Release
+          generator: Ninja
 
-
-      - name: Publish to codecov
-        if: matrix.build_type == 'Debug'
-        uses: codecov/codecov-action@v5
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1
         with:
-          # Upload when CODECOV_TOKEN is configured; do not fail forks without a token.
-          fail_ci_if_error: false
-          flags: ${{ runner.os }}
-          name: ${{ runner.os }}-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./build/coverage.xml
+          cmake: true
+          ninja: true
+
+      - name: Configure
+        run: |
+          cmake --version
+          clang++ --version
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_WARNINGS_AS_ERRORS=ON \
+            -Ddacoexec_TEST_INSTALL_CONSUMER=OFF \
+            -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+  sanitizers:
+    name: Clang 22 ASan UBSan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm-${{ env.CLANG_TIDY_VERSION }}
+          cmake: true
+          ninja: true
+
+      - name: Configure
+        run: |
+          cmake --version
+          clang++ --version
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_WARNINGS_AS_ERRORS=ON \
+            -Ddacoexec_ENABLE_SANITIZER_ADDRESS=ON \
+            -Ddacoexec_ENABLE_SANITIZER_UNDEFINED=ON \
+            -Ddacoexec_TEST_INSTALL_CONSUMER=OFF \
+            -Ddacoexec_TEST_SUBPROJECT_CONSUMER=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+  clang-tidy:
+    name: clang-tidy 22
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm-${{ env.CLANG_TIDY_VERSION }}
+          clangtidy: ${{ env.CLANG_TIDY_VERSION }}
+          cmake: true
+          ninja: true
+
+      - name: Configure and build
+        run: |
+          clang-tidy --version
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_WARNINGS_AS_ERRORS=ON \
+            -Ddacoexec_ENABLE_CLANG_TIDY=ON \
+            -Ddacoexec_TEST_INSTALL_CONSUMER=OFF \
+            -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
+          cmake --build build
+
+  format:
+    name: clang-format and cmake-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup clang-format
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm-${{ env.CLANG_TIDY_VERSION }}
+          clangformat: ${{ env.CLANG_TIDY_VERSION }}
+
+      - name: Check C++ formatting
+        run: |
+          set -euo pipefail
+          clang-format --version
+          mapfile -t sources < <(git ls-files '*.cpp' '*.hpp' '*.h' '*.cc' '*.cxx')
+          clang-format --dry-run --Werror --style=file "${sources[@]}"
+
+      - name: Check CMake formatting
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user 'cmakelang==0.6.13'
+          export PATH="${HOME}/.local/bin:${PATH}"
+          cmake-format --version
+          mapfile -t files < <(git ls-files 'CMakeLists.txt' '*.cmake' ':!:cmake/CPM.cmake')
+          cmake-format --check -c .cmake-format.yaml "${files[@]}"

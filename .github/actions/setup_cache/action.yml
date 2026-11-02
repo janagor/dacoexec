@@ -12,8 +12,9 @@ inputs:
     required: true
     type: string
   packaging_maintainer_mode:
-    required: true
+    required: false
     type: string
+    default: "OFF"
 
 
 runs:
