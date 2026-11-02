@@ -1,12 +1,15 @@
-#include <catch2/catch_test_macros.hpp>
+#include <dacoexec/dacoexec.hpp>
 
-#include <dacoexec/sample_library.hpp>
+#include <cstddef>
+#include <ranges>
+#include <span>
 
-TEST_CASE("Factorials are computed with constexpr", "[factorial]")
-{
-  STATIC_REQUIRE(FactorialConstexpr(0) == 1);
-  STATIC_REQUIRE(FactorialConstexpr(1) == 1);
-  STATIC_REQUIRE(FactorialConstexpr(2) == 2);
-  STATIC_REQUIRE(FactorialConstexpr(3) == 6);
-  STATIC_REQUIRE(FactorialConstexpr(10) == 3628800);
-}
+#if defined(_MSVC_LANG)
+static_assert(_MSVC_LANG >= 202002L);
+#else
+static_assert(__cplusplus >= 202002L);
+#endif
+
+static_assert(std::ranges::input_range<std::span<std::byte const>>);
+
+int main() { return 0; }

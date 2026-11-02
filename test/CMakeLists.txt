@@ -1,127 +1,117 @@
-cmake_minimum_required(VERSION 3.15...3.23)
+include(CTest)
 
-project(
-  CmakeConfigPackageTests
-  VERSION ${PROJECT_VERSION}
-  LANGUAGES CXX)
-
-# Workaround clang>=22 flagging __COUNTER__ as c2y-extension
+# Workaround clang>=22 flagging __COUNTER__ as a C2y extension inside Catch2.
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 22)
-  add_definitions(-DCATCH_CONFIG_NO_COUNTER)
+  set(dacoexec_catch_compile_definitions CATCH_CONFIG_NO_COUNTER)
 endif()
 
-# ---- Test as standalone project the exported config package ----
+get_target_property(dacoexec_type dacoexec TYPE)
+if(NOT
+   dacoexec_type
+   STREQUAL
+   "INTERFACE_LIBRARY")
+  message(FATAL_ERROR "dacoexec is ${dacoexec_type}, expected INTERFACE_LIBRARY")
+endif()
 
-if(PROJECT_IS_TOP_LEVEL OR TEST_INSTALLED_VERSION)
-  enable_testing()
+get_target_property(dacoexec_link_libs dacoexec INTERFACE_LINK_LIBRARIES)
+if(dacoexec_link_libs)
+  foreach(lib IN LISTS dacoexec_link_libs)
+    if(lib MATCHES "Catch2|CLI11|stdexec|fmt::|spdlog|ftxui|dacoexec_options|dacoexec_warnings")
+      message(FATAL_ERROR "Public target links ${lib}")
+    endif()
+  endforeach()
+endif()
 
-  find_package(dacoexec CONFIG REQUIRED) # for intro, project_options, ...
-
-  if(NOT TARGET dacoexec_options)
-    message(FATAL_ERROR "Required config package not found!")
-    return() # be strictly paranoid for Template Janitor github action! CK
+if(NOT COMMAND catch_discover_tests)
+  if(DEFINED Catch2_SOURCE_DIR)
+    list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
   endif()
+  if(DEFINED Catch2_DIR)
+    list(APPEND CMAKE_MODULE_PATH "${Catch2_DIR}")
+  endif()
+  include(Catch)
 endif()
 
-# ---- Dependencies ----
-
-include(${Catch2_SOURCE_DIR}/extras/Catch.cmake)
-
-# Provide a simple smoke test to make sure that the CLI works and can display a --help message
-add_test(NAME cli.has_help COMMAND intro --help)
-
-# CMake-script regression tests for cmake/Sanitizers.cmake (issue #141).
 add_test(NAME cmake.sanitizers.apple_excludes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_apple_excludes_leak.cmake)
 add_test(NAME cmake.sanitizers.non_apple_includes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_non_apple_includes_leak.cmake)
 
-# Provide a test to verify that the version being reported from the application
-# matches the version given to CMake. This will be important once you package
-# your program. Real world shows that this is the kind of simple mistake that is easy
-# to make, but also easy to test for.
-add_test(NAME cli.version_matches COMMAND intro --version)
-set_tests_properties(cli.version_matches PROPERTIES PASS_REGULAR_EXPRESSION "${PROJECT_VERSION}")
-
-add_executable(tests tests.cpp)
+add_executable(dacoexec_tests tests.cpp)
 target_link_libraries(
-  tests
-  PRIVATE dacoexec::dacoexec_warnings
-          dacoexec::dacoexec_options
-          dacoexec::sample_library
+  dacoexec_tests
+  PRIVATE dacoexec::dacoexec
+          dacoexec_options
+          dacoexec_warnings
           Catch2::Catch2WithMain)
+if(dacoexec_catch_compile_definitions)
+  target_compile_definitions(dacoexec_tests PRIVATE ${dacoexec_catch_compile_definitions})
+endif()
+if(MSVC)
+  target_compile_options(dacoexec_tests PRIVATE /Zc:__cplusplus)
+endif()
+dacoexec_configure_linker(dacoexec_tests)
+catch_discover_tests(dacoexec_tests)
 
-dacoexec_configure_linker(tests)
+add_executable(dacoexec_constexpr_tests constexpr_tests.cpp)
+target_link_libraries(dacoexec_constexpr_tests PRIVATE dacoexec::dacoexec dacoexec_options dacoexec_warnings)
+if(MSVC)
+  target_compile_options(dacoexec_constexpr_tests PRIVATE /Zc:__cplusplus)
+endif()
+dacoexec_configure_linker(dacoexec_constexpr_tests)
+add_test(NAME constexpr.cxx20 COMMAND dacoexec_constexpr_tests)
 
-if(WIN32 AND BUILD_SHARED_LIBS)
-  add_custom_command(
-    TARGET tests
-    PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:tests> $<TARGET_FILE_DIR:tests>
-    COMMAND_EXPAND_LISTS)
+# Infrastructure tests reconfigure the project. Give them the same compiler the
+# current build selected, including extra standard-library flags.
+set(dacoexec_infrastructure_arguments
+    -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+    -DBUILD_DIR=${PROJECT_BINARY_DIR}
+    -DGENERATOR=${CMAKE_GENERATOR}
+    -DGENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}
+    -DGENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}
+    -DBUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DCXX_COMPILER=${CMAKE_CXX_COMPILER}
+    -DC_COMPILER=${CMAKE_C_COMPILER}
+    "-DCXX_FLAGS=${CMAKE_CXX_FLAGS}"
+    "-DLINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
+    -DCONFIG=$<CONFIG>)
+
+add_test(NAME configure.core_only COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -P
+                                          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_core_only_configure.cmake)
+set_tests_properties(
+  configure.core_only
+  PROPERTIES TIMEOUT
+             600
+             RUN_SERIAL
+             TRUE)
+
+add_test(NAME configure.global_options COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -P
+                                               ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_global_options.cmake)
+set_tests_properties(
+  configure.global_options
+  PROPERTIES TIMEOUT
+             600
+             RUN_SERIAL
+             TRUE)
+
+if(dacoexec_TEST_SUBPROJECT_CONSUMER)
+  add_test(NAME subproject.consumer COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -P
+                                            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_subproject_consumer.cmake)
+  set_tests_properties(
+    subproject.consumer
+    PROPERTIES TIMEOUT
+               900
+               RUN_SERIAL
+               TRUE)
 endif()
 
-# automatically discover tests that are defined in catch based test files you can modify the unittests. Set TEST_PREFIX
-# to whatever you want, or use different for different binaries
-catch_discover_tests(
-  tests
-  TEST_PREFIX
-  "unittests."
-  REPORTER
-  XML
-  OUTPUT_DIR
-  .
-  OUTPUT_PREFIX
-  "unittests."
-  OUTPUT_SUFFIX
-  .xml)
-
-# Add a file containing a set of constexpr tests
-add_executable(constexpr_tests constexpr_tests.cpp)
-target_link_libraries(
-  constexpr_tests
-  PRIVATE dacoexec::dacoexec_warnings
-          dacoexec::dacoexec_options
-          dacoexec::sample_library
-          Catch2::Catch2WithMain)
-
-dacoexec_configure_linker(constexpr_tests)
-
-catch_discover_tests(
-  constexpr_tests
-  TEST_PREFIX
-  "constexpr."
-  REPORTER
-  XML
-  OUTPUT_DIR
-  .
-  OUTPUT_PREFIX
-  "constexpr."
-  OUTPUT_SUFFIX
-  .xml)
-
-# Disable the constexpr portion of the test, and build again this allows us to have an executable that we can debug when
-# things go wrong with the constexpr testing
-add_executable(relaxed_constexpr_tests constexpr_tests.cpp)
-target_link_libraries(
-  relaxed_constexpr_tests
-  PRIVATE dacoexec::dacoexec_warnings
-          dacoexec::dacoexec_options
-          dacoexec::sample_library
-          Catch2::Catch2WithMain)
-target_compile_definitions(relaxed_constexpr_tests PRIVATE -DCATCH_CONFIG_RUNTIME_STATIC_REQUIRE)
-
-dacoexec_configure_linker(relaxed_constexpr_tests)
-
-catch_discover_tests(
-  relaxed_constexpr_tests
-  TEST_PREFIX
-  "relaxed_constexpr."
-  REPORTER
-  XML
-  OUTPUT_DIR
-  .
-  OUTPUT_PREFIX
-  "relaxed_constexpr."
-  OUTPUT_SUFFIX
-  .xml)
+if(dacoexec_TEST_INSTALL_CONSUMER AND dacoexec_INSTALL)
+  add_test(NAME install.consumer COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -P
+                                         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_install_consumer.cmake)
+  set_tests_properties(
+    install.consumer
+    PROPERTIES TIMEOUT
+               900
+               RUN_SERIAL
+               TRUE)
+endif()
