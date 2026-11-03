@@ -101,6 +101,41 @@ auto const padding = writer.finish();// encoded == {0xB9}, padding == 0
 
 A complete byte sequence round-trips: reading it with `views::bits` and writing those bits back produces the same bytes, with a padding count of 0. Padding is not a payload length. Callers that need to ignore trailing bits keep that count themselves.
 
+## Huffman lengths
+
+`dacoexec::huffman::count_frequencies` counts byte symbols in one input range. `dacoexec::huffman::accumulate_frequencies` adds the same counts into an existing table, so a histogram can grow without keeping the bytes.
+
+```cpp
+#include <dacoexec/dacoexec.hpp>
+
+#include <string_view>
+
+int main()
+{
+  std::string_view input = "AAAAABBCD";
+
+  auto frequencies = dacoexec::huffman::count_frequencies(input);
+  auto lengths = dacoexec::huffman::build_code_lengths(frequencies);
+
+  return lengths[static_cast<unsigned char>('A')] == 1 ? 0 : 1;
+}
+```
+
+The input is any `dacoexec::byte_input_range`: `std::byte`, `char`, `unsigned char`, `signed char`, or `char8_t`, including move-only, unsized, and single-pass ranges. Each element is converted to an unsigned byte before it is used as an index. Signed character values keep their low eight bits, so `0x00`, `0x80`, and `0xFF` stay distinct.
+
+The table holds 256 `std::uint64_t` counters (2048 bytes). Counting walks the input once. A counter that would pass the maximum `std::uint64_t` throws `std::overflow_error` (`Huffman frequency counter overflow`). `count_frequencies` returns a finished table, or it throws and the caller receives nothing. `accumulate_frequencies` can leave earlier increments applied when a later byte throws. An exception from the source propagates unchanged.
+
+`dacoexec::huffman::build_code_lengths` returns one `std::uint8_t` length per byte value. Zero means the symbol is absent. A present symbol receives a length of at least 1. An empty table is all zeros. One present symbol receives length 1. Two present symbols both receive length 1.
+
+Ties break in a fixed order: lower frequency, then the smaller symbol contained in the subtree, then the earlier node. The same table yields the same lengths on every run. Construction uses a fixed array of 511 nodes and performs no dynamic allocation. A parent frequency that would pass the maximum `std::uint64_t` throws `std::overflow_error` (`Huffman tree frequency overflow`).
+
+Lengths are the leaf depths of that tree and can be as large as 255. With two or more present symbols they form a complete prefix code: the Kraft sum is 1, and the weighted path length is optimal. Canonical codewords are assigned from these lengths later. This step produces lengths only.
+
+```cpp
+auto frequencies = dacoexec::huffman::count_frequencies(block.bytes_);
+auto lengths = dacoexec::huffman::build_code_lengths(frequencies);
+```
+
 ## Install
 
 ```shell
