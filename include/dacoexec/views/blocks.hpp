@@ -1,6 +1,8 @@
 #pragma once
 
 #include <dacoexec/concepts.hpp>
+#include <dacoexec/detail/buffer.hpp>
+#include <dacoexec/detail/byte.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -10,41 +12,10 @@
 #include <optional>
 #include <ranges>
 #include <stdexcept>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace dacoexec {
-namespace detail {
-
-  inline constexpr std::size_t kBlockGrowthOrigin = 4096;
-
-  template<class T> constexpr std::byte ToByte(T value) noexcept
-  {
-    using Plain = std::remove_cv_t<T>;
-    if constexpr (std::same_as<Plain, std::byte>) {
-      return value;
-    } else if constexpr (std::same_as<Plain, unsigned char>) {
-      return static_cast<std::byte>(value);
-    } else {
-      static_assert(std::same_as<Plain, char> || std::same_as<Plain, signed char> || std::same_as<Plain, char8_t>);
-      return static_cast<std::byte>(static_cast<unsigned char>(value));
-    }
-  }
-
-  // Next vector capacity while filling one block. The first reservation is at
-  // most 4096 bytes, later steps double, and the result never exceeds the
-  // configured block size. Doubling is skipped when it would overflow size_t.
-  [[nodiscard]] constexpr std::size_t NextBlockCapacity(std::size_t capacity, std::size_t block_size) noexcept
-  {
-    if (capacity >= block_size) { return block_size; }
-    if (capacity == 0) { return block_size < kBlockGrowthOrigin ? block_size : kBlockGrowthOrigin; }
-    if (capacity > (std::numeric_limits<std::size_t>::max() / 2)) { return block_size; }
-    std::size_t const doubled = capacity * 2;
-    return doubled < block_size ? doubled : block_size;
-  }
-
-}// namespace detail
 
 // One owned slice of a byte stream.
 //
