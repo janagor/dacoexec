@@ -21,6 +21,30 @@ target_link_libraries(consumer PRIVATE dacoexec::dacoexec)
 
 Linking the target requires C++20. Consumers may compile as C++20 or any later standard.
 
+## Blocks
+
+`dacoexec::views::blocks` is a lazy C++20 range adaptor. It partitions a byte input range into move-only blocks of at most N bytes. Each block owns its payload and a zero-based sequence number, so the block can outlive the source and be moved into later work.
+
+```cpp
+#include <dacoexec/dacoexec.hpp>
+
+auto blocks = input | dacoexec::views::blocks(1 << 20);
+
+for (auto block : blocks) {
+  process(std::move(block));
+}
+```
+
+The source is any range of `std::byte`, `char`, `unsigned char`, `signed char`, or `char8_t`, including move-only and single-pass ranges. A move-only lvalue view is passed with `std::move`, matching C++20 `viewable_range`. `dacoexec::views::blocks(n)(input)` is the same operation as the pipe.
+
+`dacoexec::byte_block` is move-only. `sequence` is a `std::uint64_t` starting at zero. `bytes` is that block's `std::vector<std::byte>`. The final block may be shorter than N. Empty input yields no blocks. A block size of zero throws `std::invalid_argument`. Sequence numbers stop with `std::overflow_error` at the end of the `std::uint64_t` space.
+
+Iteration is single-pass. Construction reads nothing. `begin()` reads at most the first block, and each increment reads only the next one. Dereference returns `byte_block&&`. A block can be moved out of the current position; a later dereference without advancing observes that moved-from value. Advancing invalidates references to the staged block. Blocks already moved into the caller stay valid after the view and the source are destroyed. Moving the view transfers its place in the input, including a block already staged. A moved-from view is empty.
+
+The adaptor retains one staged block. That buffer starts at a capacity of at most 4096 bytes and doubles until it reaches N, so a short input does not allocate an N-byte block.
+
+An exception from the source, including a failure while a block is only partly filled, propagates unchanged. The unfinished block is discarded.
+
 ## Install
 
 ```shell
