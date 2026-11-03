@@ -76,8 +76,10 @@ public:
 
     void operator++(int) { ++*this; }
 
-    [[nodiscard]] friend bool operator==(Iterator const &it, std::default_sentinel_t) noexcept
-    { return it.parent_->cursor_ == it.parent_->data_.size(); }
+    // A member, not a hidden friend: GCC 12 does not let a friend defined in
+    // this nested iterator reach ByteSource's private state.
+    [[nodiscard]] bool operator==(std::default_sentinel_t) const noexcept
+    { return parent_->cursor_ == parent_->data_.size(); }
 
   private:
     friend class ByteSource;
