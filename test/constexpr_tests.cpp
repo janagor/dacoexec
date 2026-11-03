@@ -1,3 +1,7 @@
+#include <dacoexec/huffman/frequency.hpp>
+
+#include <dacoexec/huffman/tree.hpp>
+
 #include <dacoexec/bit/bit_output_iterator.hpp>
 
 #include <dacoexec/views/bits.hpp>
@@ -6,12 +10,14 @@
 
 #include <dacoexec/dacoexec.hpp>
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <ranges>
 #include <span>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -121,5 +127,71 @@ concept can_make_writer = requires(Out output) { dacoexec::bit_writer<Out>{ std:
 static_assert(can_make_writer<byte_out>);
 static_assert(!can_make_writer<std::vector<std::byte>::const_iterator>);
 static_assert(!can_make_writer<int>);
+
+static_assert(dacoexec::huffman::alphabet_size == 256);
+static_assert(std::is_same_v<dacoexec::huffman::frequency_table, std::array<std::uint64_t, 256>>);
+static_assert(std::is_same_v<dacoexec::huffman::code_length_table, std::array<std::uint8_t, 256>>);
+
+constexpr std::string_view huffman_sample = "AAAAABBCD";
+constexpr auto huffman_frequencies = dacoexec::huffman::count_frequencies(huffman_sample);
+static_assert(huffman_frequencies.at(static_cast<unsigned char>('A')) == 5);
+static_assert(huffman_frequencies.at(static_cast<unsigned char>('B')) == 2);
+static_assert(huffman_frequencies.at(static_cast<unsigned char>('C')) == 1);
+static_assert(huffman_frequencies.at(static_cast<unsigned char>('D')) == 1);
+static_assert(huffman_frequencies.at(0) == 0);
+
+constexpr auto huffman_lengths = dacoexec::huffman::build_code_lengths(huffman_frequencies);
+static_assert(huffman_lengths.at(static_cast<unsigned char>('A')) == 1);
+static_assert(huffman_lengths.at(static_cast<unsigned char>('B')) == 2);
+static_assert(huffman_lengths.at(static_cast<unsigned char>('C')) == 3);
+static_assert(huffman_lengths.at(static_cast<unsigned char>('D')) == 3);
+static_assert(huffman_lengths.at(0) == 0);
+
+static_assert(dacoexec::huffman::count_frequencies(std::string_view{}) == dacoexec::huffman::frequency_table{});
+static_assert(dacoexec::huffman::build_code_lengths({}) == dacoexec::huffman::code_length_table{});
+
+constexpr auto only_a_lengths =
+  dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "A" }));
+
+constexpr bool single_symbol_length(dacoexec::huffman::code_length_table const &lengths, unsigned char symbol)
+{
+  if (lengths.at(symbol) != 1) { return false; }
+  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+    if (index == symbol) { continue; }
+    if (lengths.at(index) != 0) { return false; }
+  }
+  return true;
+}
+
+static_assert(single_symbol_length(only_a_lengths, static_cast<unsigned char>('A')));
+
+constexpr std::array<char, 2> huffman_pair{ { 'X', 'Y' } };
+constexpr auto pair_lengths = dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(huffman_pair));
+static_assert(pair_lengths.at(static_cast<unsigned char>('X')) == 1);
+static_assert(pair_lengths.at(static_cast<unsigned char>('Y')) == 1);
+static_assert(pair_lengths.at(static_cast<unsigned char>('Z')) == 0);
+
+constexpr std::array<unsigned char, 3> huffman_bytes{ { 0x00, 0x80, 0xFF } };
+constexpr auto byte_frequencies = dacoexec::huffman::count_frequencies(huffman_bytes);
+static_assert(byte_frequencies.at(0x00) == 1);
+static_assert(byte_frequencies.at(0x80) == 1);
+static_assert(byte_frequencies.at(0xFF) == 1);
+static_assert(byte_frequencies.at(1) == 0);
+
+constexpr auto signed_all_ones = std::bit_cast<signed char>(static_cast<unsigned char>(0xFF));
+constexpr std::array<signed char, 1> signed_bytes{ { signed_all_ones } };
+constexpr auto signed_frequencies = dacoexec::huffman::count_frequencies(signed_bytes);
+static_assert(signed_frequencies.at(0xFF) == 1);
+static_assert(signed_frequencies.at(0) == 0);
+
+constexpr auto accumulated_frequencies = [] {
+  dacoexec::huffman::frequency_table table{};
+  dacoexec::huffman::accumulate_frequencies(table, std::string_view{ "AA" });
+  dacoexec::huffman::accumulate_frequencies(table, std::string_view{ "ABB" });
+  return table;
+}();
+static_assert(accumulated_frequencies.at(static_cast<unsigned char>('A')) == 3);
+static_assert(accumulated_frequencies.at(static_cast<unsigned char>('B')) == 2);
+static_assert(accumulated_frequencies.at(0) == 0);
 
 int main() { return 0; }

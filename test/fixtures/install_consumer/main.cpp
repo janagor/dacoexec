@@ -1,4 +1,6 @@
 #include <dacoexec/bit/bit_output_iterator.hpp>
+#include <dacoexec/huffman/frequency.hpp>
+#include <dacoexec/huffman/tree.hpp>
 #include <dacoexec/views/bits.hpp>
 #include <dacoexec/views/buffered_bytes.hpp>
 
@@ -13,6 +15,7 @@
 #include <iterator>
 #include <ranges>
 #include <span>
+#include <string_view>
 #include <vector>
 
 int main()
@@ -69,6 +72,12 @@ int main()
     buffered_writer.write_bit(bit);
   }
   if (buffered_writer.finish() != 0 || windowed != input) { return 5; }
+
+  std::string_view const sample = "AAAAABBCD";
+  auto const frequencies = dacoexec::huffman::count_frequencies(sample);
+  auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
+  unsigned char const letter_a = static_cast<unsigned char>('A');
+  if (frequencies.at(letter_a) != 5 || lengths.at(letter_a) != 1) { return 6; }
 
   std::cout << "dacoexec install consumer ok\n";
   return 0;

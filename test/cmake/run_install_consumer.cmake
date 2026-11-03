@@ -24,6 +24,10 @@ endif()
 if(NOT EXISTS "${prefix_a}/include/dacoexec/dacoexec.hpp")
   message(FATAL_ERROR "Installed public header is missing from ${prefix_a}")
 endif()
+if(NOT EXISTS "${prefix_a}/include/dacoexec/huffman/frequency.hpp"
+   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/tree.hpp")
+  message(FATAL_ERROR "Installed Huffman headers are missing from ${prefix_a}")
+endif()
 if(EXISTS "${prefix_a}/include/dacoexec/sample_library.hpp"
    OR EXISTS "${prefix_a}/include/dacoexec/sample_library_export.hpp")
   message(FATAL_ERROR "The sample library header was installed")
