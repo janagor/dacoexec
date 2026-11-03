@@ -3,19 +3,20 @@
 #include <fmt/base.h>
 #include <span>
 
-[[nodiscard]] auto SumValues(uint8_t const *data, size_t size)
+[[nodiscard]] auto sum_values(uint8_t const *data, size_t size)
 {
-  constexpr auto kScale = 1000;
+  constexpr auto scale = 1000;
 
   int value = 0;
-  for (auto const byte : std::span{ data, size }) { value += static_cast<int>(byte) * kScale; }
+  for (auto const byte : std::span{ data, size }) { value += static_cast<int>(byte) * scale; }
   return value;
 }
 
 // Fuzzer that attempts to invoke undefined behavior for signed integer overflow
 // cppcheck-suppress unusedFunction symbolName=LLVMFuzzerTestOneInput
+// NOLINTNEXTLINE(readability-identifier-naming): libFuzzer requires this entry point.
 extern "C" auto LLVMFuzzerTestOneInput(uint8_t const *data, size_t size) -> int
 {
-  fmt::print("Value sum: {}, len{}\n", SumValues(data, size), size);
+  fmt::print("Value sum: {}, len{}\n", sum_values(data, size), size);
   return 0;
 }

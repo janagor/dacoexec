@@ -37,10 +37,10 @@ int main()
   std::uint64_t sequence = 0;
   std::vector<std::byte> flattened;
   for (auto block : input | dacoexec::views::blocks(4)) {
-    if (block.sequence != sequence) { return 1; }
+    if (block.sequence_ != sequence) { return 1; }
     ++sequence;
-    sizes.push_back(block.bytes.size());
-    flattened.insert(flattened.end(), block.bytes.begin(), block.bytes.end());
+    sizes.push_back(block.bytes_.size());
+    flattened.insert(flattened.end(), block.bytes_.begin(), block.bytes_.end());
   }
 
   std::vector<std::size_t> const expected_sizes{ 4, 1 };

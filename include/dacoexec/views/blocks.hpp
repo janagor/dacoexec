@@ -19,18 +19,18 @@ namespace dacoexec {
 
 // One owned slice of a byte stream.
 //
-// sequence starts at zero for the first block and increases by one. bytes is
+// sequence_ starts at zero for the first block and increases by one. bytes_ is
 // the block's own storage. The type is move-only so a block is transferred
 // instead of copied. Moved-from blocks keep a valid sequence and a valid,
 // unspecified buffer.
-struct byte_block// NOLINT(readability-identifier-naming)
+struct byte_block
 {
-  std::uint64_t sequence = 0;
-  std::vector<std::byte> bytes;
+  std::uint64_t sequence_ = 0;
+  std::vector<std::byte> bytes_;
 
   byte_block() = default;
 
-  byte_block(std::uint64_t seq, std::vector<std::byte> data) noexcept : sequence(seq), bytes(std::move(data)) {}
+  byte_block(std::uint64_t seq, std::vector<std::byte> data) noexcept : sequence_(seq), bytes_(std::move(data)) {}
 
   byte_block(byte_block &&) noexcept = default;
   byte_block &operator=(byte_block &&) noexcept = default;
@@ -71,52 +71,51 @@ struct byte_block// NOLINT(readability-identifier-naming)
 // unchanged.
 template<std::ranges::view V>
   requires byte_input_range<V>
-class blocks_view// NOLINT(readability-identifier-naming)
-  : public std::ranges::view_interface<blocks_view<V>>
+class blocks_view : public std::ranges::view_interface<blocks_view<V>>
 {
-  struct State
+  struct state
   {
-    State(V source, std::size_t size) : base(std::move(source)), block_size(size) {}
+    state(V source, std::size_t size) : base_(std::move(source)), block_size_(size) {}
 
-    void EnsureInitialized()
+    void ensure_initialized()
     {
-      if (initialized) { return; }
-      if (block_size == 0) { throw std::invalid_argument("dacoexec::views::blocks requires a positive block size"); }
-      initialized = true;
-      input = std::ranges::begin(base);
-      LoadNextBlock();
+      if (initialized_) { return; }
+      if (block_size_ == 0) { throw std::invalid_argument("dacoexec::views::blocks requires a positive block size"); }
+      initialized_ = true;
+      input_ = std::ranges::begin(base_);
+      load_next_block();
     }
 
-    void LoadNextBlock()
+    void load_next_block()
     {
-      current.reset();
-      if (finished || !input.has_value()) {
-        finished = true;
+      current_.reset();
+      if (finished_ || !input_.has_value()) {
+        finished_ = true;
         return;
       }
 
-      auto &cursor = *input;
-      auto const last = std::ranges::end(base);
+      auto &cursor = *input_;
+      auto const last = std::ranges::end(base_);
       // End of input is a normal empty tail, including after sequence
       // 2^64-1. Overflow applies only when another byte is available.
       if (cursor == last) {
-        finished = true;
+        finished_ = true;
         return;
       }
-      if (sequence_limit_reached) {
+      if (sequence_limit_reached_) {
         throw std::overflow_error("dacoexec::views::blocks sequence number space is exhausted");
       }
 
       std::vector<std::byte> bytes;
       try {
-        while (bytes.size() < block_size) {
+        while (bytes.size() < block_size_) {
           if (cursor == last) { break; }
           // Materialize range_value_t first so a proxy reference is converted
           // as the declared byte type, not as the proxy type itself.
-          using SourceValue = std::ranges::range_value_t<V>;
-          std::byte const value = detail::ToByte(static_cast<SourceValue>(*cursor));
+          using source_value = std::ranges::range_value_t<V>;
+          std::byte const value = detail::to_byte(static_cast<source_value>(*cursor));
           if (bytes.size() == bytes.capacity()) {
-            std::size_t const next = detail::NextBlockCapacity(bytes.capacity(), block_size);
+            std::size_t const next = detail::next_block_capacity(bytes.capacity(), block_size_);
             if (next > bytes.capacity()) { bytes.reserve(next); }
           }
           bytes.push_back(value);
@@ -124,33 +123,33 @@ class blocks_view// NOLINT(readability-identifier-naming)
         }
       } catch (...) {
         // The local buffer is discarded. Do not publish a short success.
-        finished = true;
+        finished_ = true;
         throw;
       }
 
       if (bytes.empty()) {
-        finished = true;
+        finished_ = true;
         return;
       }
 
-      std::uint64_t const sequence = next_sequence;
-      if (next_sequence == std::numeric_limits<std::uint64_t>::max()) {
-        sequence_limit_reached = true;
+      std::uint64_t const sequence = next_sequence_;
+      if (next_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
+        sequence_limit_reached_ = true;
       } else {
-        ++next_sequence;
+        ++next_sequence_;
       }
-      current.emplace(sequence, std::move(bytes));
+      current_.emplace(sequence, std::move(bytes));
     }
 
     // base is declared before input so the source cursor is destroyed first.
-    V base;
-    std::size_t block_size = 0;
-    std::optional<std::ranges::iterator_t<V>> input;
-    std::optional<byte_block> current;
-    std::uint64_t next_sequence = 0;
-    bool initialized = false;
-    bool finished = false;
-    bool sequence_limit_reached = false;
+    V base_;
+    std::size_t block_size_ = 0;
+    std::optional<std::ranges::iterator_t<V>> input_;
+    std::optional<byte_block> current_;
+    std::uint64_t next_sequence_ = 0;
+    bool initialized_ = false;
+    bool finished_ = false;
+    bool sequence_limit_reached_ = false;
   };
 
 public:
@@ -159,7 +158,7 @@ public:
   explicit blocks_view(V base, std::size_t block_size)
   {
     if (block_size == 0) { throw std::invalid_argument("dacoexec::views::blocks requires a positive block size"); }
-    state_ = std::make_unique<State>(std::move(base), block_size);
+    state_ = std::make_unique<state>(std::move(base), block_size);
   }
 
   blocks_view(blocks_view const &) = delete;
@@ -175,7 +174,7 @@ public:
 
   ~blocks_view() = default;
 
-  class Iterator
+  class iterator
   {
   public:
     using iterator_concept = std::input_iterator_tag;
@@ -187,49 +186,49 @@ public:
 
     // Returns the staged block as an rvalue so range-for can move it out.
     // A second dereference without ++ observes the moved-from block.
-    [[nodiscard]] byte_block &&operator*() const { return std::move(state_->current.value()); }
+    [[nodiscard]] byte_block &&operator*() const { return std::move(state_->current_.value()); }
 
-    Iterator &operator++()
+    iterator &operator++()
     {
-      state_->LoadNextBlock();
+      state_->load_next_block();
       return *this;
     }
 
     void operator++(int) { ++*this; }
 
-    [[nodiscard]] friend bool operator==(Iterator const &it, std::default_sentinel_t) noexcept
-    { return it.state_ == nullptr || !it.state_->current.has_value(); }
+    [[nodiscard]] friend bool operator==(iterator const &it, std::default_sentinel_t) noexcept
+    { return it.state_ == nullptr || !it.state_->current_.has_value(); }
 
-    [[nodiscard]] friend byte_block &&iter_move(Iterator const &it) { return std::move(it.state_->current.value()); }
+    [[nodiscard]] friend byte_block &&iter_move(iterator const &it) { return std::move(it.state_->current_.value()); }
 
   private:
     friend class blocks_view;
 
-    explicit Iterator(State *state) : state_(state) {}
+    explicit iterator(state *state) : state_(state) {}
 
-    State *state_ = nullptr;
+    state *state_ = nullptr;
   };
 
-  [[nodiscard]] auto begin() -> Iterator
+  [[nodiscard]] auto begin() -> iterator
   {
-    if (state_ == nullptr) { return Iterator{ nullptr }; }
-    state_->EnsureInitialized();
-    return Iterator{ state_.get() };
+    if (state_ == nullptr) { return iterator{ nullptr }; }
+    state_->ensure_initialized();
+    return iterator{ state_.get() };
   }
 
   [[nodiscard]] auto end() const noexcept -> std::default_sentinel_t { return std::default_sentinel; }
 
 private:
-  std::unique_ptr<State> state_;
+  std::unique_ptr<state> state_;
 };
 
 namespace views {
   namespace detail {
 
-    class BlocksClosure
+    class blocks_closure
     {
     public:
-      explicit constexpr BlocksClosure(std::size_t block_size) : block_size_(block_size)
+      explicit constexpr blocks_closure(std::size_t block_size) : block_size_(block_size)
       {
         if (block_size_ == 0) { throw std::invalid_argument("dacoexec::views::blocks requires a positive block size"); }
       }
@@ -241,7 +240,7 @@ namespace views {
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] friend auto operator|(R &&range, BlocksClosure const &adaptor)
+      [[nodiscard]] friend auto operator|(R &&range, blocks_closure const &adaptor)
       { return adaptor(std::forward<R>(range)); }
 
     private:
@@ -250,9 +249,8 @@ namespace views {
 
   }// namespace detail
 
-  // NOLINTNEXTLINE(readability-identifier-naming)
-  [[nodiscard]] inline constexpr auto blocks(std::size_t block_size) -> detail::BlocksClosure
-  { return detail::BlocksClosure{ block_size }; }
+  [[nodiscard]] inline constexpr auto blocks(std::size_t block_size) -> detail::blocks_closure
+  { return detail::blocks_closure{ block_size }; }
 
 }// namespace views
 }// namespace dacoexec

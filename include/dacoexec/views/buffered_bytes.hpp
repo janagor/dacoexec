@@ -39,83 +39,82 @@ namespace dacoexec {
 // unfinished window is discarded, and later iteration does not resume.
 template<std::ranges::view V>
   requires byte_input_range<V>
-class buffered_bytes_view// NOLINT(readability-identifier-naming)
-  : public std::ranges::view_interface<buffered_bytes_view<V>>
+class buffered_bytes_view : public std::ranges::view_interface<buffered_bytes_view<V>>
 {
-  struct State
+  struct state
   {
-    State(V source, std::size_t window_size) : base(std::move(source)), capacity(window_size) {}
+    state(V source, std::size_t window_size) : base_(std::move(source)), capacity_(window_size) {}
 
-    void EnsureInitialized()
+    void ensure_initialized()
     {
-      if (initialized) { return; }
-      initialized = true;
+      if (initialized_) { return; }
+      initialized_ = true;
       try {
-        cursor.emplace(std::ranges::begin(base));
+        cursor_.emplace(std::ranges::begin(base_));
       } catch (...) {
-        finished = true;
+        finished_ = true;
         throw;
       }
-      Fill();
+      fill();
     }
 
-    void Fill()
+    void fill()
     {
-      window.clear();
-      index = 0;
-      if (finished || !cursor.has_value()) {
-        finished = true;
+      window_.clear();
+      index_ = 0;
+      if (finished_ || !cursor_.has_value()) {
+        finished_ = true;
         return;
       }
 
       try {
-        auto &position = *cursor;
-        auto const last = std::ranges::end(base);
-        while (window.size() < capacity) {
+        auto &position = *cursor_;
+        auto const last = std::ranges::end(base_);
+        while (window_.size() < capacity_) {
           if (position == last) { break; }
           // Materialize range_value_t first so a proxy reference is converted
           // as the declared byte type, not as the proxy type itself.
-          using SourceValue = std::ranges::range_value_t<V>;
-          std::byte const value = detail::ToByte(static_cast<SourceValue>(*position));
-          if (window.size() == window.capacity()) {
-            std::size_t const next = detail::NextBlockCapacity(window.capacity(), capacity);
-            if (next > window.capacity()) { window.reserve(next); }
+          using source_value = std::ranges::range_value_t<V>;
+          std::byte const value = detail::to_byte(static_cast<source_value>(*position));
+          if (window_.size() == window_.capacity()) {
+            std::size_t const next = detail::next_block_capacity(window_.capacity(), capacity_);
+            if (next > window_.capacity()) { window_.reserve(next); }
           }
-          window.push_back(value);
+          window_.push_back(value);
           ++position;
         }
       } catch (...) {
-        window.clear();
-        index = 0;
-        finished = true;
+        window_.clear();
+        index_ = 0;
+        finished_ = true;
         throw;
       }
 
-      if (window.empty()) { finished = true; }
+      if (window_.empty()) { finished_ = true; }
     }
 
-    void Advance()
+    void advance()
     {
-      if (finished) { return; }
-      ++index;
-      if (index < window.size()) { return; }
-      Fill();
+      if (finished_) { return; }
+      ++index_;
+      if (index_ < window_.size()) { return; }
+      fill();
     }
 
     // base is declared before cursor so the source iterator is destroyed first.
-    V base;
-    std::size_t capacity = 0;
-    std::vector<std::byte> window;
-    std::optional<std::ranges::iterator_t<V>> cursor;
-    std::size_t index = 0;
-    bool initialized = false;
-    bool finished = false;
+    V base_;
+    std::size_t capacity_ = 0;
+    std::vector<std::byte> window_;
+    std::optional<std::ranges::iterator_t<V>> cursor_;
+    std::size_t index_ = 0;
+    bool initialized_ = false;
+    bool finished_ = false;
   };
 
 public:
   buffered_bytes_view() = default;
 
-  buffered_bytes_view(V base, std::size_t capacity) : state_(std::make_unique<State>(std::move(base), capacity))
+  buffered_bytes_view(V base, std::size_t capacity) : state_(std::make_unique<state>(std::move(base), capacity))
   {
     if (capacity == 0) {
       throw std::invalid_argument("dacoexec::views::buffered_bytes requires a positive buffer size");
@@ -135,7 +134,7 @@ public:
 
   ~buffered_bytes_view() = default;
 
-  class Iterator
+  class iterator
   {
   public:
     using iterator_concept = std::input_iterator_tag;
@@ -145,47 +144,47 @@ public:
     using reference = std::byte;
     using pointer = void;
 
-    [[nodiscard]] std::byte operator*() const { return state_->window[state_->index]; }
+    [[nodiscard]] std::byte operator*() const { return state_->window_[state_->index_]; }
 
-    Iterator &operator++()
+    iterator &operator++()
     {
-      state_->Advance();
+      state_->advance();
       return *this;
     }
 
     void operator++(int) { ++*this; }
 
-    [[nodiscard]] friend bool operator==(Iterator const &it, std::default_sentinel_t) noexcept
-    { return it.state_ == nullptr || it.state_->finished; }
+    [[nodiscard]] friend bool operator==(iterator const &it, std::default_sentinel_t) noexcept
+    { return it.state_ == nullptr || it.state_->finished_; }
 
   private:
     friend class buffered_bytes_view;
 
-    explicit Iterator(State *state) : state_(state) {}
+    explicit iterator(state *state) : state_(state) {}
 
-    State *state_ = nullptr;
+    state *state_ = nullptr;
   };
 
-  [[nodiscard]] auto begin() -> Iterator
+  [[nodiscard]] auto begin() -> iterator
   {
-    if (state_ == nullptr) { return Iterator{ nullptr }; }
-    state_->EnsureInitialized();
-    return Iterator{ state_.get() };
+    if (state_ == nullptr) { return iterator{ nullptr }; }
+    state_->ensure_initialized();
+    return iterator{ state_.get() };
   }
 
   [[nodiscard]] auto end() const noexcept -> std::default_sentinel_t { return std::default_sentinel; }
 
 private:
-  std::unique_ptr<State> state_;
+  std::unique_ptr<state> state_;
 };
 
 namespace views {
   namespace detail {
 
-    class BufferedBytesClosure
+    class buffered_bytes_closure
     {
     public:
-      explicit constexpr BufferedBytesClosure(std::size_t capacity) : capacity_(capacity)
+      explicit constexpr buffered_bytes_closure(std::size_t capacity) : capacity_(capacity)
       {
         if (capacity_ == 0) {
           throw std::invalid_argument("dacoexec::views::buffered_bytes requires a positive buffer size");
@@ -199,7 +198,7 @@ namespace views {
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] friend auto operator|(R &&range, BufferedBytesClosure const &adaptor)
+      [[nodiscard]] friend auto operator|(R &&range, buffered_bytes_closure const &adaptor)
       { return adaptor(std::forward<R>(range)); }
 
     private:
@@ -208,9 +207,8 @@ namespace views {
 
   }// namespace detail
 
-  // NOLINTNEXTLINE(readability-identifier-naming)
-  [[nodiscard]] inline constexpr auto buffered_bytes(std::size_t capacity) -> detail::BufferedBytesClosure
-  { return detail::BufferedBytesClosure{ capacity }; }
+  [[nodiscard]] inline constexpr auto buffered_bytes(std::size_t capacity) -> detail::buffered_bytes_closure
+  { return detail::buffered_bytes_closure{ capacity }; }
 
 }// namespace views
 }// namespace dacoexec
