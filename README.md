@@ -45,6 +45,62 @@ The adaptor retains one staged block. That buffer starts at a capacity of at mos
 
 An exception from the source, including a failure while a block is only partly filled, propagates unchanged. The unfinished block is discarded.
 
+## Buffered bytes
+
+`dacoexec::views::buffered_bytes` reads a byte input range in fixed windows and yields one `std::byte` at a time. A byte sequence continues from the end of one window into the next.
+
+```cpp
+auto bytes = source | dacoexec::views::buffered_bytes(4096);
+
+for (std::byte value : bytes) {
+  consume(value);
+}
+```
+
+`dacoexec::views::buffered_bytes(n)(source)` is the same operation. The source is any `dacoexec::byte_input_range`, including move-only and single-pass ranges. A buffer size of zero throws `std::invalid_argument`. Empty input yields no bytes. The final window may be shorter than the buffer.
+
+Iteration is single-pass. Construction reads nothing. `begin()` fills only the first window, and the next window is read only after that one is consumed. Copying an iterator aliases that same pass. Moving the view keeps its place, including a window that is only partly consumed. A moved-from view is empty.
+
+The window starts at a capacity of at most 4096 bytes and doubles until it reaches the requested size. A short or empty source does not allocate the full buffer.
+
+An exception from the source propagates unchanged. The unfinished window is discarded, and later iteration does not resume.
+
+## Bits
+
+`dacoexec::views::bits` is a lazy range adaptor. It yields each byte as eight `bool` values, most significant bit first. The order does not depend on the host endianness, and the adaptor does not allocate a bit buffer.
+
+```cpp
+std::vector<std::byte> bytes{std::byte{0xB2}, std::byte{0x80}};
+
+auto bits = bytes | dacoexec::views::bits();
+// 1 0 1 1 0 0 1 0  1 0 0 0 0 0 0 0
+```
+
+`dacoexec::views::bits()(bytes)` is the same operation. The source is any `dacoexec::byte_input_range`, including move-only and single-pass ranges. A move-only lvalue view is passed with `std::move`. An empty byte range yields no bits. Each byte contributes exactly eight bits.
+
+Iteration is single-pass. Construction reads nothing. `begin()` caches the first source byte, and the underlying iterator advances only after those eight bits are consumed. Copying a bit iterator aliases that same pass. Moving the view keeps its place in the input, including a byte already cached. Destroying the view that owns the iteration state invalidates its iterators. A moved-from view is empty. An lvalue source is borrowed. An rvalue source is owned for the life of the view.
+
+An exception from the source propagates unchanged. The view does not turn that failure into an end-of-stream, and later iteration does not resume.
+
+`dacoexec::bit_writer` packs those bits into any output iterator of `std::byte`. `write_bit` writes one bit. `write_bits(value, n)` writes the least significant `n` bits of `value`, most significant of those bits first. `n` is 0 through 32. A zero-length write of value 0 does nothing. A count above 32, or a value with bits set above that width, throws `std::invalid_argument`. A finalized or failed writer throws `std::logic_error` before those argument checks.
+
+The writer keeps a single partial byte. Filled bits sit in the high positions, and a full byte is emitted immediately. `finish()` writes a trailing partial byte padded with zero bits on the right and returns how many padding bits were added (0 through 7). Calling `finish()` again returns the same count and writes nothing. The destructor does not pad or flush. Writing after `finish()`, or after the output iterator throws, throws `std::logic_error`. An output failure propagates as the original exception. Bytes the sink already accepted stay written, and the failed byte is not retried.
+
+Moving a writer transfers its partial byte and its output iterator. Move assignment discards the destination writer's previous partial byte without writing it. If moving the output iterator throws, both writers become unusable and neither emits its partial byte.
+
+```cpp
+std::vector<std::byte> encoded;
+dacoexec::bit_writer writer{std::back_inserter(encoded)};
+
+writer.write_bits(0b101u, 3);
+writer.write_bits(0b11001u, 5);
+auto const padding = writer.finish();// encoded == {0xB9}, padding == 0
+```
+
+`writer.output_iterator()` is a C++20 output iterator of `bool`. Assignment writes one bit. Copies share the writer's packing state, and incrementing a copy does not emit a byte. The iterator must not outlive the writer. Moving the writer invalidates its output iterators.
+
+A complete byte sequence round-trips: reading it with `views::bits` and writing those bits back produces the same bytes, with a padding count of 0. Padding is not a payload length. Callers that need to ignore trailing bits keep that count themselves.
+
 ## Install
 
 ```shell
