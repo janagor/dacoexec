@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +27,8 @@ struct source_stats
   std::size_t dereferences_ = 0;
   std::size_t increments_ = 0;
   std::optional<std::size_t> fail_at_dereference_;
+  bool fail_at_begin_ = false;
+  std::optional<std::size_t> fail_at_increment_;
 };
 
 // Move-only, single-pass byte source. begin() does not rewind: every iterator
@@ -67,9 +70,13 @@ public:
       return parent_->data_.at(parent_->cursor_);
     }
 
-    iterator &operator++()
+    auto operator++() -> iterator &
     {
       ++parent_->stats_->increments_;
+      if (parent_->stats_->fail_at_increment_.has_value()
+          && parent_->stats_->increments_ >= *parent_->stats_->fail_at_increment_) {
+        throw std::ios_base::failure("injected increment failure");
+      }
       ++parent_->cursor_;
       return *this;
     }
@@ -92,6 +99,7 @@ public:
   [[nodiscard]] auto begin() -> iterator
   {
     ++stats_->begin_calls_;
+    if (stats_->fail_at_begin_) { throw std::ios_base::failure("injected begin failure"); }
     return iterator{ this };
   }
 
@@ -659,4 +667,218 @@ TEST_CASE("streaming keeps one block of storage and does not read ahead", "[bloc
   REQUIRE(index == blocks);
   REQUIRE(seen == count);
   REQUIRE(stats->begin_calls_ == 1);
+}
+
+using codeword_range = decltype(std::declval<std::vector<std::byte> &>()
+  | dacoexec::huffman::views::codewords(std::declval<dacoexec::huffman::canonical_codebook>()));
+static_assert(std::copyable<dacoexec::huffman::canonical_codebook>);
+static_assert(std::movable<dacoexec::huffman::canonical_codebook>);
+static_assert(std::same_as<decltype(std::declval<dacoexec::huffman::canonical_codebook &>().lengths()),
+  dacoexec::huffman::code_length_table const &>);
+static_assert(std::ranges::view<codeword_range>);
+static_assert(std::ranges::input_range<codeword_range>);
+static_assert(!std::ranges::forward_range<codeword_range>);
+static_assert(!std::ranges::borrowed_range<codeword_range>);
+static_assert(std::movable<codeword_range>);
+static_assert(!std::copyable<codeword_range>);
+static_assert(std::same_as<std::ranges::range_reference_t<codeword_range>, dacoexec::huffman::codeword>);
+
+template<class R>
+concept can_adapt_codewords = requires(R &&input, dacoexec::huffman::canonical_codebook book) {
+  std::forward<R>(input) | dacoexec::huffman::views::codewords(book);
+};
+static_assert(can_adapt_codewords<std::vector<std::byte> &>);
+static_assert(can_adapt_codewords<std::vector<char> &>);
+static_assert(can_adapt_codewords<std::vector<signed char> &>);
+static_assert(can_adapt_codewords<std::vector<unsigned char> &>);
+static_assert(can_adapt_codewords<std::vector<char8_t> &>);
+static_assert(can_adapt_codewords<byte_source>);
+static_assert(!can_adapt_codewords<byte_source &>);
+static_assert(!can_adapt_codewords<std::vector<int> &>);
+static_assert(!can_adapt_codewords<std::vector<bool> &>);
+static_assert(!can_adapt_codewords<std::vector<std::uint16_t> &>);
+
+TEST_CASE("codewords stages once and preserves single-pass state across moves", "[huffman][codewords]")
+{
+  using namespace dacoexec::huffman;
+  auto const input = make_bytes(3);
+  auto const lengths = build_code_lengths(count_frequencies(input));
+  auto const expected = make_canonical_codebook(lengths);
+  auto stats = std::make_shared<source_stats>();
+  auto view = byte_source{ input, stats } | views::codewords(make_canonical_codebook(lengths));
+  REQUIRE(stats->begin_calls_ == 0);
+  REQUIRE(stats->dereferences_ == 0);
+  REQUIRE(stats->increments_ == 0);
+  auto cursor = view.begin();
+  REQUIRE(*cursor == expected[0]);
+  REQUIRE(*cursor == expected[0]);
+  REQUIRE(stats->dereferences_ == 1);
+  auto alias = view.begin();
+  REQUIRE(stats->begin_calls_ == 1);
+  ++cursor;
+  REQUIRE(*alias == expected[1]);
+  REQUIRE(stats->increments_ == 1);
+  REQUIRE(stats->dereferences_ == 2);
+  auto moved = std::move(view);
+  REQUIRE(view.begin() == view.end());
+  REQUIRE(*moved.begin() == expected[1]);
+  ++cursor;
+  REQUIRE(*cursor == expected[2]);
+  REQUIRE(*alias == expected[2]);
+  ++cursor;
+  REQUIRE(cursor == moved.end());
+  REQUIRE(stats->increments_ == input.size());
+  REQUIRE(stats->dereferences_ == input.size());
+}
+
+TEST_CASE("codewords closures own independent codebooks and accept proxy bytes", "[huffman][codewords]")
+{
+  using namespace dacoexec::huffman;
+  auto const input = make_bytes(3);
+  auto const book = make_canonical_codebook(build_code_lengths(count_frequencies(input)));
+  auto closure = views::codewords(book);
+  auto copy = closure;
+  auto first = closure(input);
+  auto second = proxy_bytes{ input } | copy;
+  auto left = first.begin();
+  auto right = second.begin();
+  for (auto const value : input) {
+    auto const expected = book[std::to_integer<std::uint8_t>(value)];
+    REQUIRE(*left == expected);
+    REQUIRE(*right == expected);
+    ++left;
+    ++right;
+  }
+  REQUIRE(left == first.end());
+  REQUIRE(right == second.end());
+  auto destination = closure(input);
+  auto source = closure(input);
+  auto cursor = source.begin();
+  ++cursor;
+  destination = std::move(source);
+  REQUIRE(source.begin() == source.end());
+  REQUIRE(*cursor == book[1]);
+  REQUIRE(*destination.begin() == book[1]);
+}
+
+TEST_CASE("codewords failures are terminal without emitting absent symbols", "[huffman][codewords]")
+{
+  using namespace dacoexec::huffman;
+  auto const input = make_bytes(3);
+  auto const book = make_canonical_codebook(build_code_lengths(count_frequencies(input)));
+  for (std::size_t failure_read : { std::size_t{ 1 }, std::size_t{ 2 } }) {
+    auto stats = std::make_shared<source_stats>();
+    stats->fail_at_dereference_ = failure_read;
+    auto view = byte_source{ input, stats } | views::codewords(book);
+    if (failure_read == 1) {
+      REQUIRE_THROWS_AS(view.begin(), std::ios_base::failure);
+    } else {
+      auto cursor = view.begin();
+      REQUIRE_THROWS_AS(++cursor, std::ios_base::failure);
+      REQUIRE(cursor == view.end());
+      ++cursor;
+    }
+    auto const reads = stats->dereferences_;
+    REQUIRE(view.begin() == view.end());
+    REQUIRE(stats->dereferences_ == reads);
+  }
+  std::vector<std::byte> const absent{ std::byte{ 0xFF } };
+  auto missing_first = absent | views::codewords(book);
+  REQUIRE_THROWS_AS(missing_first.begin(), std::invalid_argument);
+  REQUIRE(missing_first.begin() == missing_first.end());
+  std::vector<std::byte> const tail{ input.front(), absent.front() };
+  auto missing_tail = tail | views::codewords(book);
+  auto cursor = missing_tail.begin();
+  REQUIRE(*cursor == book[0]);
+  REQUIRE_THROWS_AS(++cursor, std::invalid_argument);
+  REQUIRE(cursor == missing_tail.end());
+  REQUIRE(missing_tail.begin() == missing_tail.end());
+  auto empty = std::vector<std::byte>{} | views::codewords(make_canonical_codebook({}));
+  REQUIRE(empty.begin() == empty.end());
+}
+
+TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bits", "[huffman][codewords]")
+{
+  using namespace dacoexec::huffman;
+  std::vector<char> const input{ 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'D' };
+  constexpr unsigned expected_padding = 1;
+  std::vector<std::byte> const expected{ std::byte{ 0x05 }, std::byte{ 0x6E } };
+  for (auto block : input | dacoexec::views::blocks(input.size())) {
+    auto const lengths = build_code_lengths(count_frequencies(block.bytes_));
+    auto const book = make_canonical_codebook(lengths);
+    auto const saved = book.lengths();
+    for (auto const &candidate : { book, make_canonical_codebook(saved) }) {
+      std::vector<std::byte> output;
+      dacoexec::bit_writer writer{ std::back_inserter(output) };
+      for (auto const word : block.bytes_ | views::codewords(candidate)) {
+        writer.write_bits(word.bits_, word.length_);
+      }
+      REQUIRE(writer.finish() == expected_padding);
+      REQUIRE(output == expected);
+      REQUIRE(writer.finish() == expected_padding);
+      REQUIRE(output == expected);
+    }
+  }
+}
+
+
+TEST_CASE("codewords source begin and increment failures permanently end iteration", "[huffman][codewords]")
+{
+  using namespace dacoexec::huffman;
+  auto const input = make_bytes(3);
+  auto const book = make_canonical_codebook(build_code_lengths(count_frequencies(input)));
+
+  SECTION("begin failure")
+  {
+    auto stats = std::make_shared<source_stats>();
+    stats->fail_at_begin_ = true;
+    auto view = byte_source{ input, stats } | views::codewords(book);
+    REQUIRE_THROWS_AS(view.begin(), std::ios_base::failure);
+    stats->fail_at_begin_ = false;
+    REQUIRE(view.begin() == view.end());
+    REQUIRE(stats->begin_calls_ == 1);
+    REQUIRE(stats->dereferences_ == 0);
+    REQUIRE(stats->increments_ == 0);
+  }
+
+  SECTION("increment failure")
+  {
+    auto stats = std::make_shared<source_stats>();
+    stats->fail_at_increment_ = 1;
+    auto view = byte_source{ input, stats } | views::codewords(book);
+    auto cursor = view.begin();
+    auto alias = cursor;
+    REQUIRE(*cursor == book[0]);
+    REQUIRE_THROWS_AS(++cursor, std::ios_base::failure);
+    REQUIRE(cursor == view.end());
+    REQUIRE(alias == view.end());
+    stats->fail_at_increment_.reset();
+    ++cursor;
+    REQUIRE(view.begin() == view.end());
+    REQUIRE(stats->begin_calls_ == 1);
+    REQUIRE(stats->dereferences_ == 1);
+    REQUIRE(stats->increments_ == 1);
+  }
+}
+
+TEST_CASE("codewords preserves negative signed character byte values", "[huffman][codewords]")
+{
+  using namespace dacoexec::huffman;
+  constexpr unsigned char high_bit = 0x80;
+  constexpr unsigned char all_bits = 0xFF;
+  std::array<signed char, 2> const input{
+    std::bit_cast<signed char>(high_bit), std::bit_cast<signed char>(all_bits)
+  };
+  REQUIRE(input.front() < 0);
+  REQUIRE(input.back() < 0);
+  auto const book = make_canonical_codebook(build_code_lengths(count_frequencies(input)));
+  auto view = input | views::codewords(book);
+  auto cursor = view.begin();
+  REQUIRE(*cursor == codeword{ 0U, 1 });
+  REQUIRE(*cursor == book[high_bit]);
+  ++cursor;
+  REQUIRE(*cursor == codeword{ 1U, 1 });
+  REQUIRE(*cursor == book[all_bits]);
+  ++cursor;
+  REQUIRE(cursor == view.end());
 }

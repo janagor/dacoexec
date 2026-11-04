@@ -79,6 +79,16 @@ int main()
   unsigned char const letter_a = static_cast<unsigned char>('A');
   if (frequencies.at(letter_a) != 5 || lengths.at(letter_a) != 1) { return 6; }
 
+  auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
+  std::vector<std::byte> encoded;
+  dacoexec::bit_writer canonical_writer{ std::back_inserter(encoded) };
+  for (auto const word : sample | dacoexec::huffman::views::codewords(book)) {
+    canonical_writer.write_bits(word.bits_, word.length_);
+  }
+  constexpr unsigned golden_padding = 1;
+  std::vector<std::byte> const golden_bytes{ std::byte{ 0x05 }, std::byte{ 0x6E } };
+  if (canonical_writer.finish() != golden_padding || encoded != golden_bytes) { return 7; }
+
   std::cout << "dacoexec install consumer ok\n";
   return 0;
 }

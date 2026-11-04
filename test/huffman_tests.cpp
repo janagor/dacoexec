@@ -1,3 +1,5 @@
+#include <dacoexec/bit/bit_output_iterator.hpp>
+#include <dacoexec/huffman/canonical.hpp>
 #include <dacoexec/huffman/frequency.hpp>
 #include <dacoexec/huffman/tree.hpp>
 
@@ -11,6 +13,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -807,4 +810,150 @@ TEST_CASE("seeded histograms satisfy the length invariants", "[huffman]")
     auto const frequencies = random_histogram(rng, rng.next() % 257U, 5);
     check_code_lengths(frequencies);
   }
+}
+
+TEST_CASE("canonical codebooks reconstruct deterministic fixtures", "[huffman][canonical]")
+{
+  using namespace dacoexec::huffman;
+  constexpr std::array samples{ std::string_view{}, std::string_view{ "A" }, std::string_view{ "AB" },
+    std::string_view{ "AAAAABBCD" }, std::string_view{ "ABCD" } };
+  for (auto const input : samples) {
+    auto const lengths = build_code_lengths(count_frequencies(input));
+    auto const book = make_canonical_codebook(lengths);
+    auto const saved = book.lengths();
+    auto const rebuilt = make_canonical_codebook(saved);
+    REQUIRE(saved == lengths);
+    for (std::size_t index = 0; index < alphabet_size; ++index) {
+      auto const byte = static_cast<std::uint8_t>(index);
+      REQUIRE(book[byte] == rebuilt[byte]);
+      REQUIRE(book[byte].length_ == lengths.at(index));
+    }
+  }
+  auto const singleton = make_canonical_codebook(build_code_lengths(count_frequencies(std::string_view{ "A" })));
+  REQUIRE(singleton[symbol('A')] == codeword{ 0U, 1 });
+  auto const pair = make_canonical_codebook(build_code_lengths(count_frequencies(std::string_view{ "BA" })));
+  REQUIRE(pair[symbol('A')] == codeword{ 0U, 1 });
+  REQUIRE(pair[symbol('B')] == codeword{ 1U, 1 });
+  auto const book = make_canonical_codebook(build_code_lengths(count_frequencies(std::string_view{ "AAAAABBCD" })));
+  REQUIRE(book[symbol('A')] == codeword{ 0b0U, 1 });
+  REQUIRE(book[symbol('B')] == codeword{ 0b10U, 2 });
+  REQUIRE(book[symbol('C')] == codeword{ 0b110U, 3 });
+  REQUIRE(book[symbol('D')] == codeword{ 0b111U, 3 });
+  auto const equal = make_canonical_codebook(build_code_lengths(count_frequencies(std::string_view{ "DCBA" })));
+  constexpr unsigned equal_length = 2;
+  constexpr std::uint8_t equal_symbols = 4;
+  for (std::uint8_t index = 0; index < equal_symbols; ++index) {
+    REQUIRE(equal[static_cast<std::uint8_t>(symbol('A') + index)] == codeword{ index, equal_length });
+  }
+}
+
+TEST_CASE("canonical validation rejects invalid trees and reports unsupported widths", "[huffman][canonical]")
+{
+  using namespace dacoexec::huffman;
+  code_length_table lengths{};
+  lengths.at(0) = 2;
+  REQUIRE_THROWS_AS(make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(try_make_canonical_codebook(lengths), std::invalid_argument);
+  lengths.at(1) = 2;
+  REQUIRE_THROWS_AS(make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(try_make_canonical_codebook(lengths), std::invalid_argument);
+  lengths.at(0) = 1;
+  lengths.at(1) = 1;
+  lengths.at(2) = 1;
+  REQUIRE_THROWS_AS(make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(try_make_canonical_codebook(lengths), std::invalid_argument);
+  constexpr std::size_t unsupported_chain_symbols = 40;
+  auto const deep = build_code_lengths(chain_frequencies(unsupported_chain_symbols));
+  REQUIRE(*std::ranges::max_element(deep) == unsupported_chain_symbols - 1U);
+  REQUIRE_FALSE(try_make_canonical_codebook(deep).has_value());
+  REQUIRE_THROWS_AS(make_canonical_codebook(deep), std::length_error);
+}
+
+TEST_CASE("canonical codes preserve all unsigned byte indexes", "[huffman][canonical]")
+{
+  using namespace dacoexec::huffman;
+  code_length_table lengths{};
+  constexpr std::uint8_t byte_width = 8;
+  lengths.fill(byte_width);
+  auto const book = make_canonical_codebook(lengths);
+  for (std::size_t index = 0; index < alphabet_size; ++index) {
+    REQUIRE(book[static_cast<std::uint8_t>(index)] == codeword{ static_cast<std::uint32_t>(index), byte_width });
+  }
+  constexpr std::array<unsigned char, 3> extremes{ 0x00, 0x80, 0xFF };
+  auto const sparse = make_canonical_codebook(build_code_lengths(count_frequencies(extremes)));
+  REQUIRE(sparse[0x00] == codeword{ 0b10U, 2 });
+  REQUIRE(sparse[0x80] == codeword{ 0b11U, 2 });
+  REQUIRE(sparse[0xFF] == codeword{ 0U, 1 });
+}
+
+TEST_CASE("canonical assignment reaches the full 32-bit boundary", "[huffman][canonical]")
+{
+  using namespace dacoexec::huffman;
+  code_length_table lengths{};
+  for (unsigned length = 1; length < max_canonical_bits; ++length) {
+    lengths.at(length - 1U) = static_cast<std::uint8_t>(length);
+  }
+  lengths.at(max_canonical_bits - 1U) = max_canonical_bits;
+  lengths.at(max_canonical_bits) = max_canonical_bits;
+  auto const book = make_canonical_codebook(lengths);
+  REQUIRE(book[max_canonical_bits - 1U] == codeword{ 0xFFFFFFFEU, max_canonical_bits });
+  REQUIRE(book[max_canonical_bits] == codeword{ 0xFFFFFFFFU, max_canonical_bits });
+
+  std::vector<std::byte> output;
+  dacoexec::bit_writer writer{ std::back_inserter(output) };
+  for (auto const symbol : { max_canonical_bits - 1U, max_canonical_bits }) {
+    auto const word = book[static_cast<std::uint8_t>(symbol)];
+    writer.write_bits(word.bits_, word.length_);
+  }
+  constexpr unsigned no_padding = 0;
+  REQUIRE(writer.finish() == no_padding);
+  REQUIRE(output == std::vector<std::byte>{ std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFE },
+    std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFF } });
+}
+
+TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", "[huffman][canonical]")
+{
+  using namespace dacoexec::huffman;
+  constexpr std::size_t case_count = 64;
+  constexpr std::uint64_t frequency_limit = 8;
+  splitmix64 rng{ histogram_seed };
+  for (std::size_t index = 0; index < case_count; ++index) {
+    auto const frequencies = random_histogram(rng, rng.next() % (alphabet_size + 1U), frequency_limit);
+    auto const lengths = build_code_lengths(frequencies);
+    auto const candidate = try_make_canonical_codebook(lengths);
+    REQUIRE(candidate.has_value());
+    auto const &book = *candidate;
+    auto const rebuilt = make_canonical_codebook(book.lengths());
+    for (std::size_t left = 0; left < alphabet_size; ++left) {
+      auto const word = book[static_cast<std::uint8_t>(left)];
+      REQUIRE(word == rebuilt[static_cast<std::uint8_t>(left)]);
+      REQUIRE(word.length_ == lengths.at(left));
+      REQUIRE((word.length_ == 0) == (frequencies.at(left) == 0));
+      REQUIRE((static_cast<std::uint64_t>(word.bits_) >> word.length_) == 0);
+      if (word.length_ == 0) { continue; }
+      for (std::size_t right = left + 1U; right < alphabet_size; ++right) {
+        auto const other = book[static_cast<std::uint8_t>(right)];
+        if (other.length_ == 0) { continue; }
+        if (word.length_ == other.length_) { REQUIRE(word.bits_ < other.bits_); }
+        auto const shorter = word.length_ <= other.length_ ? word : other;
+        auto const longer = word.length_ <= other.length_ ? other : word;
+        REQUIRE((static_cast<std::uint64_t>(longer.bits_) >> (longer.length_ - shorter.length_)) != shorter.bits_);
+      }
+    }
+  }
+}
+
+
+TEST_CASE("unsupported canonical widths take precedence over invalid tree structure", "[huffman][canonical]")
+{
+  using namespace dacoexec::huffman;
+  code_length_table lengths{};
+  lengths.at(0) = 1;
+  lengths.at(1) = 1;
+  lengths.at(2) = 1;
+  REQUIRE_THROWS_AS(try_make_canonical_codebook(lengths), std::invalid_argument);
+  // Keep the unsupported symbol last so earlier counts already oversubscribe.
+  lengths.back() = static_cast<std::uint8_t>(max_canonical_bits + 1U);
+  REQUIRE_FALSE(try_make_canonical_codebook(lengths).has_value());
+  REQUIRE_THROWS_AS(make_canonical_codebook(lengths), std::length_error);
 }

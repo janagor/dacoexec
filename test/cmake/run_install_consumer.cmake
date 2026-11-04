@@ -25,7 +25,9 @@ if(NOT EXISTS "${prefix_a}/include/dacoexec/dacoexec.hpp")
   message(FATAL_ERROR "Installed public header is missing from ${prefix_a}")
 endif()
 if(NOT EXISTS "${prefix_a}/include/dacoexec/huffman/frequency.hpp"
-   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/tree.hpp")
+   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/tree.hpp"
+   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/canonical.hpp"
+   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/codewords_view.hpp")
   message(FATAL_ERROR "Installed Huffman headers are missing from ${prefix_a}")
 endif()
 if(EXISTS "${prefix_a}/include/dacoexec/sample_library.hpp"

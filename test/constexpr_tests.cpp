@@ -194,4 +194,43 @@ static_assert(accumulated_frequencies.at(static_cast<unsigned char>('A')) == 3);
 static_assert(accumulated_frequencies.at(static_cast<unsigned char>('B')) == 2);
 static_assert(accumulated_frequencies.at(0) == 0);
 
+constexpr auto canonical_empty = dacoexec::huffman::make_canonical_codebook({});
+static_assert(canonical_empty.lengths() == dacoexec::huffman::code_length_table{});
+static_assert(canonical_empty[0] == dacoexec::huffman::codeword{});
+constexpr auto canonical_single = dacoexec::huffman::make_canonical_codebook(only_a_lengths);
+static_assert(canonical_single['A'] == dacoexec::huffman::codeword{ 0, 1 });
+constexpr auto canonical_sample = dacoexec::huffman::make_canonical_codebook(huffman_lengths);
+static_assert(canonical_sample['A'] == dacoexec::huffman::codeword{ 0b0, 1 });
+static_assert(canonical_sample['B'] == dacoexec::huffman::codeword{ 0b10, 2 });
+static_assert(canonical_sample['C'] == dacoexec::huffman::codeword{ 0b110, 3 });
+static_assert(canonical_sample['D'] == dacoexec::huffman::codeword{ 0b111, 3 });
+
+static_assert([]() -> bool {
+  using namespace dacoexec::huffman;
+  code_length_table lengths{};
+  constexpr std::uint8_t byte_width = 8;
+  lengths.fill(byte_width);
+  auto const book = make_canonical_codebook(lengths);
+  for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+    if (book[static_cast<std::uint8_t>(symbol)] != codeword{ static_cast<std::uint32_t>(symbol), byte_width }) {
+      return false;
+    }
+  }
+  return true;
+}());
+
+static_assert([]() -> bool {
+  using namespace dacoexec::huffman;
+  code_length_table lengths{};
+  for (unsigned length = 1; length < max_canonical_bits; ++length) {
+    lengths.at(length - 1U) = static_cast<std::uint8_t>(length);
+  }
+  lengths.at(max_canonical_bits - 1U) = max_canonical_bits;
+  lengths.at(max_canonical_bits) = max_canonical_bits;
+  auto const book = make_canonical_codebook(lengths);
+  return book[max_canonical_bits - 1U] == codeword{ 0xFFFFFFFEU, max_canonical_bits }
+    && book[max_canonical_bits] == codeword{ 0xFFFFFFFFU, max_canonical_bits }
+    && try_make_canonical_codebook(lengths).has_value();
+}());
+
 int main() { return 0; }
