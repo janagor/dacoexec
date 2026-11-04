@@ -50,7 +50,7 @@ class codewords_view : public std::ranges::view_interface<codewords_view<V>>
       }
 
       try {
-        auto &position = *cursor_;
+        auto const &position = *cursor_;
         auto const last = std::ranges::end(base_);
         if (position == last) {
           finished_ = true;

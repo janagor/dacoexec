@@ -113,9 +113,12 @@ namespace detail {
 
 // Malformed content throws decode_error; allocation failures propagate.
 // The output bound is checked before reconstructing or allocating output.
-[[nodiscard]] inline auto decompress_block(encoded_block block, std::size_t max_output_bytes) -> dacoexec::byte_block
+// infer_padding is for framing formats without a padding-count field: supply
+// padding_bits_ == 0 and accept only zero padding in the final partial byte.
+[[nodiscard]] inline auto decompress_block(encoded_block block, std::size_t max_output_bytes, bool infer_padding = false) -> dacoexec::byte_block
 {
   detail::validate_block(block, max_output_bytes);
+  if (infer_padding && block.padding_bits_ != 0) { throw decode_error("Inferred padding requires a zero padding count"); }
   if (block.encoding_ == block_encoding::raw) { return { block.sequence_, std::move(block.payload_) }; }
   auto const book = [&block]() -> canonical_codebook {
     try {
@@ -139,7 +142,7 @@ namespace detail {
   std::vector<std::byte> output;
   if (block.uncompressed_size_ > output.max_size()) { throw decode_error("Huffman output exceeds vector capacity"); }
   output.reserve(static_cast<std::size_t>(block.uncompressed_size_));
-  for (auto const symbol : block.payload_ | views::decode(book, valid_bits, block.uncompressed_size_)) {
+  for (auto const symbol : block.payload_ | views::decode(book, valid_bits, block.uncompressed_size_, infer_padding)) {
     output.push_back(symbol);
   }
   return { block.sequence_, std::move(output) };

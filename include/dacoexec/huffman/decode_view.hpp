@@ -72,8 +72,8 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
   struct state
   {
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    explicit state(V source, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols)
-      : base_(std::move(source)), lookup_(codebook), valid_bits_(bits), expected_symbols_(symbols)
+    explicit state(V source, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding)
+      : base_(std::move(source)), lookup_(codebook), valid_bits_(bits), expected_symbols_(symbols), infer_padding_(infer_padding)
     {}
 
     auto ensure_initialized() -> void
@@ -111,7 +111,11 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
     {
       if (!cursor_.has_value()) { throw decode_error("Huffman source cursor is not initialized"); }
       auto &position = cursor_.value();
-      if (consumed_bits_ != valid_bits_) { throw decode_error("Trailing meaningful Huffman bits"); }
+      if (consumed_bits_ != valid_bits_
+          && (!infer_padding_ || valid_bits_ - consumed_bits_ >= dacoexec::detail::bits_per_byte
+              || valid_bits_ - consumed_bits_ != cached_bits_)) {
+        throw decode_error("Trailing meaningful Huffman bits");
+      }
       if (cached_bits_ != 0) {
         auto const mask = (1U << cached_bits_) - 1U;
         if ((static_cast<unsigned>(cache_) & mask) != 0) { throw decode_error("Nonzero Huffman padding"); }
@@ -161,6 +165,7 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
     std::uint8_t cache_ = 0;
     unsigned cached_bits_ = 0;
     std::byte current_{};
+    bool infer_padding_ = false;
     bool initialized_ = false;
     bool finished_ = false;
   };
@@ -168,8 +173,8 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
 public:
   decode_view() = default;
 
-  explicit decode_view(V base, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols)
-    : state_(std::make_unique<state>(std::move(base), codebook, bits, symbols))
+  explicit decode_view(V base, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding = false)
+    : state_(std::make_unique<state>(std::move(base), codebook, bits, symbols, infer_padding))
   {}
 
   decode_view(decode_view const &) = delete;
@@ -236,13 +241,13 @@ namespace views {
     {
     public:
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-      explicit decode_closure(canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols)
-        : codebook_(codebook), bits_(bits), symbols_(symbols) {}
+      explicit decode_closure(canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding)
+        : codebook_(codebook), bits_(bits), symbols_(symbols), infer_padding_(infer_padding) {}
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
       [[nodiscard]] auto operator()(R &&range) const -> decode_view<std::views::all_t<R>>
-      { return decode_view<std::views::all_t<R>>(std::views::all(std::forward<R>(range)), codebook_, bits_, symbols_); }
+      { return decode_view<std::views::all_t<R>>(std::views::all(std::forward<R>(range)), codebook_, bits_, symbols_, infer_padding_); }
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
@@ -254,12 +259,13 @@ namespace views {
       canonical_codebook codebook_;
       std::uint64_t bits_ = 0;
       std::uint64_t symbols_ = 0;
+      bool infer_padding_ = false;
     };
 
   }// namespace detail
 
-  [[nodiscard]] inline auto decode(canonical_codebook codebook, std::uint64_t valid_bit_count, std::uint64_t expected_symbol_count) -> detail::decode_closure
-  { return detail::decode_closure{ codebook, valid_bit_count, expected_symbol_count }; }
+  [[nodiscard]] inline auto decode(canonical_codebook codebook, std::uint64_t valid_bit_count, std::uint64_t expected_symbol_count, bool infer_padding = false) -> detail::decode_closure
+  { return detail::decode_closure{ codebook, valid_bit_count, expected_symbol_count, infer_padding }; }
 
 }// namespace views
 }// namespace dacoexec::huffman
