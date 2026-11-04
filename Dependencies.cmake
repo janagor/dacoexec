@@ -78,6 +78,14 @@ function(dacoexec_setup_dependencies)
       "${dacoexec_tests_enabled}"
       PARENT_SCOPE)
 
+  if(dacoexec_BUILD_CLI)
+    _dacoexec_require_package(
+      NAME CLI11
+      TARGET CLI11::CLI11
+      VERSION 2.6.1
+      GITHUB_REPOSITORY "CLIUtils/CLI11")
+  endif()
+
   if(dacoexec_tests_enabled)
     _dacoexec_require_package(
       NAME

@@ -45,10 +45,6 @@ include(ProjectOptions.cmake)
 
 dacoexec_setup_options()
 
-if(dacoexec_BUILD_CLI AND NOT EXISTS "${PROJECT_SOURCE_DIR}/src/cli/CMakeLists.txt")
-  message(FATAL_ERROR "dacoexec_BUILD_CLI is not implemented yet. The production CLI is added in a later revision.")
-endif()
-
 if(dacoexec_BUILD_FUZZ_TESTS)
   message(
     FATAL_ERROR
@@ -116,6 +112,9 @@ message(STATUS "  tests         : ${dacoexec_BUILD_TESTS}")
 message(STATUS "  install       : ${dacoexec_INSTALL}")
 
 add_subdirectory(src)
+if(dacoexec_BUILD_CLI AND NOT TARGET dacoexec_cli)
+  message(FATAL_ERROR "dacoexec_BUILD_CLI is enabled but the CLI target was not created")
+endif()
 
 if(PROJECT_IS_TOP_LEVEL AND dacoexec_ENABLE_FORMATTING)
   include(cmake/Format.cmake)

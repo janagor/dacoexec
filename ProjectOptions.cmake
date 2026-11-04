@@ -62,7 +62,7 @@ macro(dacoexec_setup_options)
   endif()
 
   option(dacoexec_BUILD_TESTS "Build the unit and infrastructure tests" ${dacoexec_standalone_default})
-  option(dacoexec_BUILD_CLI "Build the command-line interface (not implemented yet)" OFF)
+  option(dacoexec_BUILD_CLI "Build the command-line interface" OFF)
   option(dacoexec_BUILD_FUZZ_TESTS "Build codec fuzz tests (not implemented yet)" OFF)
   option(dacoexec_BUILD_BENCHMARKS "Build benchmarks (not implemented yet)" OFF)
   option(dacoexec_INSTALL "Install the public header-only library" ${dacoexec_standalone_default})
