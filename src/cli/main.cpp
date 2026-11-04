@@ -1,6 +1,6 @@
-#include <dacoexec/dacoexec.hpp>
-#include <CLI/CLI.hpp>
 #include "temporary_output.hpp"
+#include <CLI/CLI.hpp>
+#include <dacoexec/dacoexec.hpp>
 
 #include <array>
 #include <cstddef>
@@ -39,6 +39,7 @@ public:
     }
     auto operator++(int) -> void { ++*this; }
     auto operator==(std::default_sentinel_t) const -> bool { return source_->finished_; }
+
   private:
     file_bytes *source_;
   };
@@ -49,7 +50,7 @@ public:
       started_ = true;
       fill();
     }
-    return iterator{this};
+    return iterator{ this };
   }
   auto end() const -> std::default_sentinel_t { return {}; }
 
@@ -82,8 +83,12 @@ private:
   bool finished_ = false;
 };
 
-auto process(std::string const &input_name, std::string const &output_name, bool force,
-             bool compress, std::size_t block_size, std::uint64_t output_limit) -> void
+auto process(std::string const &input_name,
+  std::string const &output_name,
+  bool force,
+  bool compress,
+  std::size_t block_size,
+  std::uint64_t output_limit) -> void
 {
   auto const input_path = fs::absolute(input_name);
   auto const output_path = fs::absolute(output_name);
@@ -100,7 +105,8 @@ auto process(std::string const &input_name, std::string const &output_name, bool
   if (compress) {
     static_cast<void>(dacoexec::huffman::compress_stream(source, output, { .block_size_ = block_size }));
   } else {
-    static_cast<void>(dacoexec::huffman::decompress_stream(source, output, { .max_frame_size_ = dacoexec::huffman::max_frame_size, .max_output_bytes_ = output_limit }));
+    static_cast<void>(dacoexec::huffman::decompress_stream(
+      source, output, { .max_frame_size_ = dacoexec::huffman::max_frame_size, .max_output_bytes_ = output_limit }));
   }
   if (input.bad()) { throw dacoexec::stream_error("Input read failed"); }
   output.close();
@@ -121,7 +127,8 @@ auto main(int argc, char **argv) -> int
   auto output_limit = std::numeric_limits<std::uint64_t>::max();
   auto *compress = app.add_subcommand("compress", "Compress a file to DHF1");
   compress->add_option("--algorithm", algorithm)->required()->check(CLI::IsMember({ "huffman" }));
-  compress->add_option("--block-size", block_size)->check(CLI::Range(std::size_t{1}, dacoexec::huffman::max_frame_size));
+  compress->add_option("--block-size", block_size)
+    ->check(CLI::Range(std::size_t{ 1 }, dacoexec::huffman::max_frame_size));
   compress->add_option("input", input)->required();
   compress->add_option("output", output)->required();
   compress->add_flag("--force", force);

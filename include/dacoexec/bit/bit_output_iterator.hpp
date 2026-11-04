@@ -157,13 +157,13 @@ public:
   bit_writer(bit_writer const &) = delete;
   auto operator=(bit_writer const &) -> bit_writer & = delete;
 
-/**
- * Transfers the cursor and pending bits, preserving finalization and failure state.
- *
- * The source becomes unusable. Existing handles to the source are invalidated.
- * If a cursor move throws, the source is retired and no writer is constructed.
- * @see bit_writer
- */
+  /**
+   * Transfers the cursor and pending bits, preserving finalization and failure state.
+   *
+   * The source becomes unusable. Existing handles to the source are invalidated.
+   * If a cursor move throws, the source is retired and no writer is constructed.
+   * @see bit_writer
+   */
   bit_writer(bit_writer &&other) noexcept
     requires std::is_nothrow_move_constructible_v<Out>
     : output_(std::move(other.output_))
@@ -183,14 +183,14 @@ public:
     throw;
   }
 
-/**
- * Replaces the cursor and pending state, discarding this writer's pending bits.
- *
- * Self-assignment is a no-op. Otherwise both writers' handles are invalidated
- * and the source becomes unusable. If cursor assignment throws, both writers
- * are retired without emitting pending bits.
- * @see bit_writer
- */
+  /**
+   * Replaces the cursor and pending state, discarding this writer's pending bits.
+   *
+   * Self-assignment is a no-op. Otherwise both writers' handles are invalidated
+   * and the source becomes unusable. If cursor assignment throws, both writers
+   * are retired without emitting pending bits.
+   * @see bit_writer
+   */
   auto operator=(bit_writer &&other) noexcept -> bit_writer &
     requires std::is_nothrow_move_assignable_v<Out>
   {
@@ -296,7 +296,8 @@ public:
    *
    * @see bit_output_iterator
    */
-  [[nodiscard]] auto output_iterator() noexcept -> bit_output_iterator<Out> { return bit_output_iterator<Out>{ *this }; }
+  [[nodiscard]] auto output_iterator() noexcept -> bit_output_iterator<Out>
+  { return bit_output_iterator<Out>{ *this }; }
 
 private:
   auto ensure_writable() const -> void
@@ -371,4 +372,4 @@ auto bit_output_iterator<Out>::proxy::operator=(bool bit) const -> proxy const &
 
 }// namespace dacoexec
 
-#endif // DACOEXEC_BIT_BIT_OUTPUT_ITERATOR_HPP
+#endif// DACOEXEC_BIT_BIT_OUTPUT_ITERATOR_HPP

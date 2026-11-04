@@ -151,7 +151,8 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.state_ == nullptr || cursor.state_->finished_; }
 
   private:
@@ -223,4 +224,4 @@ namespace views {
 }// namespace views
 }// namespace dacoexec::huffman
 
-#endif // DACOEXEC_HUFFMAN_CODEWORDS_VIEW_HPP
+#endif// DACOEXEC_HUFFMAN_CODEWORDS_VIEW_HPP

@@ -24,19 +24,34 @@ endif()
 
 add_subdirectory("${DACOEXEC_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/dacoexec")
 
-if(NOT CMAKE_CXX_STANDARD EQUAL 23)
+if(NOT
+   CMAKE_CXX_STANDARD
+   EQUAL
+   23)
   message(FATAL_ERROR "Embedded dacoexec changed CMAKE_CXX_STANDARD to '${CMAKE_CXX_STANDARD}'")
 endif()
-if(NOT CMAKE_CXX_EXTENSIONS STREQUAL "OFF")
+if(NOT
+   CMAKE_CXX_EXTENSIONS
+   STREQUAL
+   "OFF")
   message(FATAL_ERROR "Embedded dacoexec changed CMAKE_CXX_EXTENSIONS to '${CMAKE_CXX_EXTENSIONS}'")
 endif()
-if(NOT CMAKE_CXX_FLAGS STREQUAL saved_cxx_flags)
+if(NOT
+   CMAKE_CXX_FLAGS
+   STREQUAL
+   saved_cxx_flags)
   message(FATAL_ERROR "Embedded dacoexec changed CMAKE_CXX_FLAGS")
 endif()
-if(NOT CMAKE_BUILD_TYPE STREQUAL saved_build_type)
+if(NOT
+   CMAKE_BUILD_TYPE
+   STREQUAL
+   saved_build_type)
   message(FATAL_ERROR "Embedded dacoexec changed CMAKE_BUILD_TYPE")
 endif()
-if(NOT PARENT_SENTINEL STREQUAL saved_sentinel)
+if(NOT
+   PARENT_SENTINEL
+   STREQUAL
+   saved_sentinel)
   message(FATAL_ERROR "Embedded dacoexec changed PARENT_SENTINEL")
 endif()
 
@@ -45,7 +60,10 @@ if(NOT TARGET dacoexec::dacoexec)
 endif()
 
 get_target_property(dacoexec_type dacoexec TYPE)
-if(NOT dacoexec_type STREQUAL "INTERFACE_LIBRARY")
+if(NOT
+   dacoexec_type
+   STREQUAL
+   "INTERFACE_LIBRARY")
   message(FATAL_ERROR "dacoexec is ${dacoexec_type}, expected INTERFACE_LIBRARY")
 endif()
 
@@ -54,8 +72,17 @@ if(dacoexec_link_libs)
   message(FATAL_ERROR "The public target links dependencies: ${dacoexec_link_libs}")
 endif()
 
-foreach(unexpected IN ITEMS dacoexec_tests dacoexec_constexpr_tests intro Catch2::Catch2WithMain CLI11::CLI11 fmt::fmt
-                             spdlog::spdlog ftxui::screen STDEXEC::stdexec)
+foreach(
+  unexpected IN
+  ITEMS dacoexec_tests
+        dacoexec_constexpr_tests
+        intro
+        Catch2::Catch2WithMain
+        CLI11::CLI11
+        fmt::fmt
+        spdlog::spdlog
+        ftxui::screen
+        STDEXEC::stdexec)
   if(TARGET ${unexpected})
     message(FATAL_ERROR "Subproject unexpectedly created ${unexpected}")
   endif()

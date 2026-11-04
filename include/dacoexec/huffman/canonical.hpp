@@ -16,140 +16,140 @@
 
 namespace dacoexec::huffman {
 
-  static_assert(alphabet_size == static_cast<std::size_t>(std::numeric_limits<std::uint8_t>::max()) + 1U);
+static_assert(alphabet_size == static_cast<std::size_t>(std::numeric_limits<std::uint8_t>::max()) + 1U);
 
-  /**
-   * Largest codeword width supported by canonical_codebook and bit_writer.
-   */
-  inline constexpr unsigned max_canonical_bits = std::numeric_limits<std::uint32_t>::digits;
+/**
+ * Largest codeword width supported by canonical_codebook and bit_writer.
+ */
+inline constexpr unsigned max_canonical_bits = std::numeric_limits<std::uint32_t>::digits;
 
+/**
+ * Low length_ bits, emitted most-significant-first. Zero length means absent.
+ */
+struct codeword
+{
+  //! Code bits in the low length_ positions; emit highest of those bits first.
+  std::uint32_t bits_ = 0;
+  //! Meaningful width; zero denotes an absent symbol.
+  std::uint8_t length_ = 0;
+
+  friend constexpr auto operator==(codeword const &, codeword const &) -> bool = default;
+};
+
+class canonical_codebook;
+[[nodiscard]] constexpr auto try_make_canonical_codebook(code_length_table const &lengths)
+  -> std::optional<canonical_codebook>;
+
+/**
+ * Immutable value reconstructed solely from validated code lengths.
+ * Codes are assigned by increasing length, then increasing numeric byte value.
+ * Empty tables produce an empty book; a singleton uses the one-bit code zero.
+ * No dynamic allocation is needed.
+ *
+ * @code
+ * auto frequencies = huffman::count_frequencies(bytes);
+ * auto lengths = huffman::build_code_lengths(frequencies);
+ * auto book = huffman::make_canonical_codebook(lengths);
+ * @endcode
+ *
+ * @see make_canonical_codebook
+ * @see try_make_canonical_codebook
+ */
+class canonical_codebook
+{
+public:
   /**
-   * Low length_ bits, emitted most-significant-first. Zero length means absent.
+   * Returns the symbol's codeword, with length zero when the symbol is absent.
    */
-  struct codeword
+  [[nodiscard]] constexpr auto operator[](std::uint8_t symbol) const noexcept -> codeword
   {
-    //! Code bits in the low length_ positions; emit highest of those bits first.
-    std::uint32_t bits_ = 0;
-    //! Meaningful width; zero denotes an absent symbol.
-    std::uint8_t length_ = 0;
+    // A uint8_t always indexes the complete byte alphabet without a bounds check.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return words_[symbol];
+  }
 
-    friend constexpr auto operator==(codeword const &, codeword const &) -> bool = default;
-  };
+  [[nodiscard]] constexpr auto lengths() const noexcept -> code_length_table const & { return lengths_; }
 
-  class canonical_codebook;
-  [[nodiscard]] constexpr auto try_make_canonical_codebook(code_length_table const &lengths)
+private:
+  friend constexpr auto try_make_canonical_codebook(code_length_table const &lengths)
     -> std::optional<canonical_codebook>;
 
-  /**
-   * Immutable value reconstructed solely from validated code lengths.
-   * Codes are assigned by increasing length, then increasing numeric byte value.
-   * Empty tables produce an empty book; a singleton uses the one-bit code zero.
-   * No dynamic allocation is needed.
-   *
-   * @code
-   * auto frequencies = huffman::count_frequencies(bytes);
-   * auto lengths = huffman::build_code_lengths(frequencies);
-   * auto book = huffman::make_canonical_codebook(lengths);
-   * @endcode
-   *
-   * @see make_canonical_codebook
-   * @see try_make_canonical_codebook
-   */
-  class canonical_codebook
-  {
-  public:
-    /**
-     * Returns the symbol's codeword, with length zero when the symbol is absent.
-     */
-    [[nodiscard]] constexpr auto operator[](std::uint8_t symbol) const noexcept -> codeword
-    {
-      // A uint8_t always indexes the complete byte alphabet without a bounds check.
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      return words_[symbol];
-    }
+  constexpr canonical_codebook() = default;
 
-    [[nodiscard]] constexpr auto lengths() const noexcept -> code_length_table const & { return lengths_; }
+  code_length_table lengths_{};
+  std::array<codeword, alphabet_size> words_{};
+};
 
-  private:
-    friend constexpr auto try_make_canonical_codebook(code_length_table const &lengths)
-      -> std::optional<canonical_codebook>;
+/**
+ * Unsupported widths return nullopt before structural validation. Supported
+ * tables must be empty, a length-one singleton, or a complete prefix tree.
+ * Invalid supported tables throw invalid_argument. No allocation is needed.
+ *
+ * @param lengths Width for each byte symbol; zero means absent.
+ * @return Validated codebook, or std::nullopt if any width exceeds 32 bits.
+ * @throws std::invalid_argument For supported-width tables with an invalid
+ *     singleton, oversubscribed lengths, or an incomplete prefix tree.
+ * @see make_canonical_codebook
+ */
+[[nodiscard]] constexpr auto try_make_canonical_codebook(code_length_table const &lengths)
+  -> std::optional<canonical_codebook>
+{
+  std::array<std::uint32_t, max_canonical_bits + 1U> counts{};
+  std::size_t present = 0;
+  unsigned maximum = 0;
+  for (auto const length : lengths) {
+    if (length > max_canonical_bits) { return std::nullopt; }
+    if (length == 0) { continue; }
+    ++counts.at(length);
+    ++present;
+    maximum = std::max(maximum, static_cast<unsigned>(length));
+  }
 
-    constexpr canonical_codebook() = default;
-
-    code_length_table lengths_{};
-    std::array<codeword, alphabet_size> words_{};
-  };
-
-  /**
-   * Unsupported widths return nullopt before structural validation. Supported
-   * tables must be empty, a length-one singleton, or a complete prefix tree.
-   * Invalid supported tables throw invalid_argument. No allocation is needed.
-   *
-   * @param lengths Width for each byte symbol; zero means absent.
-   * @return Validated codebook, or std::nullopt if any width exceeds 32 bits.
-   * @throws std::invalid_argument For supported-width tables with an invalid
-   *     singleton, oversubscribed lengths, or an incomplete prefix tree.
-   * @see make_canonical_codebook
-   */
-  [[nodiscard]] constexpr auto try_make_canonical_codebook(code_length_table const &lengths)
-    -> std::optional<canonical_codebook>
-  {
-    std::array<std::uint32_t, max_canonical_bits + 1U> counts{};
-    std::size_t present = 0;
-    unsigned maximum = 0;
-    for (auto const length : lengths) {
-      if (length > max_canonical_bits) { return std::nullopt; }
-      if (length == 0) { continue; }
-      ++counts.at(length);
-      ++present;
-      maximum = std::max(maximum, static_cast<unsigned>(length));
-    }
-
-    if (present == 1) {
-      if (maximum != 1) { throw std::invalid_argument("Huffman singleton must have length one"); }
-    } else if (present > 1) {
-      std::uint64_t slots = 1;
-      for (unsigned length = 1; length <= max_canonical_bits; ++length) {
-        slots *= 2U;
-        if (counts.at(length) > slots) { throw std::invalid_argument("Oversubscribed Huffman lengths"); }
-        slots -= counts.at(length);
-      }
-      if (slots != 0) { throw std::invalid_argument("Incomplete Huffman lengths"); }
-    }
-
-    std::array<std::uint64_t, max_canonical_bits + 1U> next_code{};
-    std::uint64_t code = 0;
+  if (present == 1) {
+    if (maximum != 1) { throw std::invalid_argument("Huffman singleton must have length one"); }
+  } else if (present > 1) {
+    std::uint64_t slots = 1;
     for (unsigned length = 1; length <= max_canonical_bits; ++length) {
-      code = (code + counts.at(length - 1U)) << 1U;
-      next_code.at(length) = code;
+      slots *= 2U;
+      if (counts.at(length) > slots) { throw std::invalid_argument("Oversubscribed Huffman lengths"); }
+      slots -= counts.at(length);
     }
-    canonical_codebook result;
-    result.lengths_ = lengths;
-    for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
-      auto const length = lengths.at(symbol);
-      if (length == 0) { continue; }
-      result.words_.at(symbol) = codeword{ .bits_ = static_cast<std::uint32_t>(next_code.at(length)), .length_ = length };
-      ++next_code.at(length);
-    }
-    return result;
+    if (slots != 0) { throw std::invalid_argument("Incomplete Huffman lengths"); }
   }
 
-  /**
-   * Constructs the canonical codebook with the same validation as try_make_canonical_codebook().
-   *
-   * @param lengths Width for each symbol; zero means absent.
-   * @return Validated canonical codebook.
-   * @throws std::length_error If any width exceeds max_canonical_bits.
-   * @throws std::invalid_argument If a supported-width table is structurally invalid.
-   * @see try_make_canonical_codebook
-   */
-  [[nodiscard]] constexpr auto make_canonical_codebook(code_length_table const &lengths) -> canonical_codebook
-  {
-    auto result = try_make_canonical_codebook(lengths);
-    if (!result) { throw std::length_error("Huffman code length exceeds codeword width"); }
-    return *result;
+  std::array<std::uint64_t, max_canonical_bits + 1U> next_code{};
+  std::uint64_t code = 0;
+  for (unsigned length = 1; length <= max_canonical_bits; ++length) {
+    code = (code + counts.at(length - 1U)) << 1U;
+    next_code.at(length) = code;
   }
+  canonical_codebook result;
+  result.lengths_ = lengths;
+  for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+    auto const length = lengths.at(symbol);
+    if (length == 0) { continue; }
+    result.words_.at(symbol) = codeword{ .bits_ = static_cast<std::uint32_t>(next_code.at(length)), .length_ = length };
+    ++next_code.at(length);
+  }
+  return result;
+}
+
+/**
+ * Constructs the canonical codebook with the same validation as try_make_canonical_codebook().
+ *
+ * @param lengths Width for each symbol; zero means absent.
+ * @return Validated canonical codebook.
+ * @throws std::length_error If any width exceeds max_canonical_bits.
+ * @throws std::invalid_argument If a supported-width table is structurally invalid.
+ * @see try_make_canonical_codebook
+ */
+[[nodiscard]] constexpr auto make_canonical_codebook(code_length_table const &lengths) -> canonical_codebook
+{
+  auto result = try_make_canonical_codebook(lengths);
+  if (!result) { throw std::length_error("Huffman code length exceeds codeword width"); }
+  return *result;
+}
 
 }// namespace dacoexec::huffman
 
-#endif // DACOEXEC_HUFFMAN_CANONICAL_HPP
+#endif// DACOEXEC_HUFFMAN_CANONICAL_HPP

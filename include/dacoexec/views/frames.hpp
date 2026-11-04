@@ -69,8 +69,7 @@ class frames_view : public std::ranges::view_interface<frames_view<V>>
       return value;
     }
 
-    template<std::size_t n>
-    auto read_array() -> std::array<std::byte, n>
+    template<std::size_t n> auto read_array() -> std::array<std::byte, n>
     {
       std::array<std::byte, n> bytes{};
       for (auto &byte : bytes) { byte = read_byte(); }
@@ -159,7 +158,9 @@ public:
    */
   explicit frames_view(V base, std::size_t frame_limit)
   {
-    if (frame_limit == 0 || frame_limit > huffman::max_frame_size) { throw std::invalid_argument("Invalid DHF1 frame limit"); }
+    if (frame_limit == 0 || frame_limit > huffman::max_frame_size) {
+      throw std::invalid_argument("Invalid DHF1 frame limit");
+    }
     state_ = std::make_unique<state>(std::move(base), frame_limit);
   }
 
@@ -207,11 +208,13 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.state_ == nullptr || !cursor.state_->current_.has_value(); }
 
     // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> huffman::encoded_frame && { return std::move(cursor.state_->current_.value()); }
+    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> huffman::encoded_frame &&
+    { return std::move(cursor.state_->current_.value()); }
 
   private:
     friend class frames_view;
@@ -247,7 +250,9 @@ namespace views {
     public:
       explicit constexpr frames_closure(std::size_t frame_limit) : frame_limit_(frame_limit)
       {
-        if (frame_limit_ == 0 || frame_limit_ > huffman::max_frame_size) { throw std::invalid_argument("Invalid DHF1 frame limit"); }
+        if (frame_limit_ == 0 || frame_limit_ > huffman::max_frame_size) {
+          throw std::invalid_argument("Invalid DHF1 frame limit");
+        }
       }
 
       template<std::ranges::viewable_range R>
@@ -257,8 +262,7 @@ namespace views {
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] friend auto operator|(R &&range, frames_closure const &adaptor)
-        -> frames_view<std::views::all_t<R>>
+      [[nodiscard]] friend auto operator|(R &&range, frames_closure const &adaptor) -> frames_view<std::views::all_t<R>>
       { return adaptor(std::forward<R>(range)); }
 
     private:
@@ -286,4 +290,4 @@ namespace views {
 }// namespace views
 }// namespace dacoexec
 
-#endif // DACOEXEC_VIEWS_FRAMES_HPP
+#endif// DACOEXEC_VIEWS_FRAMES_HPP

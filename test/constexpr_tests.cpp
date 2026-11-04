@@ -1,11 +1,11 @@
-#include <dacoexec/huffman/block.hpp>
-#include <dacoexec/huffman/decode_view.hpp>
-#include <dacoexec/huffman/canonical.hpp>
+#include "huffman_test_utils.hpp"
+#include <concepts>
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/byte.hpp>
-#include <concepts>
+#include <dacoexec/huffman/block.hpp>
+#include <dacoexec/huffman/canonical.hpp>
+#include <dacoexec/huffman/decode_view.hpp>
 #include <utility>
-#include "huffman_test_utils.hpp"
 
 #include <dacoexec/huffman/frequency.hpp>
 
@@ -17,7 +17,7 @@
 
 #include <dacoexec/views/buffered_bytes.hpp>
 
-#include <dacoexec/dacoexec.hpp> // IWYU pragma: keep -- Exercise the public umbrella header.
+#include <dacoexec/dacoexec.hpp>// IWYU pragma: keep -- Exercise the public umbrella header.
 
 #include <array>
 #include <bit>
@@ -98,9 +98,11 @@ static_assert(dacoexec::detail::low_bit_mask(word_width) == word_mask);
 
 static_assert(dacoexec::detail::check_codeword(0U, 0U) == dacoexec::detail::codeword_status::ok);
 static_assert(dacoexec::detail::check_codeword(1U, 0U) == dacoexec::detail::codeword_status::value_too_wide);
-static_assert(dacoexec::detail::check_codeword(0U, unsupported_word_width) == dacoexec::detail::codeword_status::count_too_large);
+static_assert(
+  dacoexec::detail::check_codeword(0U, unsupported_word_width) == dacoexec::detail::codeword_status::count_too_large);
 static_assert(dacoexec::detail::check_codeword(word_mask, word_width) == dacoexec::detail::codeword_status::ok);
-static_assert(dacoexec::detail::check_codeword(overwide_byte, expected_byte_bits) == dacoexec::detail::codeword_status::value_too_wide);
+static_assert(dacoexec::detail::check_codeword(overwide_byte, expected_byte_bits)
+              == dacoexec::detail::codeword_status::value_too_wide);
 static_assert(dacoexec::detail::check_codeword(byte_mask, expected_byte_bits) == dacoexec::detail::codeword_status::ok);
 static_assert(dacoexec::detail::check_codeword(1U, word_width) == dacoexec::detail::codeword_status::ok);
 
@@ -133,7 +135,8 @@ static_assert(!can_adapt_bits<std::vector<int>>);
 static_assert(!can_adapt_bits<std::vector<std::uint16_t>>);
 static_assert(!can_adapt_bits<std::vector<bool>>);
 
-using buffered_bytes = decltype(std::declval<std::vector<std::byte> &>() | dacoexec::views::buffered_bytes(buffer_window_size));
+using buffered_bytes =
+  decltype(std::declval<std::vector<std::byte> &>() | dacoexec::views::buffered_bytes(buffer_window_size));
 
 static_assert(std::ranges::input_range<buffered_bytes>);
 static_assert(!std::ranges::forward_range<buffered_bytes>);
@@ -233,12 +236,17 @@ constexpr auto canonical_empty = dacoexec::huffman::make_canonical_codebook({});
 static_assert(canonical_empty.lengths() == dacoexec::huffman::code_length_table{});
 static_assert(test_detail::canonical_word(canonical_empty, 0) == dacoexec::huffman::codeword{});
 constexpr auto canonical_single = dacoexec::huffman::make_canonical_codebook(only_a_lengths);
-static_assert(test_detail::canonical_word(canonical_single, 'A') == dacoexec::huffman::codeword{ .bits_ = 0, .length_ = 1 });
+static_assert(
+  test_detail::canonical_word(canonical_single, 'A') == dacoexec::huffman::codeword{ .bits_ = 0, .length_ = 1 });
 constexpr auto canonical_sample = dacoexec::huffman::make_canonical_codebook(huffman_lengths);
-static_assert(test_detail::canonical_word(canonical_sample, 'A') == dacoexec::huffman::codeword{ .bits_ = 0b0, .length_ = 1 });
-static_assert(test_detail::canonical_word(canonical_sample, 'B') == dacoexec::huffman::codeword{ .bits_ = 0b10, .length_ = 2 });
-static_assert(test_detail::canonical_word(canonical_sample, 'C') == dacoexec::huffman::codeword{ .bits_ = sample_c_code, .length_ = 3 });
-static_assert(test_detail::canonical_word(canonical_sample, 'D') == dacoexec::huffman::codeword{ .bits_ = sample_d_code, .length_ = 3 });
+static_assert(
+  test_detail::canonical_word(canonical_sample, 'A') == dacoexec::huffman::codeword{ .bits_ = 0b0, .length_ = 1 });
+static_assert(
+  test_detail::canonical_word(canonical_sample, 'B') == dacoexec::huffman::codeword{ .bits_ = 0b10, .length_ = 2 });
+static_assert(test_detail::canonical_word(canonical_sample, 'C')
+              == dacoexec::huffman::codeword{ .bits_ = sample_c_code, .length_ = 3 });
+static_assert(test_detail::canonical_word(canonical_sample, 'D')
+              == dacoexec::huffman::codeword{ .bits_ = sample_d_code, .length_ = 3 });
 
 static_assert([]() -> bool {
   dacoexec::huffman::code_length_table lengths{};
@@ -246,7 +254,8 @@ static_assert([]() -> bool {
   lengths.fill(byte_width);
   auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
   for (std::size_t symbol = 0; symbol < dacoexec::huffman::alphabet_size; ++symbol) {
-    if (test_detail::canonical_word(book, static_cast<std::uint8_t>(symbol)) != dacoexec::huffman::codeword{ .bits_ = static_cast<std::uint32_t>(symbol), .length_ = byte_width }) {
+    if (test_detail::canonical_word(book, static_cast<std::uint8_t>(symbol))
+        != dacoexec::huffman::codeword{ .bits_ = static_cast<std::uint32_t>(symbol), .length_ = byte_width }) {
       return false;
     }
   }
@@ -261,9 +270,11 @@ static_assert([]() -> bool {
   lengths.at(dacoexec::huffman::max_canonical_bits - 1U) = dacoexec::huffman::max_canonical_bits;
   lengths.at(dacoexec::huffman::max_canonical_bits) = dacoexec::huffman::max_canonical_bits;
   auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
-  return test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits - 1U) == dacoexec::huffman::codeword{ .bits_ = penultimate_word, .length_ = dacoexec::huffman::max_canonical_bits }
-    && test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits) == dacoexec::huffman::codeword{ .bits_ = word_mask, .length_ = dacoexec::huffman::max_canonical_bits }
-    && dacoexec::huffman::try_make_canonical_codebook(lengths).has_value();
+  return test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits - 1U)
+           == dacoexec::huffman::codeword{ .bits_ = penultimate_word, .length_ = dacoexec::huffman::max_canonical_bits }
+         && test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits)
+              == dacoexec::huffman::codeword{ .bits_ = word_mask, .length_ = dacoexec::huffman::max_canonical_bits }
+         && dacoexec::huffman::try_make_canonical_codebook(lengths).has_value();
 }());
 
 using decode_range = dacoexec::huffman::decode_view<std::ranges::empty_view<std::byte>>;

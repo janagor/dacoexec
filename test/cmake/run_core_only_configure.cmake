@@ -61,11 +61,11 @@ endfunction()
 function(dacoexec_configure_without_downloads build_dir)
   file(REMOVE_RECURSE "${build_dir}")
   set(configure_command
-      ${CMAKE_COMMAND} -S "${SOURCE_DIR}" -B "${build_dir}" ${ARGN}
-      -Ddacoexec_BUILD_CLI=OFF -Ddacoexec_BUILD_FUZZ_TESTS=OFF -Ddacoexec_BUILD_BENCHMARKS=OFF
-      -Ddacoexec_ENABLE_FORMATTING=OFF -Ddacoexec_INSTALL=OFF -Ddacoexec_ENABLE_CLANG_TIDY=OFF
-      -Ddacoexec_ENABLE_CPPCHECK=OFF -Ddacoexec_ENABLE_SANITIZER_ADDRESS=OFF -Ddacoexec_ENABLE_SANITIZER_UNDEFINED=OFF
-      -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_EXTENSIONS=OFF)
+      ${CMAKE_COMMAND} -S "${SOURCE_DIR}" -B "${build_dir}" ${ARGN} -Ddacoexec_BUILD_CLI=OFF
+      -Ddacoexec_BUILD_FUZZ_TESTS=OFF -Ddacoexec_BUILD_BENCHMARKS=OFF -Ddacoexec_ENABLE_FORMATTING=OFF
+      -Ddacoexec_INSTALL=OFF -Ddacoexec_ENABLE_CLANG_TIDY=OFF -Ddacoexec_ENABLE_CPPCHECK=OFF
+      -Ddacoexec_ENABLE_SANITIZER_ADDRESS=OFF -Ddacoexec_ENABLE_SANITIZER_UNDEFINED=OFF -DCMAKE_CXX_STANDARD=20
+      -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_EXTENSIONS=OFF)
   if(GENERATOR)
     list(
       APPEND

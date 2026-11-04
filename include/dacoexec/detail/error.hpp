@@ -28,4 +28,4 @@ public:
   using std::runtime_error::runtime_error;
 };
 }// namespace dacoexec
-#endif // DACOEXEC_DETAIL_ERROR_HPP
+#endif// DACOEXEC_DETAIL_ERROR_HPP

@@ -12,32 +12,53 @@ set(consumer_build "${stage}/build")
 file(REMOVE_RECURSE "${stage}")
 
 set(configure_command
-    ${CMAKE_COMMAND}
-    -S
-    "${SOURCE_DIR}/test/fixtures/${consumer_fixture}"
-    -B
-    "${consumer_build}"
-    "-DDACOEXEC_SOURCE_DIR=${SOURCE_DIR}"
-    -DCMAKE_CXX_STANDARD=23
-    -DCMAKE_CXX_STANDARD_REQUIRED=ON
-    -DCMAKE_CXX_EXTENSIONS=OFF
-    -DPARENT_SENTINEL=dacoexec-parent-sentinel)
+    ${CMAKE_COMMAND} -S "${SOURCE_DIR}/test/fixtures/${consumer_fixture}" -B "${consumer_build}"
+    "-DDACOEXEC_SOURCE_DIR=${SOURCE_DIR}" -DCMAKE_CXX_STANDARD=23 -DCMAKE_CXX_STANDARD_REQUIRED=ON
+    -DCMAKE_CXX_EXTENSIONS=OFF -DPARENT_SENTINEL=dacoexec-parent-sentinel)
 if(GENERATOR)
-  list(APPEND configure_command -G "${GENERATOR}")
+  list(
+    APPEND
+    configure_command
+    -G
+    "${GENERATOR}")
 endif()
-if(GENERATOR_TOOLSET AND NOT GENERATOR_TOOLSET STREQUAL "")
-  list(APPEND configure_command -T "${GENERATOR_TOOLSET}")
+if(GENERATOR_TOOLSET
+   AND NOT
+       GENERATOR_TOOLSET
+       STREQUAL
+       "")
+  list(
+    APPEND
+    configure_command
+    -T
+    "${GENERATOR_TOOLSET}")
 endif()
-if(GENERATOR_PLATFORM AND NOT GENERATOR_PLATFORM STREQUAL "")
-  list(APPEND configure_command -A "${GENERATOR_PLATFORM}")
+if(GENERATOR_PLATFORM
+   AND NOT
+       GENERATOR_PLATFORM
+       STREQUAL
+       "")
+  list(
+    APPEND
+    configure_command
+    -A
+    "${GENERATOR_PLATFORM}")
 endif()
 if(BUILD_TYPE)
   list(APPEND configure_command "-DCMAKE_BUILD_TYPE=${BUILD_TYPE}")
 endif()
-if(CXX_COMPILER AND NOT GENERATOR MATCHES "Visual Studio")
+if(CXX_COMPILER
+   AND NOT
+       GENERATOR
+       MATCHES
+       "Visual Studio")
   list(APPEND configure_command "-DCMAKE_CXX_COMPILER=${CXX_COMPILER}")
 endif()
-if(C_COMPILER AND NOT GENERATOR MATCHES "Visual Studio")
+if(C_COMPILER
+   AND NOT
+       GENERATOR
+       MATCHES
+       "Visual Studio")
   list(APPEND configure_command "-DCMAKE_C_COMPILER=${C_COMPILER}")
 endif()
 if(CXX_FLAGS)
@@ -52,17 +73,29 @@ execute_process(
   RESULT_VARIABLE configure_result
   OUTPUT_VARIABLE configure_output
   ERROR_VARIABLE configure_error)
-if(NOT configure_result EQUAL 0)
+if(NOT
+   configure_result
+   EQUAL
+   0)
   message(FATAL_ERROR "Subproject configure failed (${configure_result})\n${configure_output}\n${configure_error}")
 endif()
 
 if(NOT EXECUTION_SUBPROJECT)
   set(configure_log "${configure_output}${configure_error}")
   string(TOLOWER "${configure_log}" configure_log_lower)
-  foreach(package IN ITEMS "catchorg/catch2" "fmtlib/fmt" "gabime/spdlog" "arthursonzogni/ftxui" "cliutils/cli11"
-                           "nvidia/stdexec")
+  foreach(
+    package IN
+    ITEMS "catchorg/catch2"
+          "fmtlib/fmt"
+          "gabime/spdlog"
+          "arthursonzogni/ftxui"
+          "cliutils/cli11"
+          "nvidia/stdexec")
     string(FIND "${configure_log_lower}" "${package}" package_pos)
-    if(NOT package_pos EQUAL -1)
+    if(NOT
+       package_pos
+       EQUAL
+       -1)
       message(FATAL_ERROR "Subproject configuration fetched ${package}")
     endif()
   endforeach()
@@ -70,7 +103,11 @@ if(NOT EXECUTION_SUBPROJECT)
   if(EXISTS "${consumer_build}/_deps" OR EXISTS "${consumer_build}/dacoexec/_deps")
     message(FATAL_ERROR "Subproject configuration populated _deps")
   endif()
-  file(GLOB cpm_bootstrap "${consumer_build}/cmake/CPM_*.cmake" "${consumer_build}/dacoexec/cmake/CPM_*.cmake")
+  file(
+    GLOB
+    cpm_bootstrap
+    "${consumer_build}/cmake/CPM_*.cmake"
+    "${consumer_build}/dacoexec/cmake/CPM_*.cmake")
   if(cpm_bootstrap)
     message(FATAL_ERROR "Subproject configuration downloaded CPM: ${cpm_bootstrap}")
   endif()
@@ -79,14 +116,21 @@ endif()
 
 set(build_command ${CMAKE_COMMAND} --build "${consumer_build}")
 if(CONFIG)
-  list(APPEND build_command --config "${CONFIG}")
+  list(
+    APPEND
+    build_command
+    --config
+    "${CONFIG}")
 endif()
 execute_process(
   COMMAND ${build_command}
   RESULT_VARIABLE build_result
   OUTPUT_VARIABLE build_output
   ERROR_VARIABLE build_error)
-if(NOT build_result EQUAL 0)
+if(NOT
+   build_result
+   EQUAL
+   0)
   message(FATAL_ERROR "Subproject build failed (${build_result})\n${build_output}\n${build_error}")
 endif()
 
@@ -97,28 +141,48 @@ else()
 endif()
 set(test_command ${ctest} --test-dir "${consumer_build}" --output-on-failure)
 if(CONFIG)
-  list(APPEND test_command -C "${CONFIG}")
+  list(
+    APPEND
+    test_command
+    -C
+    "${CONFIG}")
 endif()
 execute_process(
   COMMAND ${test_command}
   RESULT_VARIABLE test_result
   OUTPUT_VARIABLE test_output
   ERROR_VARIABLE test_error)
-if(NOT test_result EQUAL 0)
+if(NOT
+   test_result
+   EQUAL
+   0)
   message(FATAL_ERROR "Subproject consumer failed (${test_result})\n${test_output}\n${test_error}")
 endif()
 
 if(EXECUTION_SUBPROJECT)
   set(install_command ${CMAKE_COMMAND} --install "${consumer_build}" --prefix "${stage}/prefix")
   if(CONFIG)
-    list(APPEND install_command --config "${CONFIG}")
+    list(
+      APPEND
+      install_command
+      --config
+      "${CONFIG}")
   endif()
-  execute_process(COMMAND ${install_command} RESULT_VARIABLE install_result
-    OUTPUT_VARIABLE install_output ERROR_VARIABLE install_error)
-  if(NOT install_result EQUAL 0)
+  execute_process(
+    COMMAND ${install_command}
+    RESULT_VARIABLE install_result
+    OUTPUT_VARIABLE install_output
+    ERROR_VARIABLE install_error)
+  if(NOT
+     install_result
+     EQUAL
+     0)
     message(FATAL_ERROR "Embedded install failed\n${install_output}\n${install_error}")
   endif()
-  file(GLOB_RECURSE installed_files LIST_DIRECTORIES false "${stage}/prefix/*")
+  file(
+    GLOB_RECURSE installed_files
+    LIST_DIRECTORIES false
+    "${stage}/prefix/*")
   if(installed_files)
     message(FATAL_ERROR "Embedded execution installed files: ${installed_files}")
   endif()

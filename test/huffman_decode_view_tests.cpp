@@ -1,19 +1,19 @@
 // Catch assertion branches exceed cppcheck's normal analysis budget.
 // cppcheck-suppress-file normalCheckLevelMaxBranches
 #include <algorithm>
-#include <dacoexec/detail/byte.hpp>
-#include <dacoexec/huffman/canonical.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/tree.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/detail/byte.hpp>
+#include <dacoexec/huffman/canonical.hpp>
+#include <dacoexec/huffman/decode_view.hpp>
+#include <dacoexec/huffman/frequency.hpp>
+#include <dacoexec/huffman/tree.hpp>
+#include <dacoexec/views/buffered_bytes.hpp>
 #include <iterator>
 #include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
-#include <dacoexec/huffman/decode_view.hpp>
-#include <dacoexec/views/buffered_bytes.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -37,8 +37,7 @@ constexpr unsigned golden_second = 0x6E;
 [[nodiscard]] auto sample_book() -> canonical_codebook
 { return make_canonical_codebook(build_code_lengths(count_frequencies(sample))); }
 
-template<std::ranges::input_range R>
-[[nodiscard]] auto collect(R &range) -> std::vector<std::byte>
+template<std::ranges::input_range R> [[nodiscard]] auto collect(R &range) -> std::vector<std::byte>
 {
   std::vector<std::byte> result;
   std::ranges::copy(range, std::back_inserter(result));
@@ -57,7 +56,10 @@ TEST_CASE("Lazy decoder stages one symbol and transfers iteration state", "[huff
 {
   unsigned reads = 0;
   auto source = std::vector<unsigned char>{ golden_first, golden_second }
-    | std::views::transform([&reads](unsigned char value) -> unsigned char { ++reads; return value; });
+                | std::views::transform([&reads](unsigned char value) -> unsigned char {
+                    ++reads;
+                    return value;
+                  });
   auto decoded = std::move(source) | huffman_views::decode(sample_book(), sample_bits, sample.size());
   CHECK(reads == 0);
   auto cursor = decoded.begin();
@@ -85,8 +87,8 @@ TEST_CASE("Decoder accepts a move-only single-pass source and owns its codebook"
 {
   constexpr std::size_t window = 1;
   auto decoded = (std::vector<std::byte>{ std::byte{ golden_first }, std::byte{ golden_second } }
-      | dacoexec::views::buffered_bytes(window))
-    | huffman_views::decode(sample_book(), sample_bits, sample.size());
+                   | dacoexec::views::buffered_bytes(window))
+                 | huffman_views::decode(sample_book(), sample_bits, sample.size());
   CHECK(collect(decoded).size() == sample.size());
   auto source = std::vector<char>{ 0 };
   auto book = make_canonical_codebook(build_code_lengths(count_frequencies(std::string_view{ "A" })));
@@ -98,10 +100,10 @@ TEST_CASE("Decoder accepts a move-only single-pass source and owns its codebook"
 TEST_CASE("Decoder propagates source failures and permanently ends", "[huffman][decode]")
 {
   auto source = std::vector<std::byte>{ std::byte{ golden_first }, std::byte{ golden_second } }
-    | std::views::transform([](std::byte value) -> std::byte {
-        if (value == std::byte{ golden_second }) { throw source_error{}; }
-        return value;
-      });
+                | std::views::transform([](std::byte value) -> std::byte {
+                    if (value == std::byte{ golden_second }) { throw source_error{}; }
+                    return value;
+                  });
   auto decoded = std::move(source) | huffman_views::decode(sample_book(), sample_bits, sample.size());
   auto cursor = decoded.begin();
   CHECK_THROWS_AS(collect(decoded), source_error);

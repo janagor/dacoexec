@@ -230,11 +230,13 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.state_ == nullptr || !cursor.state_->current_.has_value(); }
 
     // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> byte_block && { return std::move(cursor.state_->current_.value()); }
+    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> byte_block &&
+    { return std::move(cursor.state_->current_.value()); }
 
   private:
     friend class blocks_view;
@@ -280,8 +282,7 @@ namespace views {
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] friend auto operator|(R &&range, blocks_closure const &adaptor)
-        -> blocks_view<std::views::all_t<R>>
+      [[nodiscard]] friend auto operator|(R &&range, blocks_closure const &adaptor) -> blocks_view<std::views::all_t<R>>
       { return adaptor(std::forward<R>(range)); }
 
     private:
@@ -308,4 +309,4 @@ namespace views {
 }// namespace views
 }// namespace dacoexec
 
-#endif // DACOEXEC_VIEWS_BLOCKS_HPP
+#endif// DACOEXEC_VIEWS_BLOCKS_HPP

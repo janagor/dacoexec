@@ -1,13 +1,13 @@
-#include <dacoexec/huffman/decode_view.hpp>
-#include <dacoexec/detail/byte.hpp>
-#include <dacoexec/huffman/canonical.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/tree.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/detail/byte.hpp>
+#include <dacoexec/huffman/block.hpp>
+#include <dacoexec/huffman/canonical.hpp>
+#include <dacoexec/huffman/decode_view.hpp>
+#include <dacoexec/huffman/frequency.hpp>
+#include <dacoexec/huffman/tree.hpp>
 #include <utility>
 #include <vector>
-#include <dacoexec/huffman/block.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -62,16 +62,27 @@ auto round_trip(std::vector<std::byte> const &bytes, std::uint64_t seq = sequenc
 
 TEST_CASE("Block codec round trips boundary sizes and binary input", "[huffman][codec]")
 {
-  constexpr std::array sizes{ std::size_t{ 0 }, std::size_t{ 1 }, std::size_t{ 7 }, std::size_t{ 8 },
-    std::size_t{ 9 }, alphabet_size - 1U, alphabet_size, alphabet_size + 1U, large_block, mebibyte };
+  constexpr std::array sizes{ std::size_t{ 0 },
+    std::size_t{ 1 },
+    std::size_t{ 7 },
+    std::size_t{ 8 },
+    std::size_t{ 9 },
+    alphabet_size - 1U,
+    alphabet_size,
+    alphabet_size + 1U,
+    large_block,
+    mebibyte };
   for (auto size : sizes) {
     round_trip(std::vector<std::byte>(size, std::byte{ 'A' }));
     std::vector<std::byte> binary(size);
-    for (std::size_t index = 0; index < size; ++index) { binary.at(index) = static_cast<std::byte>(index % alphabet_size); }
+    for (std::size_t index = 0; index < size; ++index) {
+      binary.at(index) = static_cast<std::byte>(index % alphabet_size);
+    }
     round_trip(binary);
   }
   round_trip({}, 0);
-  round_trip({ std::byte{ 0 }, std::byte{ high_bit_value }, std::byte{ all_bits_value } }, std::numeric_limits<std::uint64_t>::max());
+  round_trip({ std::byte{ 0 }, std::byte{ high_bit_value }, std::byte{ all_bits_value } },
+    std::numeric_limits<std::uint64_t>::max());
   std::vector<std::byte> text;
   for (auto value : sample) { text.push_back(static_cast<std::byte>(value)); }
   round_trip(text);
@@ -89,7 +100,9 @@ TEST_CASE("Block selection is conservative and deterministic", "[huffman][codec]
   auto small = compress_block({ sequence, { std::byte{ 'A' } } });
   CHECK(small.encoding_ == block_encoding::raw);
   std::vector<std::byte> uniform(alphabet_size);
-  for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) { uniform.at(symbol) = static_cast<std::byte>(symbol); }
+  for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+    uniform.at(symbol) = static_cast<std::byte>(symbol);
+  }
   auto const *original_storage = uniform.data();
   auto raw = compress_block({ sequence, std::move(uniform) });
   CHECK(raw.encoding_ == block_encoding::raw);
@@ -129,8 +142,17 @@ TEST_CASE("Malformed canonical length tables fail at decoder boundary", "[huffma
 {
   auto block = golden();
   block.lengths_ = {};
-  SECTION("oversubscribed") { block.lengths_.at(0) = 1; block.lengths_.at(1) = 1; block.lengths_.at(2) = 1; }
-  SECTION("incomplete") { block.lengths_.at(0) = 2; block.lengths_.at(1) = 2; }
+  SECTION("oversubscribed")
+  {
+    block.lengths_.at(0) = 1;
+    block.lengths_.at(1) = 1;
+    block.lengths_.at(2) = 1;
+  }
+  SECTION("incomplete")
+  {
+    block.lengths_.at(0) = 2;
+    block.lengths_.at(1) = 2;
+  }
   SECTION("unsupported width") { block.lengths_.at(0) = max_canonical_bits + 1U; }
   SECTION("empty") {}
   CHECK_THROWS_AS(decompress_block(std::move(block), sample.size()), decode_error);
@@ -147,7 +169,8 @@ TEST_CASE("Malformed Huffman payloads never return partial output", "[huffman][c
   SECTION("invalid padding count") { block.padding_bits_ = dacoexec::detail::bits_per_byte; }
   SECTION("extra complete codeword") { block.padding_bits_ = 0; }
   SECTION("extra payload byte") { block.payload_.push_back(std::byte{ 0 }); }
-  SECTION("invalid singleton bit") {
+  SECTION("invalid singleton bit")
+  {
     block.lengths_ = {};
     block.lengths_.front() = 1;
     block.payload_.front() = std::byte{ high_bit_value };
@@ -164,7 +187,8 @@ TEST_CASE("Block metadata and output limits are validated", "[huffman][codec]")
   SECTION("raw lengths") { block.lengths_.front() = 1; }
   // Deliberately exercise rejection of an unrecognized fixed-underlying-type value.
   // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-  SECTION("unknown encoding") { block.encoding_ = static_cast<block_encoding>(std::numeric_limits<std::uint8_t>::max()); }
+  SECTION("unknown encoding")
+  { block.encoding_ = static_cast<block_encoding>(std::numeric_limits<std::uint8_t>::max()); }
   SECTION("huge output") { block.uncompressed_size_ = std::numeric_limits<std::uint64_t>::max(); }
   SECTION("empty Huffman") { block.encoding_ = block_encoding::canonical_huffman; }
   CHECK_THROWS_AS(decompress_block(std::move(block), large_block), decode_error);
@@ -180,7 +204,9 @@ TEST_CASE("Fixed seed random and skewed blocks round trip", "[huffman][codec]")
     std::vector<std::byte> bytes(generator() % large_block);
     for (auto &value : bytes) { value = static_cast<std::byte>(generator() % alphabet_size); }
     round_trip(bytes);
-    for (auto &value : bytes) { if (generator() % alphabet_size != 0) { value = std::byte{ 'A' }; } }
+    for (auto &value : bytes) {
+      if (generator() % alphabet_size != 0) { value = std::byte{ 'A' }; }
+    }
     round_trip(bytes);
   }
 }
@@ -204,9 +230,7 @@ TEST_CASE("Block decoder accepts maximum-width codewords", "[huffman][codec]")
 TEST_CASE("Compressible full alphabet uses the Huffman path", "[huffman][codec]")
 {
   std::vector<std::byte> bytes(large_block, std::byte{ 'A' });
-  for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
-    bytes.push_back(static_cast<std::byte>(symbol));
-  }
+  for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) { bytes.push_back(static_cast<std::byte>(symbol)); }
   auto encoded = compress_block({ sequence, bytes });
   REQUIRE(encoded.encoding_ == block_encoding::canonical_huffman);
   for (auto const length : encoded.lengths_) { CHECK(length != 0); }

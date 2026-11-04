@@ -1,6 +1,6 @@
+#include <catch2/catch_test_macros.hpp>
 #include <dacoexec/huffman/execution.hpp>
 #include <exec/static_thread_pool.hpp>
-#include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 #include <array>
@@ -22,8 +22,8 @@
 #include <ranges>
 #include <span>
 #include <sstream>
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -38,7 +38,7 @@ constexpr std::array block_counts{ std::size_t{ 0 }, std::size_t{ 1 }, batch_siz
 constexpr std::uint32_t random_seed = 1729;
 enum class input_kind { random, single_symbol, repeated_pattern };
 constexpr std::array input_kinds{ input_kind::random, input_kind::single_symbol, input_kind::repeated_pattern };
-constexpr std::array input_pattern{ std::byte{'a'}, std::byte{'b'}, std::byte{'c'} };
+constexpr std::array input_pattern{ std::byte{ 'a' }, std::byte{ 'b' }, std::byte{ 'c' } };
 
 constexpr int value_completion = 0;
 constexpr int stopped_completion = 1;
@@ -63,6 +63,7 @@ public:
     std::unique_lock lock(mutex_);
     return condition_.wait_for(lock, synchronization_timeout, [this]() -> bool { return remaining_ == 0; });
   }
+
 private:
   std::mutex mutex_;
   std::condition_variable condition_;
@@ -76,8 +77,7 @@ struct destructive_receiver
   std::shared_ptr<std::promise<int>> promise_;
   std::atomic<std::size_t> *completions_;
   stdexec::inplace_stop_token token_;
-  [[nodiscard]] auto get_env() const noexcept
-    -> stdexec::prop<stdexec::get_stop_token_t, stdexec::inplace_stop_token>
+  [[nodiscard]] auto get_env() const noexcept -> stdexec::prop<stdexec::get_stop_token_t, stdexec::inplace_stop_token>
   { return { stdexec::get_stop_token, token_ }; }
   auto complete(int outcome) noexcept -> void
   {
@@ -88,8 +88,7 @@ struct destructive_receiver
     operation->reset();// destroys this receiver, its parent and child states
     promise->set_value(outcome);
   }
-  template<class T>
-  auto set_value(T &&) noexcept -> void { complete(value_completion); }
+  template<class T> auto set_value(T &&) noexcept -> void { complete(value_completion); }
   auto set_error(std::exception_ptr) noexcept -> void { complete(error_completion); }
   auto set_stopped() noexcept -> void { complete(stopped_completion); }
 };
@@ -105,19 +104,16 @@ auto start_destructive(Sender sender, destructive_receiver receiver, erased_oper
 struct vector_sink
 {
   bytes bytes_;
-  auto write(std::span<const std::byte> data) -> void
-  { bytes_.insert(bytes_.end(), data.begin(), data.end()); }
+  auto write(std::span<std::byte const> data) -> void { bytes_.insert(bytes_.end(), data.begin(), data.end()); }
 };
 struct completion_receiver
 {
   using receiver_concept = stdexec::receiver_tag;
   std::promise<int> *promise_;
   stdexec::inplace_stop_token token_;
-  [[nodiscard]] auto get_env() const noexcept
-    -> stdexec::prop<stdexec::get_stop_token_t, stdexec::inplace_stop_token>
+  [[nodiscard]] auto get_env() const noexcept -> stdexec::prop<stdexec::get_stop_token_t, stdexec::inplace_stop_token>
   { return { stdexec::get_stop_token, token_ }; }
-  template<class T>
-  auto set_value(T &&) noexcept -> void { promise_->set_value(0); }
+  template<class T> auto set_value(T &&) noexcept -> void { promise_->set_value(0); }
   auto set_error(std::exception_ptr error) noexcept -> void { promise_->set_exception(std::move(error)); }
   auto set_stopped() noexcept -> void { promise_->set_value(1); }
 };
@@ -125,8 +121,7 @@ constexpr std::size_t environment_marker = 73;
 struct marker_query
 {
   template<class Environment>
-  [[nodiscard]] auto operator()(Environment const &environment) const noexcept
-    -> decltype(environment.query(*this))
+  [[nodiscard]] auto operator()(Environment const &environment) const noexcept -> decltype(environment.query(*this))
   { return environment.query(*this); }
   [[nodiscard]] static constexpr auto query(stdexec::forwarding_query_t) noexcept -> bool { return true; }
 };
@@ -173,8 +168,7 @@ struct integer_source
   auto commit(std::size_t value) -> void { committed_->push_back(value); }
   auto finish() -> std::size_t { return committed_->size(); }
 };
-template<class Scheduler>
-struct throwing_scheduler
+template<class Scheduler> struct throwing_scheduler
 {
   using scheduler_concept = stdexec::scheduler_tag;
   Scheduler scheduler_;
@@ -191,13 +185,11 @@ struct schedule_failure
 {
   auto operator()() const -> void { throw std::runtime_error("scheduler failed"); }
 };
-template<class Scheduler>
-struct error_scheduler
+template<class Scheduler> struct error_scheduler
 {
   using scheduler_concept = stdexec::scheduler_tag;
   Scheduler scheduler_;
-  [[nodiscard]] auto schedule() const
-    -> decltype(stdexec::then(stdexec::schedule(scheduler_), schedule_failure{}))
+  [[nodiscard]] auto schedule() const -> decltype(stdexec::then(stdexec::schedule(scheduler_), schedule_failure{}))
   { return stdexec::then(stdexec::schedule(scheduler_), schedule_failure{}); }
   auto operator==(error_scheduler const &) const noexcept -> bool = default;
 };
@@ -212,17 +204,19 @@ TEST_CASE("Parallel DHF1 matches sequential output and round trips", "[execution
     for (auto const count : block_counts) {
       for (auto const tail : tail_sizes) {
         for (auto const kind : input_kinds) {
-          bytes input(count * block_size + tail, std::byte{'x'});
+          bytes input(count * block_size + tail, std::byte{ 'x' });
           if (kind == input_kind::random) {
             for (auto &byte : input) { byte = static_cast<std::byte>(random()); }
           } else if (kind == input_kind::repeated_pattern) {
-            for (std::size_t index = 0; index < input.size(); ++index) { input[index] = input_pattern[index % input_pattern.size()]; }
+            for (std::size_t index = 0; index < input.size(); ++index) {
+              input[index] = input_pattern[index % input_pattern.size()];
+            }
           }
           vector_sink sequential;
           auto const expected = huffman::compress_stream(input, sequential, { block_size });
           vector_sink parallel;
-          auto sender = huffman::encode_parallel_on(pool.get_scheduler(), input, parallel,
-            { .block_size_ = block_size, .max_in_flight_ = batch_size });
+          auto sender = huffman::encode_parallel_on(
+            pool.get_scheduler(), input, parallel, { .block_size_ = block_size, .max_in_flight_ = batch_size });
           REQUIRE(parallel.bytes_.empty());
           auto result = stdexec::sync_wait(std::move(sender));
           REQUIRE(result.has_value());
@@ -245,16 +239,16 @@ TEST_CASE("Parallel sender owns move-only input and supports single-pass input",
 {
   exec::static_thread_pool pool{ 1 };
   vector_sink output;
-  auto sender = huffman::encode_parallel_on(pool.get_scheduler(),
-    std::ranges::owning_view{ bytes(block_size, std::byte{'a'}) }, output);
+  auto sender = huffman::encode_parallel_on(
+    pool.get_scheduler(), std::ranges::owning_view{ bytes(block_size, std::byte{ 'a' }) }, output);
   REQUIRE(stdexec::sync_wait(std::move(sender)).has_value());
 
   std::size_t reads = 0;
-  auto source = std::views::iota(std::size_t{ 0 }, block_size)
-    | std::views::transform([&reads](std::size_t value) -> std::byte {
-        ++reads;
-        return static_cast<std::byte>(value);
-      });
+  auto source =
+    std::views::iota(std::size_t{ 0 }, block_size) | std::views::transform([&reads](std::size_t value) -> std::byte {
+      ++reads;
+      return static_cast<std::byte>(value);
+    });
   vector_sink second;
   auto lazy = huffman::encode_parallel_on(pool.get_scheduler(), source, second);
   REQUIRE(reads == 0);
@@ -274,17 +268,19 @@ TEST_CASE("Ordered batches bound acquisition and tolerate reversed completion", 
     if (index < batch_size) {
       entered.count_down();
       release.wait();
-      if (index == 0) { later_finished.wait(); }
-      else { later_finished.count_down(); }
+      if (index == 0) {
+        later_finished.wait();
+      } else {
+        later_finished.count_down();
+      }
     }
     return index;
   };
   constexpr auto count = batch_size * 2 + 1;
-  auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-    integer_source{ count, &committed, &acquired }, process, batch_size);
-  auto future = std::async(std::launch::async, [sender = std::move(sender)]() mutable -> void {
-    static_cast<void>(stdexec::sync_wait(std::move(sender)));
-  });
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    pool.get_scheduler(), integer_source{ count, &committed, &acquired }, process, batch_size);
+  auto future = std::async(std::launch::async,
+    [sender = std::move(sender)]() mutable -> void { static_cast<void>(stdexec::sync_wait(std::move(sender))); });
   entered.wait();
   auto const first_batch_reads = acquired.load();
   release.count_down();
@@ -309,8 +305,8 @@ TEST_CASE("Worker failures drain the batch and select its lowest failing index",
     if (index == 0) { throw std::runtime_error("first block"); }
     throw std::runtime_error("later block");
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-    integer_source{ batch_size + 1, &committed, &acquired }, process, batch_size);
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    pool.get_scheduler(), integer_source{ batch_size + 1, &committed, &acquired }, process, batch_size);
   REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "first block");
   REQUIRE(finished.load() == batch_size);
   REQUIRE(acquired.load() == batch_size);
@@ -324,15 +320,15 @@ TEST_CASE("Cancellation before start has no observable input or output", "[execu
   stop.request_stop();
   vector_sink sink;
   std::size_t reads = 0;
-  auto input = std::views::iota(std::size_t{ 0 }, block_size)
-    | std::views::transform([&reads](std::size_t value) -> std::byte {
-        ++reads;
-        return static_cast<std::byte>(value);
-      });
+  auto input =
+    std::views::iota(std::size_t{ 0 }, block_size) | std::views::transform([&reads](std::size_t value) -> std::byte {
+      ++reads;
+      return static_cast<std::byte>(value);
+    });
   std::promise<int> promise;
   auto future = promise.get_future();
-  auto operation = stdexec::connect(huffman::encode_parallel_on(pool.get_scheduler(), input, sink),
-    completion_receiver{ &promise, stop.get_token() });
+  auto operation = stdexec::connect(
+    huffman::encode_parallel_on(pool.get_scheduler(), input, sink), completion_receiver{ &promise, stop.get_token() });
   stdexec::start(operation);
   REQUIRE(future.get() == 1);
   REQUIRE(reads == 0);
@@ -354,8 +350,8 @@ TEST_CASE("Cancellation drains active workers without committing their batch", "
     finished.fetch_add(1);
     return index;
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-    integer_source{ batch_size + 1, &committed, &acquired }, process, batch_size);
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    pool.get_scheduler(), integer_source{ batch_size + 1, &committed, &acquired }, process, batch_size);
   std::promise<int> promise;
   auto future = promise.get_future();
   auto operation = stdexec::connect(std::move(sender), completion_receiver{ &promise, stop.get_token() });
@@ -388,20 +384,20 @@ TEST_CASE("Source and sink exceptions end parallel encoding", "[execution]")
 {
   exec::static_thread_pool pool{ 1 };
   auto source = std::views::iota(std::size_t{ 0 }, block_size * batch_size)
-    | std::views::transform([](std::size_t index) -> std::byte {
-        if (index == block_size) { throw std::runtime_error("source failed"); }
-        return std::byte{'a'};
-      });
+                | std::views::transform([](std::size_t index) -> std::byte {
+                    if (index == block_size) { throw std::runtime_error("source failed"); }
+                    return std::byte{ 'a' };
+                  });
   vector_sink sink;
-  auto sender = huffman::encode_parallel_on(pool.get_scheduler(), source, sink,
-    { .block_size_ = block_size, .max_in_flight_ = batch_size });
+  auto sender = huffman::encode_parallel_on(
+    pool.get_scheduler(), source, sink, { .block_size_ = block_size, .max_in_flight_ = batch_size });
   REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "source failed");
   REQUIRE(sink.bytes_.size() == huffman::archive_header_size);
 
   struct failing_sink
   {
     std::size_t writes_ = 0;
-    auto write(std::span<const std::byte>) -> void
+    auto write(std::span<std::byte const>) -> void
     {
       ++writes_;
       if (writes_ > 1) { throw std::runtime_error("sink failed"); }
@@ -430,8 +426,8 @@ TEST_CASE("Submission failures retain and drain previously started operations", 
     finished.fetch_add(1);
     return index;
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(scheduler,
-    integer_source{ batch_size, &committed, &acquired }, process, batch_size);
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    scheduler, integer_source{ batch_size, &committed, &acquired }, process, batch_size);
   stdexec::inplace_stop_source stop;
   std::promise<int> promise;
   auto future = promise.get_future();
@@ -451,11 +447,11 @@ TEST_CASE("Huffman block staging does not read into an active batch's successor"
   exec::static_thread_pool pool{ batch_size };
   std::atomic<std::size_t> reads{ 0 };
   constexpr auto input_size = block_size * (batch_size + 1);
-  auto input = std::views::iota(std::size_t{ 0 }, input_size)
-    | std::views::transform([&reads](std::size_t index) -> std::byte {
-        reads.fetch_add(1);
-        return static_cast<std::byte>(index);
-      });
+  auto input =
+    std::views::iota(std::size_t{ 0 }, input_size) | std::views::transform([&reads](std::size_t index) -> std::byte {
+      reads.fetch_add(1);
+      return static_cast<std::byte>(index);
+    });
   vector_sink output;
   std::latch entered(batch_size);
   std::latch release(1);
@@ -469,10 +465,10 @@ TEST_CASE("Huffman block staging does not read into an active batch's successor"
   using source_type = huffman::detail::parallel_source<decltype(input), vector_sink>;
   auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
     source_type{ std::move(input), &output, { .block_size_ = block_size, .max_in_flight_ = batch_size } },
-    process, batch_size);
-  auto future = std::async(std::launch::async, [sender = std::move(sender)]() mutable -> void {
-    static_cast<void>(stdexec::sync_wait(std::move(sender)));
-  });
+    process,
+    batch_size);
+  auto future = std::async(std::launch::async,
+    [sender = std::move(sender)]() mutable -> void { static_cast<void>(stdexec::sync_wait(std::move(sender))); });
   entered.wait();
   auto const active_batch_reads = reads.load();
   release.count_down();
@@ -486,9 +482,11 @@ TEST_CASE("Synchronous scheduling advances batches without recursive stack growt
   constexpr std::size_t many_batches = 10000;
   std::atomic<std::size_t> acquired{ 0 };
   std::vector<std::size_t> committed;
-  auto sender = dacoexec::execution::ordered_parallel_on(stdexec::inline_scheduler{},
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    stdexec::inline_scheduler{},
     integer_source{ many_batches, &committed, &acquired },
-    [](std::size_t value) -> std::size_t { return value; }, 1);
+    [](std::size_t value) -> std::size_t { return value; },
+    1);
   REQUIRE(stdexec::sync_wait(std::move(sender)).has_value());
   REQUIRE(committed.size() == many_batches);
 }
@@ -500,13 +498,15 @@ TEST_CASE("Parallel compression consumes an actual single-pass stream range", "[
   stream >> std::noskipws;
   exec::static_thread_pool pool{ 1 };
   vector_sink output;
-  auto sender = huffman::encode_parallel_on(pool.get_scheduler(), std::ranges::istream_view<char>(stream), output,
+  auto sender = huffman::encode_parallel_on(pool.get_scheduler(),
+    std::ranges::istream_view<char>(stream),
+    output,
     { .block_size_ = block_size, .max_in_flight_ = batch_size });
   REQUIRE(stdexec::sync_wait(std::move(sender)).has_value());
   vector_sink decoded;
   auto const statistics = huffman::decompress_stream(output.bytes_, decoded);
   REQUIRE(statistics.output_bytes_ == text.size());
-  REQUIRE(std::ranges::all_of(decoded.bytes_, [](std::byte byte) -> bool { return byte == std::byte{'z'}; }));
+  REQUIRE(std::ranges::all_of(decoded.bytes_, [](std::byte byte) -> bool { return byte == std::byte{ 'z' }; }));
 }
 
 TEST_CASE("Cancellation between batches prevents further acquisition", "[execution]")
@@ -523,9 +523,11 @@ TEST_CASE("Cancellation between batches prevents further acquisition", "[executi
   };
   std::atomic<std::size_t> acquired{ 0 };
   std::vector<std::size_t> committed;
-  auto sender = dacoexec::execution::ordered_parallel_on(stdexec::inline_scheduler{},
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    stdexec::inline_scheduler{},
     stopping_source{ integer_source{ batch_size + 1, &committed, &acquired }, &stop },
-    [](std::size_t value) -> std::size_t { return value; }, batch_size);
+    [](std::size_t value) -> std::size_t { return value; },
+    batch_size);
   std::promise<int> promise;
   auto future = promise.get_future();
   auto operation = stdexec::connect(std::move(sender), completion_receiver{ &promise, stop.get_token() });
@@ -541,12 +543,14 @@ TEST_CASE("Failed batches leave only previously committed batches", "[execution]
   for (auto const failing_index : failing_indices) {
     std::atomic<std::size_t> acquired{ 0 };
     std::vector<std::size_t> committed;
-    auto sender = dacoexec::execution::ordered_parallel_on(stdexec::inline_scheduler{},
+    auto sender = dacoexec::execution::ordered_parallel_on(
+      stdexec::inline_scheduler{},
       integer_source{ batch_size * 3, &committed, &acquired },
       [failing_index](std::size_t index) -> std::size_t {
         if (index == failing_index) { throw std::runtime_error("encoding failed"); }
         return index;
-      }, batch_size);
+      },
+      batch_size);
     REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "encoding failed");
     auto const successful_batches = failing_index / batch_size;
     REQUIRE(committed.size() == successful_batches * batch_size);
@@ -578,13 +582,15 @@ TEST_CASE("Encoded results are released before acquiring the next batch", "[exec
     auto commit(result) -> void {}
     auto finish() -> bool { return *released_; }
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(stdexec::inline_scheduler{},
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    stdexec::inline_scheduler{},
     source{ &previous_results, &released_before_next_batch },
     [&previous_results](std::size_t value) -> result {
       auto encoded = std::make_shared<std::size_t>(value);
       if (value < batch_size) { previous_results.push_back(encoded); }
       return encoded;
-    }, batch_size);
+    },
+    batch_size);
   auto completed = stdexec::sync_wait(std::move(sender));
   REQUIRE(completed.has_value());
   REQUIRE(std::get<0>(*completed));
@@ -596,12 +602,14 @@ TEST_CASE("Scheduler error completions are recorded before joining the batch", "
   std::atomic<std::size_t> acquired{ 0 };
   std::atomic<std::size_t> processed{ 0 };
   std::vector<std::size_t> committed;
-  auto sender = dacoexec::execution::ordered_parallel_on(error_scheduler{ pool.get_scheduler() },
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    error_scheduler{ pool.get_scheduler() },
     integer_source{ batch_size + 1, &committed, &acquired },
     [&processed](std::size_t value) -> std::size_t {
       processed.fetch_add(1);
       return value;
-    }, batch_size);
+    },
+    batch_size);
   REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "scheduler failed");
   REQUIRE(acquired.load() == batch_size);
   REQUIRE(processed.load() == 0);
@@ -620,9 +628,11 @@ TEST_CASE("Concurrent short completions survive destructive terminal receivers",
       auto promise = std::make_shared<std::promise<int>>();
       auto future = promise->get_future();
       erased_operation storage(nullptr, [](void *) -> void {});
-      auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
+      auto sender = dacoexec::execution::ordered_parallel_on(
+        pool.get_scheduler(),
         integer_source{ completion_stress_items, &committed, &acquired },
-        [](std::size_t value) -> std::size_t { return value; }, batch_size);
+        [](std::size_t value) -> std::size_t { return value; },
+        batch_size);
       start_destructive(std::move(sender), { &storage, promise, &completions, stop.get_token() }, storage);
       REQUIRE(future.get() == value_completion);
       REQUIRE(completions.load() == 1);
@@ -643,12 +653,14 @@ TEST_CASE("Inline terminal completions can destroy their owning operation", "[ex
     auto future = promise->get_future();
     erased_operation storage(nullptr, [](void *) -> void {});
     if (outcome == stopped_completion) { stop.request_stop(); }
-    auto sender = dacoexec::execution::ordered_parallel_on(stdexec::inline_scheduler{},
+    auto sender = dacoexec::execution::ordered_parallel_on(
+      stdexec::inline_scheduler{},
       integer_source{ batch_size, &committed, &acquired },
       [outcome](std::size_t value) -> std::size_t {
         if (outcome == error_completion) { throw std::runtime_error("destructive error"); }
         return value;
-      }, batch_size);
+      },
+      batch_size);
     start_destructive(std::move(sender), { &storage, promise, &completions, stop.get_token() }, storage);
     REQUIRE(future.get() == outcome);
     REQUIRE(completions.load() == 1);
@@ -676,8 +688,8 @@ TEST_CASE("Recorded failures win when external cancellation races active workers
     auto promise = std::make_shared<std::promise<int>>();
     auto future = promise->get_future();
     erased_operation storage(nullptr, [](void *) -> void {});
-    auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-      integer_source{ batch_size + 1, &committed, &acquired }, process, batch_size);
+    auto sender = dacoexec::execution::ordered_parallel_on(
+      pool.get_scheduler(), integer_source{ batch_size + 1, &committed, &acquired }, process, batch_size);
     start_destructive(std::move(sender), { &storage, promise, &completions, stop.get_token() }, storage);
     bool const all_started = entered.wait();
     // Release and request stop concurrently to exercise both arrival orders.
@@ -714,9 +726,11 @@ TEST_CASE("Queued stopped children can destroy their owning operation", "[execut
   auto promise = std::make_shared<std::promise<int>>();
   auto future = promise->get_future();
   erased_operation storage(nullptr, [](void *) -> void {});
-  auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    pool.get_scheduler(),
     integer_source{ batch_size, &committed, &acquired },
-    [](std::size_t value) -> std::size_t { return value; }, batch_size);
+    [](std::size_t value) -> std::size_t { return value; },
+    batch_size);
   start_destructive(std::move(sender), { &storage, promise, &completions, stop.get_token() }, storage);
   stop.request_stop();
   release.arrive();
@@ -737,11 +751,13 @@ TEST_CASE("Child operations preserve forwarding receiver environment queries", "
   stdexec::inplace_stop_source stop;
   std::promise<int> promise;
   auto future = promise.get_future();
-  auto sender = dacoexec::execution::ordered_parallel_on(environment_scheduler{ &observed },
+  auto sender = dacoexec::execution::ordered_parallel_on(
+    environment_scheduler{ &observed },
     integer_source{ batch_size, &committed, &acquired },
-    [](std::size_t value) -> std::size_t { return value; }, batch_size);
-  auto operation = stdexec::connect(std::move(sender),
-    marker_receiver{ completion_receiver{ &promise, stop.get_token() } });
+    [](std::size_t value) -> std::size_t { return value; },
+    batch_size);
+  auto operation =
+    stdexec::connect(std::move(sender), marker_receiver{ completion_receiver{ &promise, stop.get_token() } });
   stdexec::start(operation);
   REQUIRE(future.get() == 0);
   REQUIRE(observed.load() == environment_marker);

@@ -5,9 +5,9 @@
 
 #include <array>
 #include <cstddef>
-#include <ios>
 #include <filesystem>
 #include <fstream>
+#include <ios>
 #include <iterator>
 #include <random>
 #include <stdexcept>
@@ -39,6 +39,7 @@ public:
     fs::remove_all(path_, error);
   }
   [[nodiscard]] auto path() const -> fs::path const & { return path_; }
+
 private:
   fs::path path_;
 };
@@ -46,7 +47,7 @@ auto read_file(fs::path const &path) -> std::string
 {
   std::ifstream file(path, std::ios::binary);
   REQUIRE(file.good());
-  return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+  return { std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>() };
 }
 auto write_file(fs::path const &path, std::string const &content) -> void
 {
@@ -67,7 +68,7 @@ TEST_CASE("CLI publication preserves a destination created during processing", "
     REQUIRE_FALSE(fs::exists(destination));
     dacoexec::cli::temporary_output output(destination);
     temporary_path = output.path();
-    std::array const bytes{std::byte{'n'}, std::byte{'e'}, std::byte{'w'}};
+    std::array const bytes{ std::byte{ 'n' }, std::byte{ 'e' }, std::byte{ 'w' } };
     output.write(bytes);
     // Deterministically interleave another writer after the existence check.
     write_file(destination, original);
@@ -82,7 +83,7 @@ TEST_CASE("CLI temporary output closes before publication and cleans up failures
 {
   temporary_directory const directory;
   auto const destination = directory.path() / "output.dhf";
-  std::array const bytes{std::byte{'x'}};
+  std::array const bytes{ std::byte{ 'x' } };
   fs::path temporary_path;
   {
     dacoexec::cli::temporary_output output(destination);
@@ -114,7 +115,7 @@ TEST_CASE("CLI writes retain the exclusive handle after temporary-path replaceme
     dacoexec::cli::temporary_output output(destination);
     REQUIRE(fs::remove(output.path()));
     fs::create_symlink(victim, output.path());
-    std::array const bytes{std::byte{'x'}};
+    std::array const bytes{ std::byte{ 'x' } };
     output.write(bytes);
     output.close();
     REQUIRE(read_file(victim) == "preserve me");

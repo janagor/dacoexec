@@ -41,7 +41,7 @@ auto allocation_statistics() -> allocation_counters &
 auto allocate(std::size_t size, std::size_t alignment) -> void *
 {
   alignment = std::max(alignment, alignof(allocation_header));
-  auto const capacity = std::max(size, std::size_t{1});
+  auto const capacity = std::max(size, std::size_t{ 1 });
   auto const overhead = sizeof(allocation_header) + alignment - 1U;
   if (capacity > std::numeric_limits<std::size_t>::max() - overhead) { throw std::bad_alloc(); }
   auto *allocation = std::malloc(capacity + overhead);
@@ -77,12 +77,19 @@ auto operator delete(void *pointer, [[maybe_unused]] std::size_t size) noexcept 
 auto operator delete[](void *pointer, [[maybe_unused]] std::size_t size) noexcept -> void { deallocate(pointer); }
 auto operator new(std::size_t size, std::align_val_t alignment) -> void *
 { return allocate(size, static_cast<std::size_t>(alignment)); }
-auto operator new[](std::size_t size, std::align_val_t alignment) -> void *
-{ return ::operator new(size, alignment); }
-auto operator delete(void *pointer, [[maybe_unused]] std::align_val_t alignment) noexcept -> void { deallocate(pointer); }
-auto operator delete[](void *pointer, [[maybe_unused]] std::align_val_t alignment) noexcept -> void { deallocate(pointer); }
-auto operator delete(void *pointer, [[maybe_unused]] std::size_t size, [[maybe_unused]] std::align_val_t alignment) noexcept -> void { deallocate(pointer); }
-auto operator delete[](void *pointer, [[maybe_unused]] std::size_t size, [[maybe_unused]] std::align_val_t alignment) noexcept -> void { deallocate(pointer); }
+auto operator new[](std::size_t size, std::align_val_t alignment) -> void * { return ::operator new(size, alignment); }
+auto operator delete(void *pointer, [[maybe_unused]] std::align_val_t alignment) noexcept -> void
+{ deallocate(pointer); }
+auto operator delete[](void *pointer, [[maybe_unused]] std::align_val_t alignment) noexcept -> void
+{ deallocate(pointer); }
+auto operator delete(void *pointer,
+  [[maybe_unused]] std::size_t size,
+  [[maybe_unused]] std::align_val_t alignment) noexcept -> void
+{ deallocate(pointer); }
+auto operator delete[](void *pointer,
+  [[maybe_unused]] std::size_t size,
+  [[maybe_unused]] std::align_val_t alignment) noexcept -> void
+{ deallocate(pointer); }
 
 namespace {
 namespace huffman = dacoexec::huffman;
@@ -90,9 +97,9 @@ struct checking_sink
 {
   std::uint64_t count_ = 0;
   bool check_zero_ = false;
-  auto write(std::span<const std::byte> bytes) -> void
+  auto write(std::span<std::byte const> bytes) -> void
   {
-    if (check_zero_ && std::ranges::any_of(bytes, [](auto byte) -> bool { return byte != std::byte{0}; })) {
+    if (check_zero_ && std::ranges::any_of(bytes, [](auto byte) -> bool { return byte != std::byte{ 0 }; })) {
       throw std::logic_error("Decoded content mismatch");
     }
     huffman::detail::checked_add(count_, bytes.size());
@@ -103,17 +110,18 @@ auto exercise(std::uint64_t size) -> std::size_t
 {
   auto const baseline = allocation_statistics().retained_;
   allocation_statistics().peak_ = baseline;
-  auto source = std::views::iota(std::uint64_t{0}, size)
-    | std::views::transform([](auto) -> std::byte { return std::byte{0}; });
+  auto source = std::views::iota(std::uint64_t{ 0 }, size)
+                | std::views::transform([](auto) -> std::byte { return std::byte{ 0 }; });
   checking_sink compressed;
   auto const encoded = huffman::compress_stream(source, compressed);
-  auto const expected_frames = (size / huffman::default_block_size)
-    + (size % huffman::default_block_size != 0 ? 1U : 0U);
-  if (encoded.input_bytes_ != size || encoded.output_bytes_ != compressed.count_ || encoded.frames_ != expected_frames) {
+  auto const expected_frames =
+    (size / huffman::default_block_size) + (size % huffman::default_block_size != 0 ? 1U : 0U);
+  if (encoded.input_bytes_ != size || encoded.output_bytes_ != compressed.count_
+      || encoded.frames_ != expected_frames) {
     throw std::logic_error("Compression statistics mismatch");
   }
   auto make_frame = [](std::size_t length) -> std::vector<std::byte> {
-    auto frame = huffman::encode_frame({0, std::vector<std::byte>(length, std::byte{0})});
+    auto frame = huffman::encode_frame({ 0, std::vector<std::byte>(length, std::byte{ 0 }) });
     std::vector<std::byte> bytes;
     dacoexec::io::iterator_sink sink(std::back_inserter(bytes));
     huffman::write_frame(sink, frame);
@@ -125,20 +133,22 @@ auto exercise(std::uint64_t size) -> std::size_t
   auto const full_count = size / huffman::default_block_size;
   auto const full_bytes = full_count * full.size();
   auto const archive_size = huffman::archive_header_size + full_bytes + tail.size() + huffman::frame_header_size;
-  auto archive = std::views::iota(std::uint64_t{0}, archive_size)
-    | std::views::transform([&full, &tail, full_bytes](std::uint64_t offset) -> std::byte {
-      if (offset < huffman::archive_header_size) { return huffman::archive_header_bytes.at(static_cast<std::size_t>(offset)); }
-      offset -= huffman::archive_header_size;
-      if (offset < full_bytes) { return full.at(static_cast<std::size_t>(offset % full.size())); }
-      offset -= full_bytes;
-      if (offset < tail.size()) { return tail.at(static_cast<std::size_t>(offset)); }
-      offset -= tail.size();
-      return offset == 0 ? static_cast<std::byte>(huffman::frame_kind::end) : std::byte{0};
-    });
+  auto archive = std::views::iota(std::uint64_t{ 0 }, archive_size)
+                 | std::views::transform([&full, &tail, full_bytes](std::uint64_t offset) -> std::byte {
+                     if (offset < huffman::archive_header_size) {
+                       return huffman::archive_header_bytes.at(static_cast<std::size_t>(offset));
+                     }
+                     offset -= huffman::archive_header_size;
+                     if (offset < full_bytes) { return full.at(static_cast<std::size_t>(offset % full.size())); }
+                     offset -= full_bytes;
+                     if (offset < tail.size()) { return tail.at(static_cast<std::size_t>(offset)); }
+                     offset -= tail.size();
+                     return offset == 0 ? static_cast<std::byte>(huffman::frame_kind::end) : std::byte{ 0 };
+                   });
   checking_sink decoded{ .check_zero_ = true };
   auto const statistics = huffman::decompress_stream(archive, decoded);
-  if (statistics.input_bytes_ != archive_size || statistics.output_bytes_ != size
-      || decoded.count_ != size || statistics.frames_ != expected_frames) {
+  if (statistics.input_bytes_ != archive_size || statistics.output_bytes_ != size || decoded.count_ != size
+      || statistics.frames_ != expected_frames) {
     throw std::logic_error("Decompression statistics mismatch");
   }
   return allocation_statistics().peak_ - baseline;
@@ -151,16 +161,18 @@ auto main(int argc, char **argv) -> int
     constexpr std::size_t probe_alignment = 64;
     constexpr std::size_t probe_size = 257;
     auto const baseline = allocation_statistics().retained_;
-    auto *probe = ::operator new(probe_size, std::align_val_t{probe_alignment});
+    auto *probe = ::operator new(probe_size, std::align_val_t{ probe_alignment });
     auto const tracked = allocation_statistics().retained_ == baseline + probe_size;
     auto *aligned_probe = probe;
     auto probe_space = probe_size;
     auto const aligned = std::align(probe_alignment, probe_size, aligned_probe, probe_space) == probe;
-    ::operator delete(probe, std::align_val_t{probe_alignment});
-    if (!tracked || !aligned || allocation_statistics().retained_ != baseline) { throw std::logic_error("Aligned allocation tracking failed"); }
+    ::operator delete(probe, std::align_val_t{ probe_alignment });
+    if (!tracked || !aligned || allocation_statistics().retained_ != baseline) {
+      throw std::logic_error("Aligned allocation tracking failed");
+    }
     auto const arguments = std::span(argv, static_cast<std::size_t>(argc));
     if (arguments.size() > 1 && std::string_view(arguments.subspan(1).front()) == "--large") {
-      constexpr auto large_size = (std::uint64_t{1} << 32U) + 4096U;
+      constexpr auto large_size = (std::uint64_t{ 1 } << 32U) + 4096U;
       static_cast<void>(exercise(large_size));
     } else {
       constexpr auto smaller_size = huffman::default_block_size * 2U;

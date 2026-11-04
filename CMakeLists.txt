@@ -81,9 +81,8 @@ file(
   DACOEXEC_HEADERS
   CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/include/dacoexec/*.hpp")
-set(DACOEXEC_EXECUTION_HEADERS
-  "${PROJECT_SOURCE_DIR}/include/dacoexec/execution/ordered_parallel.hpp"
-  "${PROJECT_SOURCE_DIR}/include/dacoexec/huffman/execution.hpp")
+set(DACOEXEC_EXECUTION_HEADERS "${PROJECT_SOURCE_DIR}/include/dacoexec/execution/ordered_parallel.hpp"
+                               "${PROJECT_SOURCE_DIR}/include/dacoexec/huffman/execution.hpp")
 list(REMOVE_ITEM DACOEXEC_HEADERS ${DACOEXEC_EXECUTION_HEADERS})
 if(NOT DACOEXEC_HEADERS)
   message(FATAL_ERROR "No public headers found under include/dacoexec")
@@ -110,8 +109,16 @@ if(dacoexec_BUILD_EXECUTION)
   set_target_properties(dacoexec_execution PROPERTIES EXPORT_NAME execution)
   target_compile_features(dacoexec_execution INTERFACE cxx_std_20)
   target_link_libraries(dacoexec_execution INTERFACE dacoexec::dacoexec STDEXEC::stdexec)
-  target_sources(dacoexec_execution INTERFACE FILE_SET execution_headers TYPE HEADERS
-    BASE_DIRS "${PROJECT_SOURCE_DIR}/include" FILES ${DACOEXEC_EXECUTION_HEADERS})
+  target_sources(
+    dacoexec_execution
+    INTERFACE FILE_SET
+              execution_headers
+              TYPE
+              HEADERS
+              BASE_DIRS
+              "${PROJECT_SOURCE_DIR}/include"
+              FILES
+              ${DACOEXEC_EXECUTION_HEADERS})
 endif()
 
 if(DEFINED CMAKE_CXX_STANDARD)
@@ -172,10 +179,16 @@ if(dacoexec_INSTALL AND NOT CMAKE_SKIP_INSTALL_RULES)
     DESTINATION "${DACOEXEC_CMAKE_INSTALL_DIR}")
 
   if(dacoexec_BUILD_EXECUTION)
-    install(TARGETS dacoexec_execution EXPORT dacoexecExecutionTargets
-      FILE_SET execution_headers DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
-    install(EXPORT dacoexecExecutionTargets FILE dacoexecExecutionTargets.cmake
-      NAMESPACE dacoexec:: DESTINATION "${DACOEXEC_CMAKE_INSTALL_DIR}")
+    install(
+      TARGETS dacoexec_execution
+      EXPORT dacoexecExecutionTargets
+      FILE_SET execution_headers
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+    install(
+      EXPORT dacoexecExecutionTargets
+      FILE dacoexecExecutionTargets.cmake
+      NAMESPACE dacoexec::
+      DESTINATION "${DACOEXEC_CMAKE_INSTALL_DIR}")
   endif()
 
   configure_package_config_file(

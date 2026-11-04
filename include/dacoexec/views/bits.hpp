@@ -160,7 +160,8 @@ public:
     using reference = bool;
     using pointer = void;
 
-    [[nodiscard]] auto operator*() const -> bool { return detail::msb_first_bit(state_->current_byte_, state_->bit_index_); }
+    [[nodiscard]] auto operator*() const -> bool
+    { return detail::msb_first_bit(state_->current_byte_, state_->bit_index_); }
 
     auto operator++() -> iterator &
     {
@@ -170,7 +171,8 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.state_ == nullptr || cursor.state_->finished_; }
 
   private:
@@ -212,8 +214,7 @@ namespace views {
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] friend auto operator|(R &&range, bits_closure const &adaptor)
-        -> bits_view<std::views::all_t<R>>
+      [[nodiscard]] friend auto operator|(R &&range, bits_closure const &adaptor) -> bits_view<std::views::all_t<R>>
       { return adaptor(std::forward<R>(range)); }
     };
 
@@ -233,4 +234,4 @@ namespace views {
 }// namespace views
 }// namespace dacoexec
 
-#endif // DACOEXEC_VIEWS_BITS_HPP
+#endif// DACOEXEC_VIEWS_BITS_HPP

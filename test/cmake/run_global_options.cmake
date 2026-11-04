@@ -6,8 +6,8 @@ set(options_build "${BUILD_DIR}/Testing/Temporary/global-options")
 file(REMOVE_RECURSE "${options_build}")
 
 set(configure_command
-    ${CMAKE_COMMAND} -S "${SOURCE_DIR}" -B "${options_build}" -Ddacoexec_BUILD_TESTS=OFF
-    -Ddacoexec_BUILD_CLI=OFF -Ddacoexec_BUILD_FUZZ_TESTS=OFF -Ddacoexec_ENABLE_FORMATTING=OFF -Ddacoexec_INSTALL=OFF
+    ${CMAKE_COMMAND} -S "${SOURCE_DIR}" -B "${options_build}" -Ddacoexec_BUILD_TESTS=OFF -Ddacoexec_BUILD_CLI=OFF
+    -Ddacoexec_BUILD_FUZZ_TESTS=OFF -Ddacoexec_ENABLE_FORMATTING=OFF -Ddacoexec_INSTALL=OFF
     -Ddacoexec_ENABLE_HARDENING=ON -Ddacoexec_ENABLE_GLOBAL_HARDENING=ON -DCMAKE_CXX_STANDARD=20
     -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_EXTENSIONS=OFF)
 if(GENERATOR)

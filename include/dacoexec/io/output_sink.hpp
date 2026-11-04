@@ -24,7 +24,7 @@ namespace dacoexec::io {
  * failures without retry or rollback. The concept checks syntax, not atomicity.
  */
 template<class S>
-concept byte_output_sink = requires(S &sink, std::span<const std::byte> bytes) {
+concept byte_output_sink = requires(S &sink, std::span<std::byte const> bytes) {
   { sink.write(bytes) } -> std::same_as<void>;
 };
 /**
@@ -45,7 +45,7 @@ public:
    * @throws stream_error If the stream reports failure.
    * Stream exceptions propagate. An accepted prefix is not rolled back.
    */
-  auto write(std::span<const std::byte> bytes) -> void
+  auto write(std::span<std::byte const> bytes) -> void
   {
     constexpr std::size_t buffer_size = 4096;
     std::array<char, buffer_size> buffer{};
@@ -60,6 +60,7 @@ public:
       bytes = bytes.subspan(count);
     }
   }
+
 private:
   std::reference_wrapper<std::ostream> stream_;
 };
@@ -73,8 +74,7 @@ private:
  * io::iterator_sink sink{std::back_inserter(bytes)};
  * @endcode
  */
-template<class I>
-class iterator_sink
+template<class I> class iterator_sink
 {
 public:
   /**
@@ -84,10 +84,13 @@ public:
   /**
    * Assigns each byte and advances the stored cursor. Iterator exceptions propagate.
    */
-  auto write(std::span<const std::byte> bytes) -> void
-  { for (auto byte : bytes) { *output_++ = byte; } }
+  auto write(std::span<std::byte const> bytes) -> void
+  {
+    for (auto byte : bytes) { *output_++ = byte; }
+  }
+
 private:
   I output_;
 };
 }// namespace dacoexec::io
-#endif // DACOEXEC_IO_OUTPUT_SINK_HPP
+#endif// DACOEXEC_IO_OUTPUT_SINK_HPP

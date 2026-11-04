@@ -37,7 +37,16 @@ add_test(NAME cmake.sanitizers.apple_excludes_leak
 add_test(NAME cmake.sanitizers.non_apple_includes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_non_apple_includes_leak.cmake)
 
-add_executable(dacoexec_tests tests.cpp ranges_tests.cpp bit_tests.cpp huffman_tests.cpp huffman_codec_tests.cpp huffman_decode_view_tests.cpp streaming_tests.cpp cli_file_tests.cpp)
+add_executable(
+  dacoexec_tests
+  tests.cpp
+  ranges_tests.cpp
+  bit_tests.cpp
+  huffman_tests.cpp
+  huffman_codec_tests.cpp
+  huffman_decode_view_tests.cpp
+  streaming_tests.cpp
+  cli_file_tests.cpp)
 target_compile_definitions(dacoexec_tests PRIVATE DACOEXEC_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 target_link_libraries(
   dacoexec_tests
@@ -107,9 +116,14 @@ if(dacoexec_TEST_SUBPROJECT_CONSUMER)
 endif()
 
 if(dacoexec_TEST_INSTALL_CONSUMER AND dacoexec_INSTALL)
-  add_test(NAME install.core_only COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments}
-    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_core_only_install.cmake)
-  set_tests_properties(install.core_only PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+  add_test(NAME install.core_only COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -P
+                                          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_core_only_install.cmake)
+  set_tests_properties(
+    install.core_only
+    PROPERTIES TIMEOUT
+               900
+               RUN_SERIAL
+               TRUE)
   add_test(NAME install.consumer COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -P
                                          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_install_consumer.cmake)
   set_tests_properties(
@@ -130,46 +144,70 @@ add_test(NAME streaming.memory COMMAND dacoexec_streaming_memory_tests)
 option(dacoexec_TEST_LARGE_STREAMS "Run streaming tests exceeding 4 GiB" OFF)
 if(dacoexec_TEST_LARGE_STREAMS)
   add_test(NAME streaming.large COMMAND dacoexec_streaming_memory_tests --large)
-  set_tests_properties(streaming.large PROPERTIES LABELS large TIMEOUT 7200)
+  set_tests_properties(
+    streaming.large
+    PROPERTIES LABELS
+               large
+               TIMEOUT
+               7200)
 endif()
 if(dacoexec_BUILD_CLI)
-  add_test(NAME cli.smoke COMMAND ${CMAKE_COMMAND}
-    -DCLI=$<TARGET_FILE:dacoexec_cli>
-    -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-smoke
-    -DFIXTURE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/fixtures
-    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_cli_smoke.cmake)
+  add_test(
+    NAME cli.smoke
+    COMMAND ${CMAKE_COMMAND} -DCLI=$<TARGET_FILE:dacoexec_cli> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-smoke
+            -DFIXTURE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/fixtures -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_cli_smoke.cmake)
 endif()
 
 # Each translation unit includes just one public header. Disable unity and PCH
 # so neither can conceal missing includes, even in an enclosing build.
 set(dacoexec_header_test_sources "")
 foreach(header IN LISTS DACOEXEC_HEADERS)
-  file(RELATIVE_PATH relative_header "${PROJECT_SOURCE_DIR}/include" "${header}")
+  file(
+    RELATIVE_PATH
+    relative_header
+    "${PROJECT_SOURCE_DIR}/include"
+    "${header}")
   string(MAKE_C_IDENTIFIER "${relative_header}" header_id)
   set(header_source "${CMAKE_CURRENT_BINARY_DIR}/public_headers/${header_id}.cpp")
-  file(GENERATE OUTPUT "${header_source}" CONTENT "#include <${relative_header}> // IWYU pragma: keep\n")
+  file(
+    GENERATE
+    OUTPUT "${header_source}"
+    CONTENT "#include <${relative_header}> // IWYU pragma: keep\n")
   list(APPEND dacoexec_header_test_sources "${header_source}")
 endforeach()
 add_library(dacoexec_public_header_tests OBJECT ${dacoexec_header_test_sources})
 target_link_libraries(dacoexec_public_header_tests PRIVATE dacoexec::dacoexec dacoexec_warnings)
-set_target_properties(dacoexec_public_header_tests PROPERTIES
-  CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
-  UNITY_BUILD OFF DISABLE_PRECOMPILE_HEADERS ON)
+set_target_properties(
+  dacoexec_public_header_tests
+  PROPERTIES CXX_STANDARD 20
+             CXX_STANDARD_REQUIRED YES
+             CXX_EXTENSIONS NO
+             UNITY_BUILD OFF
+             DISABLE_PRECOMPILE_HEADERS ON)
 if(MSVC)
   target_compile_options(dacoexec_public_header_tests PRIVATE /Zc:__cplusplus)
 endif()
 
 if(dacoexec_BUILD_EXECUTION)
   if(dacoexec_TEST_SUBPROJECT_CONSUMER)
-    add_test(NAME subproject.execution_consumer COMMAND ${CMAKE_COMMAND}
-      ${dacoexec_infrastructure_arguments} -DEXECUTION_SUBPROJECT=ON
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_subproject_consumer.cmake)
-    set_tests_properties(subproject.execution_consumer PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+    add_test(NAME subproject.execution_consumer
+             COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -DEXECUTION_SUBPROJECT=ON -P
+                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_subproject_consumer.cmake)
+    set_tests_properties(
+      subproject.execution_consumer
+      PROPERTIES TIMEOUT
+                 900
+                 RUN_SERIAL
+                 TRUE)
   endif()
 
   add_executable(dacoexec_execution_tests execution_tests.cpp)
-  target_link_libraries(dacoexec_execution_tests PRIVATE dacoexec::execution
-    dacoexec_options dacoexec_warnings Catch2::Catch2WithMain)
+  target_link_libraries(
+    dacoexec_execution_tests
+    PRIVATE dacoexec::execution
+            dacoexec_options
+            dacoexec_warnings
+            Catch2::Catch2WithMain)
   if(dacoexec_catch_compile_definitions)
     target_compile_definitions(dacoexec_execution_tests PRIVATE ${dacoexec_catch_compile_definitions})
   endif()
@@ -177,29 +215,49 @@ if(dacoexec_BUILD_EXECUTION)
     target_compile_options(dacoexec_execution_tests PRIVATE /Zc:__cplusplus)
   endif()
   dacoexec_configure_linker(dacoexec_execution_tests)
-  catch_discover_tests(dacoexec_execution_tests PROPERTIES TIMEOUT 120)
+  catch_discover_tests(
+    dacoexec_execution_tests
+    PROPERTIES
+    TIMEOUT
+    120)
 
   if(dacoexec_TEST_INSTALL_CONSUMER AND dacoexec_INSTALL)
-    add_test(NAME install.execution_consumer COMMAND ${CMAKE_COMMAND}
-      ${dacoexec_infrastructure_arguments} -DEXECUTION_CONSUMER=ON
-      "-DSTDEXEC_PACKAGE_DIR=${stdexec_DIR}"
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_install_consumer.cmake)
-    set_tests_properties(install.execution_consumer PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+    add_test(
+      NAME install.execution_consumer
+      COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -DEXECUTION_CONSUMER=ON
+              "-DSTDEXEC_PACKAGE_DIR=${stdexec_DIR}" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_install_consumer.cmake)
+    set_tests_properties(
+      install.execution_consumer
+      PROPERTIES TIMEOUT
+                 900
+                 RUN_SERIAL
+                 TRUE)
   endif()
 
   set(execution_header_sources "")
   foreach(header IN LISTS DACOEXEC_EXECUTION_HEADERS)
-    file(RELATIVE_PATH relative_header "${PROJECT_SOURCE_DIR}/include" "${header}")
+    file(
+      RELATIVE_PATH
+      relative_header
+      "${PROJECT_SOURCE_DIR}/include"
+      "${header}")
     string(MAKE_C_IDENTIFIER "${relative_header}" header_id)
     set(header_source "${CMAKE_CURRENT_BINARY_DIR}/public_headers/${header_id}.cpp")
-    file(GENERATE OUTPUT "${header_source}" CONTENT "#include <${relative_header}> // IWYU pragma: keep\n")
+    file(
+      GENERATE
+      OUTPUT "${header_source}"
+      CONTENT "#include <${relative_header}> // IWYU pragma: keep\n")
     list(APPEND execution_header_sources "${header_source}")
   endforeach()
   add_library(dacoexec_execution_header_tests OBJECT ${execution_header_sources})
   target_link_libraries(dacoexec_execution_header_tests PRIVATE dacoexec::execution dacoexec_warnings)
-  set_target_properties(dacoexec_execution_header_tests PROPERTIES
-    CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
-    UNITY_BUILD OFF DISABLE_PRECOMPILE_HEADERS ON)
+  set_target_properties(
+    dacoexec_execution_header_tests
+    PROPERTIES CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED YES
+               CXX_EXTENSIONS NO
+               UNITY_BUILD OFF
+               DISABLE_PRECOMPILE_HEADERS ON)
   if(MSVC)
     target_compile_options(dacoexec_execution_header_tests PRIVATE /Zc:__cplusplus)
   endif()

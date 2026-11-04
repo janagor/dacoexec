@@ -64,10 +64,14 @@ inline constexpr std::size_t crc_field_offset = payload_field_offset + sizeof(st
 /**
  * Exact archive magic and zero reserved bytes accepted by read_archive_header().
  */
-inline constexpr std::array<std::byte, archive_header_size> archive_header_bytes{
-  std::byte{'D'}, std::byte{'H'}, std::byte{'F'}, std::byte{'1'},
-  std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}
-};
+inline constexpr std::array<std::byte, archive_header_size> archive_header_bytes{ std::byte{ 'D' },
+  std::byte{ 'H' },
+  std::byte{ 'F' },
+  std::byte{ '1' },
+  std::byte{ 0 },
+  std::byte{ 0 },
+  std::byte{ 0 },
+  std::byte{ 0 } };
 /**
  * Serialized frame tags for RAW data, canonical Huffman data, and archive termination.
  */
@@ -119,10 +123,12 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
     }
     return;
   }
-  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::huffman) { throw format_error("Unknown frame type"); }
-  if (header.uncompressed_size_ == 0 || header.payload_size_ == 0
-      || header.uncompressed_size_ > limit || header.payload_size_ > limit
-      || header.uncompressed_size_ > max_frame_size || header.payload_size_ > max_frame_size) {
+  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::huffman) {
+    throw format_error("Unknown frame type");
+  }
+  if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > limit
+      || header.payload_size_ > limit || header.uncompressed_size_ > max_frame_size
+      || header.payload_size_ > max_frame_size) {
     throw format_error("Invalid DHF1 frame size");
   }
   if (header.kind_ == frame_kind::raw && header.payload_size_ != header.uncompressed_size_) {
@@ -134,7 +140,7 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
  *
  * @throws format_error If any byte differs from archive_header_bytes.
  */
-inline auto read_archive_header(std::span<const std::byte, archive_header_size> bytes) -> void
+inline auto read_archive_header(std::span<std::byte const, archive_header_size> bytes) -> void
 {
   if (!std::ranges::equal(bytes, archive_header_bytes)) { throw format_error("Invalid DHF1 header"); }
 }
@@ -145,8 +151,8 @@ inline auto read_archive_header(std::span<const std::byte, archive_header_size> 
  * @return Validated host-representation header, including END.
  * @throws format_error If the decoded header violates validate_frame_header().
  */
-[[nodiscard]] inline auto read_frame_header(std::span<const std::byte, frame_header_size> bytes,
-                                          std::size_t limit = max_frame_size) -> frame_header
+[[nodiscard]] inline auto read_frame_header(std::span<std::byte const, frame_header_size> bytes,
+  std::size_t limit = max_frame_size) -> frame_header
 {
   frame_header header{ .kind_ = static_cast<frame_kind>(bytes.front()),
     .uncompressed_size_ = dacoexec::detail::read_u32_le(bytes.subspan<size_field_offset, sizeof(std::uint32_t)>()),
@@ -158,16 +164,14 @@ inline auto read_archive_header(std::span<const std::byte, archive_header_size> 
 /**
  * Writes the fixed archive prefix. Sink exceptions propagate without rollback.
  */
-template<io::byte_output_sink S>
-inline auto write_archive_header(S &sink) -> void { sink.write(archive_header_bytes); }
+template<io::byte_output_sink S> inline auto write_archive_header(S &sink) -> void { sink.write(archive_header_bytes); }
 /**
  * Validates and writes a 13-byte little-endian header.
  *
  * @throws format_error If header fields are invalid, before writing.
  * Sink exceptions propagate; already-written bytes remain accepted.
  */
-template<io::byte_output_sink S>
-inline auto write_frame_header(S &sink, frame_header const &header) -> void
+template<io::byte_output_sink S> inline auto write_frame_header(S &sink, frame_header const &header) -> void
 {
   validate_frame_header(header);
   std::array<std::byte, frame_header_size> bytes{};
@@ -192,22 +196,24 @@ inline auto write_frame_header(S &sink, frame_header const &header) -> void
  *
  * @see encode_frame
  */
-template<io::byte_output_sink S>
-inline auto write_frame(S &sink, encoded_frame const &frame) -> void
+template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame const &frame) -> void
 {
   validate_frame_header(frame.header_);
   auto const &block = frame.block_;
-  if (block.payload_.size() != frame.header_.payload_size_ || block.uncompressed_size_ != frame.header_.uncompressed_size_
-      || block.encoding_ != (frame.header_.kind_ == frame_kind::huffman ? block_encoding::canonical_huffman : block_encoding::raw)) {
+  if (block.payload_.size() != frame.header_.payload_size_
+      || block.uncompressed_size_ != frame.header_.uncompressed_size_
+      || block.encoding_
+           != (frame.header_.kind_ == frame_kind::huffman ? block_encoding::canonical_huffman : block_encoding::raw)) {
     throw format_error("Inconsistent encoded frame");
   }
   write_frame_header(sink, frame.header_);
   if (frame.header_.kind_ == frame_kind::huffman) {
     std::array<std::byte, alphabet_size> lengths{};
-    std::ranges::transform(block.lengths_, lengths.begin(), [](auto length) -> std::byte { return static_cast<std::byte>(length); });
+    std::ranges::transform(
+      block.lengths_, lengths.begin(), [](auto length) -> std::byte { return static_cast<std::byte>(length); });
     sink.write(lengths);
   }
   sink.write(block.payload_);
 }
 }// namespace dacoexec::huffman
-#endif // DACOEXEC_HUFFMAN_FORMAT_HPP
+#endif// DACOEXEC_HUFFMAN_FORMAT_HPP

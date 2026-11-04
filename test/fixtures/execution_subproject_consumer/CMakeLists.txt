@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.29)
 project(dacoexec_execution_subproject_consumer LANGUAGES CXX)
-set(dacoexec_BUILD_EXECUTION ON CACHE BOOL "" FORCE)
-set(dacoexec_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(dacoexec_INSTALL OFF CACHE BOOL "" FORCE)
+set(dacoexec_BUILD_EXECUTION
+    ON
+    CACHE BOOL "" FORCE)
+set(dacoexec_BUILD_TESTS
+    OFF
+    CACHE BOOL "" FORCE)
+set(dacoexec_INSTALL
+    OFF
+    CACHE BOOL "" FORCE)
 add_subdirectory("${DACOEXEC_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/dacoexec")
 if(NOT TARGET dacoexec::execution)
   message(FATAL_ERROR "Execution target is missing")

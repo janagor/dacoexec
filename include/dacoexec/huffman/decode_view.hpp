@@ -100,7 +100,8 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
   {
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     explicit state(V source, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding)
-      : base_(std::move(source)), lookup_(codebook), valid_bits_(bits), expected_symbols_(symbols), infer_padding_(infer_padding)
+      : base_(std::move(source)), lookup_(codebook), valid_bits_(bits), expected_symbols_(symbols),
+        infer_padding_(infer_padding)
     {}
 
     auto ensure_initialized() -> void
@@ -208,7 +209,11 @@ public:
    * @param infer_padding Allow a final partial byte of zero padding.
    * @see views::decode
    */
-  explicit decode_view(V base, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding = false)
+  explicit decode_view(V base,
+    canonical_codebook codebook,
+    std::uint64_t bits,
+    std::uint64_t symbols,
+    bool infer_padding = false)
     : state_(std::make_unique<state>(std::move(base), codebook, bits, symbols, infer_padding))
   {}
 
@@ -250,7 +255,8 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.state_ == nullptr || cursor.state_->finished_; }
 
   private:
@@ -286,18 +292,24 @@ namespace views {
     {
     public:
       // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-      explicit decode_closure(canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding)
-        : codebook_(codebook), bits_(bits), symbols_(symbols), infer_padding_(infer_padding) {}
+      explicit decode_closure(canonical_codebook codebook,
+        std::uint64_t bits,
+        std::uint64_t symbols,
+        bool infer_padding)
+        : codebook_(codebook), bits_(bits), symbols_(symbols), infer_padding_(infer_padding)
+      {}
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
       [[nodiscard]] auto operator()(R &&range) const -> decode_view<std::views::all_t<R>>
-      { return decode_view<std::views::all_t<R>>(std::views::all(std::forward<R>(range)), codebook_, bits_, symbols_, infer_padding_); }
+      {
+        return decode_view<std::views::all_t<R>>(
+          std::views::all(std::forward<R>(range)), codebook_, bits_, symbols_, infer_padding_);
+      }
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] friend auto operator|(R &&range, decode_closure const &adaptor)
-        -> decode_view<std::views::all_t<R>>
+      [[nodiscard]] friend auto operator|(R &&range, decode_closure const &adaptor) -> decode_view<std::views::all_t<R>>
       { return adaptor(std::forward<R>(range)); }
 
     private:
@@ -327,10 +339,13 @@ namespace views {
    *
    * @see decode_view
    */
-  [[nodiscard]] inline auto decode(canonical_codebook codebook, std::uint64_t valid_bit_count, std::uint64_t expected_symbol_count, bool infer_padding = false) -> detail::decode_closure
+  [[nodiscard]] inline auto decode(canonical_codebook codebook,
+    std::uint64_t valid_bit_count,
+    std::uint64_t expected_symbol_count,
+    bool infer_padding = false) -> detail::decode_closure
   { return detail::decode_closure{ codebook, valid_bit_count, expected_symbol_count, infer_padding }; }
 
 }// namespace views
 }// namespace dacoexec::huffman
 
-#endif // DACOEXEC_HUFFMAN_DECODE_VIEW_HPP
+#endif// DACOEXEC_HUFFMAN_DECODE_VIEW_HPP

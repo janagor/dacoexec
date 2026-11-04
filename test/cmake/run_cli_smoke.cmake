@@ -8,8 +8,14 @@ set(restored "${WORK_DIR}/restored.bin")
 file(COPY_FILE "${FIXTURE_DIR}/cli-input.bin" "${input}")
 file(REMOVE "${archive}" "${restored}")
 function(run_success)
-  execute_process(COMMAND "${CLI}" ${ARGN} RESULT_VARIABLE result ERROR_VARIABLE diagnostic)
-  if(NOT result EQUAL 0)
+  execute_process(
+    COMMAND "${CLI}" ${ARGN}
+    RESULT_VARIABLE result
+    ERROR_VARIABLE diagnostic)
+  if(NOT
+     result
+     EQUAL
+     0)
     message(FATAL_ERROR "CLI failed: ${diagnostic}")
   endif()
 endfunction()
@@ -19,29 +25,79 @@ function(run_failure)
     message(FATAL_ERROR "CLI unexpectedly succeeded: ${ARGN}")
   endif()
 endfunction()
-run_success(compress --algorithm huffman "${input}" "${archive}")
+run_success(
+  compress
+  --algorithm
+  huffman
+  "${input}"
+  "${archive}")
 run_success(decompress "${archive}" "${restored}")
 file(SHA256 "${input}" expected)
 file(SHA256 "${restored}" actual)
-if(NOT expected STREQUAL actual)
+if(NOT
+   expected
+   STREQUAL
+   actual)
   message(FATAL_ERROR "CLI round trip differs")
 endif()
-run_failure(compress --algorithm huffman "${input}" "${archive}")
-run_failure(compress --algorithm huffman --force "${input}" "${input}")
-run_failure(decompress --force --max-output-size 0 "${archive}" "${restored}")
+run_failure(
+  compress
+  --algorithm
+  huffman
+  "${input}"
+  "${archive}")
+run_failure(
+  compress
+  --algorithm
+  huffman
+  --force
+  "${input}"
+  "${input}")
+run_failure(
+  decompress
+  --force
+  --max-output-size
+  0
+  "${archive}"
+  "${restored}")
 file(SHA256 "${restored}" preserved)
-if(NOT expected STREQUAL preserved)
+if(NOT
+   expected
+   STREQUAL
+   preserved)
   message(FATAL_ERROR "Failed operation replaced existing output")
 endif()
 file(WRITE "${archive}" "corrupt")
-run_failure(decompress --force "${archive}" "${restored}")
+run_failure(
+  decompress
+  --force
+  "${archive}"
+  "${restored}")
 file(SHA256 "${restored}" preserved)
-if(NOT expected STREQUAL preserved)
+if(NOT
+   expected
+   STREQUAL
+   preserved)
   message(FATAL_ERROR "Corrupt input replaced existing output")
 endif()
-run_success(compress --algorithm huffman --force "${input}" "${archive}")
-run_success(decompress --force "${archive}" "${restored}")
-run_failure(compress --algorithm unsupported "${input}" "${archive}")
+run_success(
+  compress
+  --algorithm
+  huffman
+  --force
+  "${input}"
+  "${archive}")
+run_success(
+  decompress
+  --force
+  "${archive}"
+  "${restored}")
+run_failure(
+  compress
+  --algorithm
+  unsupported
+  "${input}"
+  "${archive}")
 file(GLOB leftovers "${WORK_DIR}/*.tmp.*")
 if(leftovers)
   message(FATAL_ERROR "Temporary outputs leaked: ${leftovers}")

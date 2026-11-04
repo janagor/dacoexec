@@ -1,16 +1,16 @@
+#include "huffman_test_utils.hpp"
 #include <dacoexec/bit/bit_output_iterator.hpp>
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/buffer.hpp>
 #include <dacoexec/huffman/canonical.hpp>
 #include <dacoexec/huffman/codewords_view.hpp>
-#include <dacoexec/huffman/tree.hpp>
 #include <dacoexec/huffman/frequency.hpp>
+#include <dacoexec/huffman/tree.hpp>
 #include <dacoexec/views/blocks.hpp>
-#include "huffman_test_utils.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <dacoexec/dacoexec.hpp> // IWYU pragma: keep -- Exercise the public umbrella header.
+#include <dacoexec/dacoexec.hpp>// IWYU pragma: keep -- Exercise the public umbrella header.
 
 #include <algorithm>
 #include <array>
@@ -267,7 +267,8 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.ptr_ == cursor.last_; }
 
   private:
@@ -717,8 +718,9 @@ TEST_CASE("streaming keeps one block of storage and does not read ahead", "[bloc
   REQUIRE(stats->begin_calls_ == 1);
 }
 
-using codeword_range = decltype(std::declval<std::vector<std::byte> &>()
-  | dacoexec::huffman::views::codewords(std::declval<dacoexec::huffman::canonical_codebook>()));
+using codeword_range =
+  decltype(std::declval<std::vector<std::byte> &>()
+           | dacoexec::huffman::views::codewords(std::declval<dacoexec::huffman::canonical_codebook>()));
 static_assert(std::copyable<dacoexec::huffman::canonical_codebook>);
 static_assert(std::movable<dacoexec::huffman::canonical_codebook>);
 static_assert(std::same_as<decltype(std::declval<dacoexec::huffman::canonical_codebook &>().lengths()),
@@ -752,7 +754,8 @@ TEST_CASE("codewords stages once and preserves single-pass state across moves", 
   auto const lengths = dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input));
   auto const expected = dacoexec::huffman::make_canonical_codebook(lengths);
   auto stats = std::make_shared<source_stats>();
-  auto view = byte_source{ input, stats } | dacoexec::huffman::views::codewords(dacoexec::huffman::make_canonical_codebook(lengths));
+  auto view = byte_source{ input, stats }
+              | dacoexec::huffman::views::codewords(dacoexec::huffman::make_canonical_codebook(lengths));
   REQUIRE(stats->begin_calls_ == 0);
   REQUIRE(stats->dereferences_ == 0);
   REQUIRE(stats->increments_ == 0);
@@ -785,7 +788,8 @@ TEST_CASE("codewords stages once and preserves single-pass state across moves", 
 TEST_CASE("codewords closures own independent codebooks and accept proxy bytes", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const book = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
+  auto const book = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
   auto closure = dacoexec::huffman::views::codewords(book);
   auto copy = closure;
   auto first = closure(input);
@@ -818,7 +822,8 @@ TEST_CASE("codewords closures own independent codebooks and accept proxy bytes",
 TEST_CASE("codewords failures are terminal without emitting absent symbols", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const book = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
+  auto const book = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
   for (std::size_t failure_read : { std::size_t{ 1 }, std::size_t{ 2 } }) {
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = failure_read;
@@ -846,7 +851,8 @@ TEST_CASE("codewords failures are terminal without emitting absent symbols", "[h
   REQUIRE_THROWS_AS(++cursor, std::invalid_argument);
   REQUIRE(cursor == missing_tail.end());
   REQUIRE(missing_tail.begin() == missing_tail.end());
-  auto empty = std::vector<std::byte>{} | dacoexec::huffman::views::codewords(dacoexec::huffman::make_canonical_codebook({}));
+  auto empty =
+    std::vector<std::byte>{} | dacoexec::huffman::views::codewords(dacoexec::huffman::make_canonical_codebook({}));
   REQUIRE(empty.begin() == empty.end());
 }
 
@@ -879,7 +885,8 @@ TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bi
 TEST_CASE("codewords source begin and increment failures permanently end iteration", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const book = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
+  auto const book = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
 
   SECTION("begin failure")
   {
@@ -918,12 +925,11 @@ TEST_CASE("codewords preserves negative signed character byte values", "[huffman
 {
   constexpr unsigned char high_bit = 0x80;
   constexpr unsigned char all_bits = 0xFF;
-  std::array<signed char, 2> const input{
-    std::bit_cast<signed char>(high_bit), std::bit_cast<signed char>(all_bits)
-  };
+  std::array<signed char, 2> const input{ std::bit_cast<signed char>(high_bit), std::bit_cast<signed char>(all_bits) };
   REQUIRE(input.front() < 0);
   REQUIRE(input.back() < 0);
-  auto const book = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
+  auto const book = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
   auto view = input | dacoexec::huffman::views::codewords(book);
   auto cursor = view.begin();
   REQUIRE(*cursor == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });

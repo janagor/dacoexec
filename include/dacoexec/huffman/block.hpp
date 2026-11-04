@@ -160,10 +160,14 @@ namespace detail {
  *     are invalid.
  * @see compress_block
  */
-[[nodiscard]] inline auto decompress_block(encoded_block block, std::size_t max_output_bytes, bool infer_padding = false) -> dacoexec::byte_block
+[[nodiscard]] inline auto decompress_block(encoded_block block,
+  std::size_t max_output_bytes,
+  bool infer_padding = false) -> dacoexec::byte_block
 {
   detail::validate_block(block, max_output_bytes);
-  if (infer_padding && block.padding_bits_ != 0) { throw decode_error("Inferred padding requires a zero padding count"); }
+  if (infer_padding && block.padding_bits_ != 0) {
+    throw decode_error("Inferred padding requires a zero padding count");
+  }
   if (block.encoding_ == block_encoding::raw) { return { block.sequence_, std::move(block.payload_) }; }
   auto const book = [&block]() -> canonical_codebook {
     try {
@@ -195,4 +199,4 @@ namespace detail {
 
 }// namespace dacoexec::huffman
 
-#endif // DACOEXEC_HUFFMAN_BLOCK_HPP
+#endif// DACOEXEC_HUFFMAN_BLOCK_HPP

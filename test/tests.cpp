@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <dacoexec/dacoexec.hpp> // IWYU pragma: keep -- Public umbrella smoke test.
+#include <dacoexec/dacoexec.hpp>// IWYU pragma: keep -- Public umbrella smoke test.
 
 #include <array>
 #include <cstddef>

@@ -244,7 +244,9 @@ template<class R> auto collect_bits(R &&range) -> std::vector<int>
   bits.reserve(bytes.size() * byte_width);
   for (std::byte const byte : bytes) {
     auto const value = std::to_integer<unsigned>(byte);
-    for (unsigned shift = 0; shift < byte_width; ++shift) { bits.push_back(((value >> (last_bit_index - shift)) & 1U) != 0U ? 1 : 0); }
+    for (unsigned shift = 0; shift < byte_width; ++shift) {
+      bits.push_back(((value >> (last_bit_index - shift)) & 1U) != 0U ? 1 : 0);
+    }
   }
   return bits;
 }
@@ -318,7 +320,8 @@ struct codeword
   return writer.finish();
 }
 
-auto check_codewords(std::span<codeword const> words, std::span<unsigned char const> expected, std::uint8_t padding) -> void
+auto check_codewords(std::span<codeword const> words, std::span<unsigned char const> expected, std::uint8_t padding)
+  -> void
 {
   packed_bytes const actual = write_codewords(words);
   packed_bytes const reference = reference_codewords(words);
@@ -584,7 +587,8 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.pointer_ == cursor.last_; }
 
   private:
@@ -1087,22 +1091,43 @@ TEST_CASE("bit_writer golden vectors", "[bit_writer]")
 {
   check_codewords({}, {}, 0);
   check_codewords(std::array{ codeword{ .value_ = 0U, .width_ = 0U } }, {}, 0);
-  check_codewords(std::array{ codeword{ .value_ = 1U, .width_ = 1U } }, std::array<unsigned char, 1>{ high_bit_byte }, max_padding);
-  check_codewords(std::array{ codeword{ .value_ = triplet_pattern, .width_ = 3U } }, std::array<unsigned char, 1>{ padded_triplet_byte }, five_bit_padding);
-  check_codewords(std::array{ codeword{ .value_ = five_bit_pattern, .width_ = five_bit_width } }, std::array<unsigned char, 1>{ padded_five_bit_byte }, 3);
-  check_codewords(std::array{ codeword{ .value_ = sample_byte_pattern, .width_ = byte_width } }, std::array<unsigned char, 1>{ sample_byte }, 0);
   check_codewords(
-    std::array{ codeword{ .value_ = triplet_pattern, .width_ = 3U }, codeword{ .value_ = second_five_bit_pattern, .width_ = five_bit_width } }, std::array<unsigned char, 1>{ joined_patterns_byte }, 0);
-  check_codewords(
-    std::array{ codeword{ .value_ = four_bit_pattern, .width_ = 4U }, codeword{ .value_ = leading_zero_pattern, .width_ = five_bit_width } }, std::array<unsigned char, 2>{ joined_padded_byte, high_bit_byte }, max_padding);
-  check_codewords(
-    std::array{ codeword{ .value_ = word_mask, .width_ = word_width } }, std::array<unsigned char, 4>{ all_bits_byte, all_bits_byte, all_bits_byte, all_bits_byte }, 0);
-  check_codewords(
-    std::array{ codeword{ .value_ = word_high_bit, .width_ = word_width } }, std::array<unsigned char, 4>{ high_bit_byte, 0x00, 0x00, 0x00 }, 0);
-  check_codewords(std::array{ codeword{ .value_ = 0x1U, .width_ = word_width } }, std::array<unsigned char, 4>{ 0x00, 0x00, 0x00, 0x01 }, 0);
-  check_codewords(std::array{ codeword{ .value_ = 0U, .width_ = word_width } }, std::array<unsigned char, 4>{ 0x00, 0x00, 0x00, 0x00 }, 0);
-  check_codewords(std::array{ codeword{ .value_ = ten_bit_mask, .width_ = ten_bit_width } }, std::array<unsigned char, 2>{ all_bits_byte, padded_two_bit_byte }, two_bit_padding);
-  check_codewords(std::array{ codeword{ .value_ = 1U, .width_ = 2U } }, std::array<unsigned char, 1>{ padded_low_pair_byte }, two_bit_padding);
+    std::array{ codeword{ .value_ = 1U, .width_ = 1U } }, std::array<unsigned char, 1>{ high_bit_byte }, max_padding);
+  check_codewords(std::array{ codeword{ .value_ = triplet_pattern, .width_ = 3U } },
+    std::array<unsigned char, 1>{ padded_triplet_byte },
+    five_bit_padding);
+  check_codewords(std::array{ codeword{ .value_ = five_bit_pattern, .width_ = five_bit_width } },
+    std::array<unsigned char, 1>{ padded_five_bit_byte },
+    3);
+  check_codewords(std::array{ codeword{ .value_ = sample_byte_pattern, .width_ = byte_width } },
+    std::array<unsigned char, 1>{ sample_byte },
+    0);
+  check_codewords(std::array{ codeword{ .value_ = triplet_pattern, .width_ = 3U },
+                    codeword{ .value_ = second_five_bit_pattern, .width_ = five_bit_width } },
+    std::array<unsigned char, 1>{ joined_patterns_byte },
+    0);
+  check_codewords(std::array{ codeword{ .value_ = four_bit_pattern, .width_ = 4U },
+                    codeword{ .value_ = leading_zero_pattern, .width_ = five_bit_width } },
+    std::array<unsigned char, 2>{ joined_padded_byte, high_bit_byte },
+    max_padding);
+  check_codewords(std::array{ codeword{ .value_ = word_mask, .width_ = word_width } },
+    std::array<unsigned char, 4>{ all_bits_byte, all_bits_byte, all_bits_byte, all_bits_byte },
+    0);
+  check_codewords(std::array{ codeword{ .value_ = word_high_bit, .width_ = word_width } },
+    std::array<unsigned char, 4>{ high_bit_byte, 0x00, 0x00, 0x00 },
+    0);
+  check_codewords(std::array{ codeword{ .value_ = 0x1U, .width_ = word_width } },
+    std::array<unsigned char, 4>{ 0x00, 0x00, 0x00, 0x01 },
+    0);
+  check_codewords(std::array{ codeword{ .value_ = 0U, .width_ = word_width } },
+    std::array<unsigned char, 4>{ 0x00, 0x00, 0x00, 0x00 },
+    0);
+  check_codewords(std::array{ codeword{ .value_ = ten_bit_mask, .width_ = ten_bit_width } },
+    std::array<unsigned char, 2>{ all_bits_byte, padded_two_bit_byte },
+    two_bit_padding);
+  check_codewords(std::array{ codeword{ .value_ = 1U, .width_ = 2U } },
+    std::array<unsigned char, 1>{ padded_low_pair_byte },
+    two_bit_padding);
   check_codewords(std::array{ codeword{ .value_ = all_bits_triplet, .width_ = 3U },
                     codeword{ .value_ = 0b000U, .width_ = 3U },
                     codeword{ .value_ = all_bits_triplet, .width_ = 3U },
@@ -1144,7 +1169,8 @@ TEST_CASE("write_bit matches the codeword order", "[bit_writer]")
 TEST_CASE("a zero-width write does not change alignment", "[bit_writer]")
 {
   std::vector<codeword> const words{ { .value_ = triplet_pattern, .width_ = 3U },
-    { .value_ = 0U, .width_ = 0U }, { .value_ = second_five_bit_pattern, .width_ = five_bit_width } };
+    { .value_ = 0U, .width_ = 0U },
+    { .value_ = second_five_bit_pattern, .width_ = five_bit_width } };
   check_codewords(words, std::array<unsigned char, 1>{ joined_patterns_byte }, 0);
 }
 

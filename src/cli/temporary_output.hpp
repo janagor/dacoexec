@@ -6,8 +6,8 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
-#include <random>
 #include <memory>
+#include <random>
 #include <span>
 #include <string>
 #include <system_error>
@@ -32,6 +32,7 @@ class temporary_output
       static_cast<void>(std::fclose(file));
     }
   };
+
 public:
   explicit temporary_output(std::filesystem::path const &destination)
   {
@@ -45,7 +46,7 @@ public:
       static_cast<void>(_wfopen_s(&file, path_.c_str(), L"wbx"));
       file_.reset(file);
 #else
-      file_ = std::unique_ptr<std::FILE, file_closer>{std::fopen(path_.c_str(), "wbx")};
+      file_ = std::unique_ptr<std::FILE, file_closer>{ std::fopen(path_.c_str(), "wbx") };
 #endif
       if (file_ != nullptr) { return; }
     }
@@ -62,7 +63,7 @@ public:
     std::filesystem::remove(path_, error);
   }
 
-  auto write(std::span<const std::byte> bytes) -> void
+  auto write(std::span<std::byte const> bytes) -> void
   {
     if (file_ == nullptr) { throw stream_error("Temporary output is closed"); }
     if (!bytes.empty() && std::fwrite(bytes.data(), sizeof(std::byte), bytes.size(), file_.get()) != bytes.size()) {
@@ -107,4 +108,4 @@ private:
   std::unique_ptr<std::FILE, file_closer> file_;
 };
 }// namespace dacoexec::cli
-#endif // DACOEXEC_CLI_TEMPORARY_OUTPUT_HPP
+#endif// DACOEXEC_CLI_TEMPORARY_OUTPUT_HPP

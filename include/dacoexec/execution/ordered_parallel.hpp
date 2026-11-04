@@ -26,8 +26,7 @@ inline constexpr std::size_t default_max_in_flight = 4;
 /**
  * Move-only storage for a worker result, exception, or stopped completion.
  */
-template<class T>
-struct result_slot
+template<class T> struct result_slot
 {
   //! Value from a successfully completed worker.
   std::optional<T> value_;
@@ -48,21 +47,20 @@ namespace detail {
   // Source supplies input_type, result_type, initialize(), next(), commit(T)
   // and finish(). next() returns optional<input_type>; finish() returns the
   // final value. Only process is called concurrently (on distinct inputs).
-  template<class Scheduler, class Source, class Process>
-  struct ordered_sender
+  template<class Scheduler, class Source, class Process> struct ordered_sender
   {
     using sender_concept = stdexec::sender_tag;
     using value_type = decltype(std::declval<Source &>().finish());
-    using completion_signatures = stdexec::completion_signatures<
-      stdexec::set_value_t(value_type), stdexec::set_error_t(std::exception_ptr), stdexec::set_stopped_t()>;
+    using completion_signatures = stdexec::completion_signatures<stdexec::set_value_t(value_type),
+      stdexec::set_error_t(std::exception_ptr),
+      stdexec::set_stopped_t()>;
 
     Scheduler scheduler_;
     Source source_;
     Process process_;
     std::size_t capacity_;
 
-    template<class Receiver>
-    struct operation
+    template<class Receiver> struct operation
     {
       using operation_state_concept = stdexec::operation_state_tag;
       using input_type = typename Source::input_type;
@@ -79,24 +77,28 @@ namespace detail {
         // entire environment, including allocator and domain queries.
         [[nodiscard]] auto get_env() const noexcept -> stdexec::env_of_t<Receiver>
         { return stdexec::get_env(owner_->receiver_); }
-        template<class Value>
-        auto set_value(Value &&value) noexcept -> void
+        template<class Value> auto set_value(Value &&value) noexcept -> void
         {
           auto *owner = owner_;
-          try { owner->slots_[index_].value_.emplace(std::forward<Value>(value)); }
-          catch (...) { owner->slots_[index_].error_ = std::current_exception(); }
+          try {
+            owner->slots_[index_].value_.emplace(std::forward<Value>(value));
+          } catch (...) {
+            owner->slots_[index_].error_ = std::current_exception();
+          }
           if (owner->slots_[index_].error_) { owner->failed_.store(true, std::memory_order_release); }
           owner->settled();
         }
-        template<class Error>
-        auto set_error(Error &&error) noexcept -> void
+        template<class Error> auto set_error(Error &&error) noexcept -> void
         {
           auto *owner = owner_;
           if constexpr (std::is_same_v<std::remove_cvref_t<Error>, std::exception_ptr>) {
             owner->slots_[index_].error_ = std::move(error);
           } else {
-            try { owner->slots_[index_].error_ = std::make_exception_ptr(std::forward<Error>(error)); }
-            catch (...) { owner->slots_[index_].error_ = std::current_exception(); }
+            try {
+              owner->slots_[index_].error_ = std::make_exception_ptr(std::forward<Error>(error));
+            } catch (...) {
+              owner->slots_[index_].error_ = std::current_exception();
+            }
           }
           owner->failed_.store(true, std::memory_order_release);
           // Drain this batch before reporting the lowest-index error. Do not
@@ -117,14 +119,15 @@ namespace detail {
         input_type input_;
         auto operator()() -> result_type { return std::invoke(*process_, std::move(input_)); }
       };
-      using work_sender = decltype(stdexec::then(stdexec::schedule(std::declval<Scheduler &>()),
-                                               std::declval<work_function>()));
+      using work_sender =
+        decltype(stdexec::then(stdexec::schedule(std::declval<Scheduler &>()), std::declval<work_function>()));
       using child_operation = stdexec::connect_result_t<work_sender, worker_receiver>;
 
       operation(Scheduler scheduler, Source source, Process process, std::size_t capacity, Receiver receiver)
         : scheduler_(std::move(scheduler)), source_(std::move(source)), process_(std::move(process)),
           capacity_(capacity), receiver_(std::move(receiver)),
-          token_(stdexec::get_stop_token(stdexec::get_env(receiver_))) {}
+          token_(stdexec::get_stop_token(stdexec::get_env(receiver_)))
+      {}
       operation(operation const &) = delete;
       operation(operation &&) = delete;
       auto operator=(operation const &) -> operation & = delete;
@@ -138,7 +141,9 @@ namespace detail {
             if (capacity_ == 0) { throw std::invalid_argument("Invalid parallel batch capacity"); }
             source_.initialize();
           }
-        } catch (...) { error_ = std::current_exception(); }
+        } catch (...) {
+          error_ = std::current_exception();
+        }
         drive();
       }
 
@@ -169,11 +174,17 @@ namespace detail {
             // Slot order is acquisition order; input sequence numbers are
             // retained by moving inputs intact into their processing function.
             for (auto const &slot : slots_) {
-              if (slot.error_) { error_ = slot.error_; break; }
+              if (slot.error_) {
+                error_ = slot.error_;
+                break;
+              }
             }
             if (!error_ && !stop_requested()) {
               for (auto &slot : slots_) {
-                if (slot.stopped_) { stopped_ = true; break; }
+                if (slot.stopped_) {
+                  stopped_ = true;
+                  break;
+                }
               }
               if (!stop_requested()) {
                 for (auto &slot : slots_) {
@@ -194,7 +205,10 @@ namespace detail {
             if (!input) { break; }
             inputs.push_back(std::move(*input));
           }
-          if (stop_requested()) { inputs.clear(); return complete(); }
+          if (stop_requested()) {
+            inputs.clear();
+            return complete();
+          }
           if (inputs.empty()) { return complete(); }
           slots_.resize(inputs.size());
           children_.reserve(inputs.size());
@@ -204,10 +218,10 @@ namespace detail {
           for (std::size_t index = 0; index < inputs.size(); ++index) {
             if (stop_requested() || failed_.load(std::memory_order_acquire)) { break; }
             try {
-              auto work = stdexec::then(stdexec::schedule(scheduler_),
-                                       work_function{ &process_, std::move(inputs[index]) });
-              auto child = std::unique_ptr<child_operation>(new child_operation(
-                stdexec::connect(std::move(work), worker_receiver{ this, index })));
+              auto work =
+                stdexec::then(stdexec::schedule(scheduler_), work_function{ &process_, std::move(inputs[index]) });
+              auto child = std::unique_ptr<child_operation>(
+                new child_operation(stdexec::connect(std::move(work), worker_receiver{ this, index })));
               children_.push_back(std::move(child));
               remaining_.fetch_add(1, std::memory_order_relaxed);
               stdexec::start(*children_.back());
@@ -229,19 +243,22 @@ namespace detail {
         // All paths here have either not dispatched or fully drained a batch.
         children_.clear();
         slots_.clear();
-        if (error_) { stdexec::set_error(std::move(receiver_), std::move(error_)); }
-        else if (stop_requested()) { stdexec::set_stopped(std::move(receiver_)); }
-        else {
+        if (error_) {
+          stdexec::set_error(std::move(receiver_), std::move(error_));
+        } else if (stop_requested()) {
+          stdexec::set_stopped(std::move(receiver_));
+        } else {
           try {
             auto value = source_.finish();
             stdexec::set_value(std::move(receiver_), std::move(value));
-          } catch (...) { stdexec::set_error(std::move(receiver_), std::current_exception()); }
+          } catch (...) {
+            stdexec::set_error(std::move(receiver_), std::current_exception());
+          }
         }
         return true;
       }
 
-      [[nodiscard]] auto stop_requested() const noexcept -> bool
-      { return stopped_ || token_.stop_requested(); }
+      [[nodiscard]] auto stop_requested() const noexcept -> bool { return stopped_ || token_.stop_requested(); }
 
       Scheduler scheduler_;
       Source source_;
@@ -259,11 +276,8 @@ namespace detail {
       std::atomic<bool> failed_{ false };
     };
 
-    template<stdexec::receiver Receiver>
-    [[nodiscard]] auto connect(Receiver receiver) && -> operation<Receiver>
-    {
-      return { std::move(scheduler_), std::move(source_), std::move(process_), capacity_, std::move(receiver) };
-    }
+    template<stdexec::receiver Receiver> [[nodiscard]] auto connect(Receiver receiver) && -> operation<Receiver>
+    { return { std::move(scheduler_), std::move(source_), std::move(process_), capacity_, std::move(receiver) }; }
   };
 }// namespace detail
 
@@ -288,9 +302,10 @@ namespace detail {
  *     or stopped. Execution-context lifetimes must extend through completion.
  */
 template<stdexec::scheduler Scheduler, class Source, class Process>
-[[nodiscard]] auto ordered_parallel_on(Scheduler scheduler, Source source, Process process,
-                                       std::size_t max_in_flight = default_max_in_flight)
-  -> detail::ordered_sender<Scheduler, Source, Process>
+[[nodiscard]] auto ordered_parallel_on(Scheduler scheduler,
+  Source source,
+  Process process,
+  std::size_t max_in_flight = default_max_in_flight) -> detail::ordered_sender<Scheduler, Source, Process>
 { return { std::move(scheduler), std::move(source), std::move(process), max_in_flight }; }
 }// namespace dacoexec::execution
-#endif // DACOEXEC_EXECUTION_ORDERED_PARALLEL_HPP
+#endif// DACOEXEC_EXECUTION_ORDERED_PARALLEL_HPP

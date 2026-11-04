@@ -1,6 +1,6 @@
+#include "huffman_test_utils.hpp"
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/byte.hpp>
-#include "huffman_test_utils.hpp"
 
 #include <dacoexec/bit/bit_output_iterator.hpp>
 #include <dacoexec/huffman/canonical.hpp>
@@ -213,7 +213,7 @@ auto add_wide(wide &sum, wide const &value) -> void
 auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
   dacoexec::huffman::code_length_table const &lengths,
   unsigned max_length) -> void
-  {
+{
   wide sum;
   wide const capacity = one_shifted(max_length);
   for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
@@ -226,7 +226,8 @@ auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
 // Optimal cost of a Huffman tree equals the sum of the internal-node frequencies.
 // Ties prefer the higher symbol, the opposite of the library order, so a matching
 // cost is an independent check rather than a second copy of the same merges.
-[[nodiscard]] auto reference_weighted_path_length(dacoexec::huffman::frequency_table const &frequencies) -> std::uint64_t
+[[nodiscard]] auto reference_weighted_path_length(dacoexec::huffman::frequency_table const &frequencies)
+  -> std::uint64_t
 {
   struct item
   {
@@ -451,7 +452,8 @@ public:
 
     auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    [[nodiscard]] friend auto operator==(iterator const &cursor,
+      [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.pointer_ == cursor.last_; }
 
   private:
@@ -863,8 +865,11 @@ TEST_CASE("seeded histograms satisfy the length invariants", "[huffman]")
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("canonical codebooks reconstruct deterministic fixtures", "[huffman][canonical]")
 {
-  constexpr std::array samples{ std::string_view{}, std::string_view{ "A" }, std::string_view{ "AB" },
-    std::string_view{ "AAAAABBCD" }, std::string_view{ "ABCD" } };
+  constexpr std::array samples{ std::string_view{},
+    std::string_view{ "A" },
+    std::string_view{ "AB" },
+    std::string_view{ "AAAAABBCD" },
+    std::string_view{ "ABCD" } };
   for (auto const input : samples) {
     auto const lengths = dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input));
     auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
@@ -877,21 +882,30 @@ TEST_CASE("canonical codebooks reconstruct deterministic fixtures", "[huffman][c
       REQUIRE(test_detail::canonical_word(book, byte).length_ == lengths.at(index));
     }
   }
-  auto const singleton = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "A" })));
-  REQUIRE(test_detail::canonical_word(singleton, symbol('A')) == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
-  auto const pair = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "BA" })));
+  auto const singleton = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "A" })));
+  REQUIRE(
+    test_detail::canonical_word(singleton, symbol('A')) == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
+  auto const pair = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "BA" })));
   REQUIRE(test_detail::canonical_word(pair, symbol('A')) == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
   REQUIRE(test_detail::canonical_word(pair, symbol('B')) == dacoexec::huffman::codeword{ .bits_ = 1U, .length_ = 1 });
-  auto const book = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "AAAAABBCD" })));
+  auto const book = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "AAAAABBCD" })));
   REQUIRE(test_detail::canonical_word(book, symbol('A')) == dacoexec::huffman::codeword{ .bits_ = 0b0U, .length_ = 1 });
-  REQUIRE(test_detail::canonical_word(book, symbol('B')) == dacoexec::huffman::codeword{ .bits_ = 0b10U, .length_ = 2 });
-  REQUIRE(test_detail::canonical_word(book, symbol('C')) == dacoexec::huffman::codeword{ .bits_ = 0b110U, .length_ = 3 });
-  REQUIRE(test_detail::canonical_word(book, symbol('D')) == dacoexec::huffman::codeword{ .bits_ = 0b111U, .length_ = 3 });
-  auto const equal = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "DCBA" })));
+  REQUIRE(
+    test_detail::canonical_word(book, symbol('B')) == dacoexec::huffman::codeword{ .bits_ = 0b10U, .length_ = 2 });
+  REQUIRE(
+    test_detail::canonical_word(book, symbol('C')) == dacoexec::huffman::codeword{ .bits_ = 0b110U, .length_ = 3 });
+  REQUIRE(
+    test_detail::canonical_word(book, symbol('D')) == dacoexec::huffman::codeword{ .bits_ = 0b111U, .length_ = 3 });
+  auto const equal = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "DCBA" })));
   constexpr unsigned equal_length = 2;
   constexpr std::uint8_t equal_symbols = 4;
   for (std::uint8_t index = 0; index < equal_symbols; ++index) {
-    REQUIRE(test_detail::canonical_word(equal, static_cast<std::uint8_t>(symbol('A') + index)) == dacoexec::huffman::codeword{ .bits_ = index, .length_ = equal_length });
+    REQUIRE(test_detail::canonical_word(equal, static_cast<std::uint8_t>(symbol('A') + index))
+            == dacoexec::huffman::codeword{ .bits_ = index, .length_ = equal_length });
   }
 }
 
@@ -923,10 +937,12 @@ TEST_CASE("canonical codes preserve all unsigned byte indexes", "[huffman][canon
   lengths.fill(byte_width);
   auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
   for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
-    REQUIRE(test_detail::canonical_word(book, static_cast<std::uint8_t>(index)) == dacoexec::huffman::codeword{ .bits_ = static_cast<std::uint32_t>(index), .length_ = byte_width });
+    REQUIRE(test_detail::canonical_word(book, static_cast<std::uint8_t>(index))
+            == dacoexec::huffman::codeword{ .bits_ = static_cast<std::uint32_t>(index), .length_ = byte_width });
   }
   constexpr std::array<unsigned char, 3> extremes{ 0x00, 0x80, 0xFF };
-  auto const sparse = dacoexec::huffman::make_canonical_codebook(dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(extremes)));
+  auto const sparse = dacoexec::huffman::make_canonical_codebook(
+    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(extremes)));
   REQUIRE(test_detail::canonical_word(sparse, 0x00) == dacoexec::huffman::codeword{ .bits_ = 0b10U, .length_ = 2 });
   REQUIRE(test_detail::canonical_word(sparse, 0x80) == dacoexec::huffman::codeword{ .bits_ = 0b11U, .length_ = 2 });
   REQUIRE(test_detail::canonical_word(sparse, 0xFF) == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
@@ -941,8 +957,10 @@ TEST_CASE("canonical assignment reaches the full 32-bit boundary", "[huffman][ca
   lengths.at(dacoexec::huffman::max_canonical_bits - 1U) = dacoexec::huffman::max_canonical_bits;
   lengths.at(dacoexec::huffman::max_canonical_bits) = dacoexec::huffman::max_canonical_bits;
   auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
-  REQUIRE(test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits - 1U) == dacoexec::huffman::codeword{ .bits_ = 0xFFFFFFFEU, .length_ = dacoexec::huffman::max_canonical_bits });
-  REQUIRE(test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits) == dacoexec::huffman::codeword{ .bits_ = 0xFFFFFFFFU, .length_ = dacoexec::huffman::max_canonical_bits });
+  REQUIRE(test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits - 1U)
+          == dacoexec::huffman::codeword{ .bits_ = 0xFFFFFFFEU, .length_ = dacoexec::huffman::max_canonical_bits });
+  REQUIRE(test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits)
+          == dacoexec::huffman::codeword{ .bits_ = 0xFFFFFFFFU, .length_ = dacoexec::huffman::max_canonical_bits });
 
   std::vector<std::byte> output;
   dacoexec::bit_writer writer{ std::back_inserter(output) };
@@ -952,8 +970,15 @@ TEST_CASE("canonical assignment reaches the full 32-bit boundary", "[huffman][ca
   }
   constexpr unsigned no_padding = 0;
   REQUIRE(writer.finish() == no_padding);
-  REQUIRE(output == std::vector<std::byte>{ std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFE },
-    std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFF }, std::byte{ 0xFF } });
+  REQUIRE(output
+          == std::vector<std::byte>{ std::byte{ 0xFF },
+            std::byte{ 0xFF },
+            std::byte{ 0xFF },
+            std::byte{ 0xFE },
+            std::byte{ 0xFF },
+            std::byte{ 0xFF },
+            std::byte{ 0xFF },
+            std::byte{ 0xFF } });
 }
 
 // Catch2 assertions expand into control flow counted by this check.
@@ -964,7 +989,8 @@ TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", 
   constexpr std::uint64_t frequency_limit = 8;
   splitmix64 rng{ histogram_seed };
   for (std::size_t index = 0; index < case_count; ++index) {
-    auto const frequencies = random_histogram(rng, rng.next() % (dacoexec::huffman::alphabet_size + 1U), frequency_limit);
+    auto const frequencies =
+      random_histogram(rng, rng.next() % (dacoexec::huffman::alphabet_size + 1U), frequency_limit);
     auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
     auto const candidate = dacoexec::huffman::try_make_canonical_codebook(lengths);
     if (!candidate.has_value()) {
@@ -986,7 +1012,8 @@ TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", 
         if (word.length_ == other.length_) { REQUIRE(word.bits_ < other.bits_); }
         auto const shorter = word.length_ <= other.length_ ? word : other;
         auto const longer = word.length_ <= other.length_ ? other : word;
-        REQUIRE((static_cast<std::uint64_t>(longer.bits_) >> static_cast<unsigned>(longer.length_ - shorter.length_)) != shorter.bits_);
+        REQUIRE((static_cast<std::uint64_t>(longer.bits_) >> static_cast<unsigned>(longer.length_ - shorter.length_))
+                != shorter.bits_);
       }
     }
   }

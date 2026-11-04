@@ -30,7 +30,7 @@ inline constexpr auto crc32_table = []() -> std::array<std::uint32_t, crc32_tabl
   }
   return table;
 }();
-[[nodiscard]] inline auto crc32(std::span<const std::byte> bytes) -> std::uint32_t
+[[nodiscard]] inline auto crc32(std::span<std::byte const> bytes) -> std::uint32_t
 {
   auto value = crc32_mask;
   for (auto byte : bytes) {
@@ -40,4 +40,4 @@ inline constexpr auto crc32_table = []() -> std::array<std::uint32_t, crc32_tabl
   return value ^ crc32_mask;
 }
 }// namespace dacoexec::detail
-#endif // DACOEXEC_DETAIL_CRC32_HPP
+#endif// DACOEXEC_DETAIL_CRC32_HPP

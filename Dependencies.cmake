@@ -85,24 +85,32 @@ function(dacoexec_setup_dependencies)
       set(_dacoexec_install_stdexec ON)
     endif()
     _dacoexec_require_package(
-      NAME stdexec
-      TARGET STDEXEC::stdexec
-      GIT_TAG "${DACOEXEC_STDEXEC_GIT_TAG}"
-      GITHUB_REPOSITORY "NVIDIA/stdexec"
+      NAME
+      stdexec
+      TARGET
+      STDEXEC::stdexec
+      GIT_TAG
+      "${DACOEXEC_STDEXEC_GIT_TAG}"
+      GITHUB_REPOSITORY
+      "NVIDIA/stdexec"
       OPTIONS
-        "STDEXEC_BUILD_TESTS OFF"
-        "STDEXEC_BUILD_EXAMPLES OFF"
-        "STDEXEC_ENABLE_CUDA OFF"
-        "STDEXEC_ENABLE_IO_URING OFF"
-        "STDEXEC_INSTALL ${_dacoexec_install_stdexec}")
+      "STDEXEC_BUILD_TESTS OFF"
+      "STDEXEC_BUILD_EXAMPLES OFF"
+      "STDEXEC_ENABLE_CUDA OFF"
+      "STDEXEC_ENABLE_IO_URING OFF"
+      "STDEXEC_INSTALL ${_dacoexec_install_stdexec}")
   endif()
 
   if(dacoexec_BUILD_CLI)
     _dacoexec_require_package(
-      NAME CLI11
-      TARGET CLI11::CLI11
-      VERSION 2.6.1
-      GITHUB_REPOSITORY "CLIUtils/CLI11")
+      NAME
+      CLI11
+      TARGET
+      CLI11::CLI11
+      VERSION
+      2.6.1
+      GITHUB_REPOSITORY
+      "CLIUtils/CLI11")
   endif()
 
   if(dacoexec_tests_enabled)
