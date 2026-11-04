@@ -211,3 +211,43 @@ The existing presets `unixlike-clang-debug`, `unixlike-clang-release`, `unixlike
 * [Building](README_building.md)
 * [Troubleshooting](README_troubleshooting.md)
 * [Docker](README_docker.md)
+
+## Canonical Huffman codewords
+
+Canonical codebooks are immutable values reconstructed from code lengths alone.
+The lazy view owns its codebook and stages one codeword at a time:
+
+```cpp
+#include <dacoexec/dacoexec.hpp>
+
+#include <iterator>
+#include <vector>
+
+auto frequencies = dacoexec::huffman::count_frequencies(block.bytes_);
+auto lengths = dacoexec::huffman::build_code_lengths(frequencies);
+auto codebook = dacoexec::huffman::make_canonical_codebook(lengths);
+auto encoded_symbols = block.bytes_ | dacoexec::huffman::views::codewords(codebook);
+
+std::vector<std::byte> output;
+dacoexec::bit_writer writer{ std::back_inserter(output) };
+for (auto word : encoded_symbols) {
+  writer.write_bits(word.bits_, word.length_);
+}
+auto padding = writer.finish();
+```
+
+`"AAAAABBCD"` produces `0x05 0x6E` with one zero padding bit.
+Empty codebooks and length-one singletons are accepted; multiple symbols must
+form a complete prefix tree. Invalid tables throw `std::invalid_argument`.
+Lengths above 32 throw `std::length_error`; `try_make_canonical_codebook(lengths)`
+returns `std::nullopt` for these unsupported widths, preparing for a future RAW
+block fallback without changing the original Huffman lengths. Width detection
+precedes structural validation when a table contains an unsupported length.
+
+The view accepts the library's byte element types, including proxy references
+and move-only sources. Construction reads nothing; `begin()` stages the first
+symbol, and each increment advances one symbol. Repeated dereferences use the
+cached codeword. Iterator copies share a single pass, and moving the view keeps
+active iterators valid. The owning view must outlive its iterators. Source
+exceptions propagate unchanged; an absent symbol throws `std::invalid_argument`.
+Either error permanently ends that view's iteration.
