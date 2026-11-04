@@ -65,7 +65,7 @@ if(NOT dacoexec_type STREQUAL "INTERFACE_LIBRARY")
   message(FATAL_ERROR "dacoexec::dacoexec is ${dacoexec_type}, expected INTERFACE_LIBRARY")
 endif()
 
-add_executable(consumer main.cpp canonical_header.cpp codewords_header.cpp)
+add_executable(consumer main.cpp canonical_header.cpp codewords_header.cpp block_header.cpp decode_header.cpp)
 target_link_libraries(consumer PRIVATE dacoexec::dacoexec)
 
 enable_testing()

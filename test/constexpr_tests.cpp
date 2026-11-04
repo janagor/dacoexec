@@ -1,3 +1,5 @@
+#include <dacoexec/huffman/block.hpp>
+#include <dacoexec/huffman/decode_view.hpp>
 #include <dacoexec/huffman/canonical.hpp>
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/byte.hpp>
@@ -263,5 +265,18 @@ static_assert([]() -> bool {
     && test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits) == dacoexec::huffman::codeword{ .bits_ = word_mask, .length_ = dacoexec::huffman::max_canonical_bits }
     && dacoexec::huffman::try_make_canonical_codebook(lengths).has_value();
 }());
+
+using decode_range = dacoexec::huffman::decode_view<std::ranges::empty_view<std::byte>>;
+static_assert(std::ranges::input_range<decode_range>);
+static_assert(std::ranges::view<decode_range>);
+static_assert(!std::ranges::forward_range<decode_range>);
+static_assert(!std::ranges::borrowed_range<decode_range>);
+static_assert(!std::copyable<decode_range>);
+static_assert(std::movable<decode_range>);
+static_assert(std::same_as<std::ranges::range_value_t<decode_range>, std::byte>);
+static_assert(!std::copyable<dacoexec::huffman::encoded_block>);
+static_assert(std::is_nothrow_move_constructible_v<dacoexec::huffman::encoded_block>);
+static_assert(std::same_as<decltype(dacoexec::huffman::compress_block(std::declval<dacoexec::byte_block>())),
+  dacoexec::huffman::encoded_block>);
 
 auto main() -> int { return 0; }

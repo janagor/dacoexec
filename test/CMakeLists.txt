@@ -37,7 +37,7 @@ add_test(NAME cmake.sanitizers.apple_excludes_leak
 add_test(NAME cmake.sanitizers.non_apple_includes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_non_apple_includes_leak.cmake)
 
-add_executable(dacoexec_tests tests.cpp ranges_tests.cpp bit_tests.cpp huffman_tests.cpp)
+add_executable(dacoexec_tests tests.cpp ranges_tests.cpp bit_tests.cpp huffman_tests.cpp huffman_codec_tests.cpp huffman_decode_view_tests.cpp)
 target_link_libraries(
   dacoexec_tests
   PRIVATE dacoexec::dacoexec
