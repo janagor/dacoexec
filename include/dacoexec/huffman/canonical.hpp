@@ -1,7 +1,9 @@
-#pragma once
+#ifndef DACOEXEC_HUFFMAN_CANONICAL_HPP
+#define DACOEXEC_HUFFMAN_CANONICAL_HPP
 
 #include <dacoexec/huffman/tree.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -9,8 +11,9 @@
 #include <optional>
 #include <stdexcept>
 
-namespace dacoexec {
-namespace huffman {
+namespace dacoexec::huffman {
+
+  static_assert(alphabet_size == static_cast<std::size_t>(std::numeric_limits<std::uint8_t>::max()) + 1U);
 
   inline constexpr unsigned max_canonical_bits = std::numeric_limits<std::uint32_t>::digits;
 
@@ -32,7 +35,11 @@ namespace huffman {
   {
   public:
     [[nodiscard]] constexpr auto operator[](std::uint8_t symbol) const noexcept -> codeword
-    { return words_[symbol]; }
+    {
+      // A uint8_t always indexes the complete byte alphabet without a bounds check.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      return words_[symbol];
+    }
 
     [[nodiscard]] constexpr auto lengths() const noexcept -> code_length_table const & { return lengths_; }
 
@@ -60,7 +67,7 @@ namespace huffman {
       if (length == 0) { continue; }
       ++counts.at(length);
       ++present;
-      if (length > maximum) { maximum = length; }
+      maximum = std::max(maximum, static_cast<unsigned>(length));
     }
 
     if (present == 1) {
@@ -86,7 +93,7 @@ namespace huffman {
     for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
       auto const length = lengths.at(symbol);
       if (length == 0) { continue; }
-      result.words_.at(symbol) = codeword{ static_cast<std::uint32_t>(next_code.at(length)), length };
+      result.words_.at(symbol) = codeword{ .bits_ = static_cast<std::uint32_t>(next_code.at(length)), .length_ = length };
       ++next_code.at(length);
     }
     return result;
@@ -100,5 +107,6 @@ namespace huffman {
     return *result;
   }
 
-}// namespace huffman
-}// namespace dacoexec
+}// namespace dacoexec::huffman
+
+#endif // DACOEXEC_HUFFMAN_CANONICAL_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_VIEWS_BITS_HPP
+#define DACOEXEC_VIEWS_BITS_HPP
 
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/byte.hpp>
@@ -16,7 +17,7 @@ namespace detail {
 
   // Bit at `index` of `byte`, with index 0 as the most significant bit.
   // `index` must be less than bits_per_byte.
-  [[nodiscard]] constexpr bool msb_first_bit(std::uint8_t byte, unsigned index) noexcept
+  [[nodiscard]] constexpr auto msb_first_bit(std::uint8_t byte, unsigned index) noexcept -> bool
   { return ((static_cast<unsigned>(byte) >> ((bits_per_byte - 1U) - index)) & 1U) != 0U; }
 
 }// namespace detail
@@ -49,7 +50,7 @@ class bits_view : public std::ranges::view_interface<bits_view<V>>
   {
     explicit state(V source) : base_(std::move(source)) {}
 
-    void ensure_initialized()
+    auto ensure_initialized() -> void
     {
       if (initialized_) { return; }
       initialized_ = true;
@@ -62,7 +63,7 @@ class bits_view : public std::ranges::view_interface<bits_view<V>>
       load_next_byte();
     }
 
-    void load_next_byte()
+    auto load_next_byte() -> void
     {
       if (finished_ || !cursor_.has_value()) {
         finished_ = true;
@@ -88,16 +89,16 @@ class bits_view : public std::ranges::view_interface<bits_view<V>>
       }
     }
 
-    void advance()
+    auto advance() -> void
     {
-      if (finished_) { return; }
+      if (finished_ || !cursor_.has_value()) { return; }
       if (bit_index_ + 1U < detail::bits_per_byte) {
         ++bit_index_;
         return;
       }
 
       try {
-        ++(*cursor_);
+        std::ranges::advance(cursor_.value(), 1);
       } catch (...) {
         finished_ = true;
         throw;
@@ -120,11 +121,11 @@ public:
   explicit bits_view(V base) : state_(std::make_unique<state>(std::move(base))) {}
 
   bits_view(bits_view const &) = delete;
-  bits_view &operator=(bits_view const &) = delete;
+  auto operator=(bits_view const &) -> bits_view & = delete;
 
   bits_view(bits_view &&) noexcept = default;
 
-  bits_view &operator=(bits_view &&other) noexcept
+  auto operator=(bits_view &&other) noexcept -> bits_view &
   {
     if (this != &other) { state_ = std::move(other.state_); }
     return *this;
@@ -142,18 +143,18 @@ public:
     using reference = bool;
     using pointer = void;
 
-    [[nodiscard]] bool operator*() const { return detail::msb_first_bit(state_->current_byte_, state_->bit_index_); }
+    [[nodiscard]] auto operator*() const -> bool { return detail::msb_first_bit(state_->current_byte_, state_->bit_index_); }
 
-    iterator &operator++()
+    auto operator++() -> iterator &
     {
       state_->advance();
       return *this;
     }
 
-    void operator++(int) { ++*this; }
+    auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend bool operator==(iterator const &it, std::default_sentinel_t) noexcept
-    { return it.state_ == nullptr || it.state_->finished_; }
+    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    { return cursor.state_ == nullptr || cursor.state_->finished_; }
 
   private:
     friend class bits_view;
@@ -184,18 +185,21 @@ namespace views {
     public:
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] auto operator()(R &&range) const
+      [[nodiscard]] auto operator()(R &&range) const -> bits_view<std::views::all_t<R>>
       { return bits_view<std::views::all_t<R>>(std::views::all(std::forward<R>(range))); }
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
       [[nodiscard]] friend auto operator|(R &&range, bits_closure const &adaptor)
+        -> bits_view<std::views::all_t<R>>
       { return adaptor(std::forward<R>(range)); }
     };
 
   }// namespace detail
 
-  [[nodiscard]] inline constexpr auto bits() noexcept -> detail::bits_closure { return detail::bits_closure{}; }
+  [[nodiscard]] constexpr auto bits() noexcept -> detail::bits_closure { return detail::bits_closure{}; }
 
 }// namespace views
 }// namespace dacoexec
+
+#endif // DACOEXEC_VIEWS_BITS_HPP

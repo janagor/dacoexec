@@ -1,11 +1,11 @@
-#pragma once
+#ifndef DACOEXEC_DETAIL_BYTE_HPP
+#define DACOEXEC_DETAIL_BYTE_HPP
 
 #include <concepts>
 #include <cstddef>
 #include <type_traits>
 
-namespace dacoexec {
-namespace detail {
+namespace dacoexec::detail {
 
   // Bits produced for one source byte. Bit 7 is emitted first and bit 0 last.
   inline constexpr unsigned bits_per_byte = 8U;
@@ -15,7 +15,7 @@ namespace detail {
   // Signed character values go through unsigned char, so a value whose high
   // bit is set keeps that bit. The conversion is the low eight bits of the
   // value and does not depend on host endianness.
-  template<class T> constexpr std::byte to_byte(T value) noexcept
+  template<class T> constexpr auto to_byte(T value) noexcept -> std::byte
   {
     using plain = std::remove_cv_t<T>;
     if constexpr (std::same_as<plain, std::byte>) {
@@ -28,5 +28,6 @@ namespace detail {
     }
   }
 
-}// namespace detail
-}// namespace dacoexec
+}// namespace dacoexec::detail
+
+#endif // DACOEXEC_DETAIL_BYTE_HPP

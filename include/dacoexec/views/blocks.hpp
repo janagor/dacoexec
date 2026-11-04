@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_VIEWS_BLOCKS_HPP
+#define DACOEXEC_VIEWS_BLOCKS_HPP
 
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/buffer.hpp>
@@ -33,10 +34,10 @@ struct byte_block
   byte_block(std::uint64_t seq, std::vector<std::byte> data) noexcept : sequence_(seq), bytes_(std::move(data)) {}
 
   byte_block(byte_block &&) noexcept = default;
-  byte_block &operator=(byte_block &&) noexcept = default;
+  auto operator=(byte_block &&) noexcept -> byte_block & = default;
 
   byte_block(byte_block const &) = delete;
-  byte_block &operator=(byte_block const &) = delete;
+  auto operator=(byte_block const &) -> byte_block & = delete;
 
   ~byte_block() = default;
 };
@@ -77,7 +78,7 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
   {
     state(V source, std::size_t size) : base_(std::move(source)), block_size_(size) {}
 
-    void ensure_initialized()
+    auto ensure_initialized() -> void
     {
       if (initialized_) { return; }
       if (block_size_ == 0) { throw std::invalid_argument("dacoexec::views::blocks requires a positive block size"); }
@@ -86,7 +87,7 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
       load_next_block();
     }
 
-    void load_next_block()
+    auto load_next_block() -> void
     {
       current_.reset();
       if (finished_ || !input_.has_value()) {
@@ -119,7 +120,7 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
             if (next > bytes.capacity()) { bytes.reserve(next); }
           }
           bytes.push_back(value);
-          ++cursor;
+          std::ranges::advance(cursor, 1);
         }
       } catch (...) {
         // The local buffer is discarded. Do not publish a short success.
@@ -162,11 +163,11 @@ public:
   }
 
   blocks_view(blocks_view const &) = delete;
-  blocks_view &operator=(blocks_view const &) = delete;
+  auto operator=(blocks_view const &) -> blocks_view & = delete;
 
   blocks_view(blocks_view &&) noexcept = default;
 
-  blocks_view &operator=(blocks_view &&other) noexcept
+  auto operator=(blocks_view &&other) noexcept -> blocks_view &
   {
     if (this != &other) { state_ = std::move(other.state_); }
     return *this;
@@ -186,20 +187,23 @@ public:
 
     // Returns the staged block as an rvalue so range-for can move it out.
     // A second dereference without ++ observes the moved-from block.
-    [[nodiscard]] byte_block &&operator*() const { return std::move(state_->current_.value()); }
+    // Dereferencing an end iterator is outside the input-iterator contract.
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+    [[nodiscard]] auto operator*() const -> byte_block && { return std::move(state_->current_.value()); }
 
-    iterator &operator++()
+    auto operator++() -> iterator &
     {
       state_->load_next_block();
       return *this;
     }
 
-    void operator++(int) { ++*this; }
+    auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend bool operator==(iterator const &it, std::default_sentinel_t) noexcept
-    { return it.state_ == nullptr || !it.state_->current_.has_value(); }
+    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    { return cursor.state_ == nullptr || !cursor.state_->current_.has_value(); }
 
-    [[nodiscard]] friend byte_block &&iter_move(iterator const &it) { return std::move(it.state_->current_.value()); }
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> byte_block && { return std::move(cursor.state_->current_.value()); }
 
   private:
     friend class blocks_view;
@@ -235,12 +239,13 @@ namespace views {
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] auto operator()(R &&range) const
+      [[nodiscard]] auto operator()(R &&range) const -> blocks_view<std::views::all_t<R>>
       { return blocks_view<std::views::all_t<R>>(std::views::all(std::forward<R>(range)), block_size_); }
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
       [[nodiscard]] friend auto operator|(R &&range, blocks_closure const &adaptor)
+        -> blocks_view<std::views::all_t<R>>
       { return adaptor(std::forward<R>(range)); }
 
     private:
@@ -249,8 +254,10 @@ namespace views {
 
   }// namespace detail
 
-  [[nodiscard]] inline constexpr auto blocks(std::size_t block_size) -> detail::blocks_closure
+  [[nodiscard]] constexpr auto blocks(std::size_t block_size) -> detail::blocks_closure
   { return detail::blocks_closure{ block_size }; }
 
 }// namespace views
 }// namespace dacoexec
+
+#endif // DACOEXEC_VIEWS_BLOCKS_HPP

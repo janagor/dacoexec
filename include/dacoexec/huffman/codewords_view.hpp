@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_HUFFMAN_CODEWORDS_VIEW_HPP
+#define DACOEXEC_HUFFMAN_CODEWORDS_VIEW_HPP
 
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/byte.hpp>
@@ -13,8 +14,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace dacoexec {
-namespace huffman {
+namespace dacoexec::huffman {
 
 // Single-pass lazy byte-to-codeword mapping with one staged value. Construction
 // reads nothing; begin stages the first symbol. Copies of iterators alias the
@@ -27,7 +27,7 @@ class codewords_view : public std::ranges::view_interface<codewords_view<V>>
 {
   struct state
   {
-    explicit state(V source, canonical_codebook codebook) : base_(std::move(source)), codebook_(std::move(codebook)) {}
+    explicit state(V source, canonical_codebook codebook) : base_(std::move(source)), codebook_(codebook) {}
 
     auto ensure_initialized() -> void
     {
@@ -60,6 +60,7 @@ class codewords_view : public std::ranges::view_interface<codewords_view<V>>
         // as the declared byte type, not as the proxy type itself.
         using source_value = std::ranges::range_value_t<V>;
         std::byte const value = dacoexec::detail::to_byte(static_cast<source_value>(*position));
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         current_ = codebook_[std::to_integer<std::uint8_t>(value)];
         if (current_.length_ == 0) { throw std::invalid_argument("Symbol absent from Huffman codebook"); }
       } catch (...) {
@@ -70,9 +71,9 @@ class codewords_view : public std::ranges::view_interface<codewords_view<V>>
 
     auto advance() -> void
     {
-      if (finished_) { return; }
+      if (finished_ || !cursor_.has_value()) { return; }
       try {
-        ++(*cursor_);
+        std::ranges::advance(cursor_.value(), 1);
       } catch (...) {
         finished_ = true;
         throw;
@@ -93,7 +94,7 @@ public:
   codewords_view() = default;
 
   explicit codewords_view(V base, canonical_codebook codebook)
-    : state_(std::make_unique<state>(std::move(base), std::move(codebook)))
+    : state_(std::make_unique<state>(std::move(base), codebook))
   {}
 
   codewords_view(codewords_view const &) = delete;
@@ -127,10 +128,10 @@ public:
       return *this;
     }
 
-    auto operator++(int) -> void { ++*this; }
+    auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend auto operator==(iterator const &it, std::default_sentinel_t) noexcept -> bool
-    { return it.state_ == nullptr || it.state_->finished_; }
+    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    { return cursor.state_ == nullptr || cursor.state_->finished_; }
 
   private:
     friend class codewords_view;
@@ -159,7 +160,7 @@ namespace views {
     class codewords_closure
     {
     public:
-      explicit codewords_closure(canonical_codebook codebook) : codebook_(std::move(codebook)) {}
+      explicit codewords_closure(canonical_codebook codebook) : codebook_(codebook) {}
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
@@ -179,8 +180,9 @@ namespace views {
   }// namespace detail
 
   [[nodiscard]] inline auto codewords(canonical_codebook codebook) -> detail::codewords_closure
-  { return detail::codewords_closure{ std::move(codebook) }; }
+  { return detail::codewords_closure{ codebook }; }
 
 }// namespace views
-}// namespace huffman
-}// namespace dacoexec
+}// namespace dacoexec::huffman
+
+#endif // DACOEXEC_HUFFMAN_CODEWORDS_VIEW_HPP

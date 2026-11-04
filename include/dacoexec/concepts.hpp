@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_CONCEPTS_HPP
+#define DACOEXEC_CONCEPTS_HPP
 
 #include <concepts>
 #include <cstddef>
@@ -26,3 +27,5 @@ concept byte_input_range =
   std::ranges::input_range<R> && detail::byte_element<std::remove_cv_t<std::ranges::range_value_t<R>>>;
 
 }// namespace dacoexec
+
+#endif // DACOEXEC_CONCEPTS_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_HUFFMAN_FREQUENCY_HPP
+#define DACOEXEC_HUFFMAN_FREQUENCY_HPP
 
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/byte.hpp>
@@ -11,8 +12,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace dacoexec {
-namespace huffman {
+namespace dacoexec::huffman {
 
   // Number of distinct byte values. Index 0 is the byte 0x00 and index 255 is 0xFF.
   inline constexpr std::size_t alphabet_size = 256;
@@ -31,7 +31,7 @@ namespace huffman {
   // A counter stops at the maximum std::uint64_t. The next occurrence of that
   // symbol throws std::overflow_error. An exception from the source, or that
   // overflow, leaves earlier increments applied.
-  template<byte_input_range R> constexpr void accumulate_frequencies(frequency_table &frequencies, R &&input)
+  template<byte_input_range R> constexpr auto accumulate_frequencies(frequency_table &frequencies, R &&input) -> void
   {
     auto &&range = std::forward<R>(input);
     auto cursor = std::ranges::begin(range);
@@ -45,7 +45,7 @@ namespace huffman {
         throw std::overflow_error("Huffman frequency counter overflow");
       }
       ++count;
-      ++cursor;
+      std::ranges::advance(cursor, 1);
     }
   }
 
@@ -53,12 +53,13 @@ namespace huffman {
   //
   // This is accumulate_frequencies on a zeroed table. The caller receives a
   // finished table, or the function throws and no table is returned.
-  template<byte_input_range R> [[nodiscard]] constexpr frequency_table count_frequencies(R &&input)
+  template<byte_input_range R> [[nodiscard]] constexpr auto count_frequencies(R &&input) -> frequency_table
   {
     frequency_table frequencies{};
     accumulate_frequencies(frequencies, std::forward<R>(input));
     return frequencies;
   }
 
-}// namespace huffman
-}// namespace dacoexec
+}// namespace dacoexec::huffman
+
+#endif // DACOEXEC_HUFFMAN_FREQUENCY_HPP

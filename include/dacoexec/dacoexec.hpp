@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_DACOEXEC_HPP
+#define DACOEXEC_DACOEXEC_HPP
 
 #include <dacoexec/bit/bit_output_iterator.hpp>
 #include <dacoexec/concepts.hpp>
@@ -13,3 +14,5 @@
 // dacoexec is a header-only C++20 library.
 // Public entry point for the byte and bit adaptors and Huffman coding.
 // The core target stays free of third-party dependencies.
+
+#endif // DACOEXEC_DACOEXEC_HPP

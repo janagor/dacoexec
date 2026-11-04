@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_VIEWS_BUFFERED_BYTES_HPP
+#define DACOEXEC_VIEWS_BUFFERED_BYTES_HPP
 
 #include <dacoexec/concepts.hpp>
 #include <dacoexec/detail/buffer.hpp>
@@ -45,7 +46,7 @@ class buffered_bytes_view : public std::ranges::view_interface<buffered_bytes_vi
   {
     state(V source, std::size_t window_size) : base_(std::move(source)), capacity_(window_size) {}
 
-    void ensure_initialized()
+    auto ensure_initialized() -> void
     {
       if (initialized_) { return; }
       initialized_ = true;
@@ -58,7 +59,7 @@ class buffered_bytes_view : public std::ranges::view_interface<buffered_bytes_vi
       fill();
     }
 
-    void fill()
+    auto fill() -> void
     {
       window_.clear();
       index_ = 0;
@@ -93,7 +94,7 @@ class buffered_bytes_view : public std::ranges::view_interface<buffered_bytes_vi
       if (window_.empty()) { finished_ = true; }
     }
 
-    void advance()
+    auto advance() -> void
     {
       if (finished_) { return; }
       ++index_;
@@ -122,11 +123,11 @@ public:
   }
 
   buffered_bytes_view(buffered_bytes_view const &) = delete;
-  buffered_bytes_view &operator=(buffered_bytes_view const &) = delete;
+  auto operator=(buffered_bytes_view const &) -> buffered_bytes_view & = delete;
 
   buffered_bytes_view(buffered_bytes_view &&) noexcept = default;
 
-  buffered_bytes_view &operator=(buffered_bytes_view &&other) noexcept
+  auto operator=(buffered_bytes_view &&other) noexcept -> buffered_bytes_view &
   {
     if (this != &other) { state_ = std::move(other.state_); }
     return *this;
@@ -144,18 +145,18 @@ public:
     using reference = std::byte;
     using pointer = void;
 
-    [[nodiscard]] std::byte operator*() const { return state_->window_[state_->index_]; }
+    [[nodiscard]] auto operator*() const -> std::byte { return state_->window_.at(state_->index_); }
 
-    iterator &operator++()
+    auto operator++() -> iterator &
     {
       state_->advance();
       return *this;
     }
 
-    void operator++(int) { ++*this; }
+    auto operator++([[maybe_unused]] int postfix) -> void { ++*this; }
 
-    [[nodiscard]] friend bool operator==(iterator const &it, std::default_sentinel_t) noexcept
-    { return it.state_ == nullptr || it.state_->finished_; }
+    [[nodiscard]] friend auto operator==(iterator const &cursor, [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
+    { return cursor.state_ == nullptr || cursor.state_->finished_; }
 
   private:
     friend class buffered_bytes_view;
@@ -193,12 +194,13 @@ namespace views {
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
-      [[nodiscard]] auto operator()(R &&range) const
+      [[nodiscard]] auto operator()(R &&range) const -> buffered_bytes_view<std::views::all_t<R>>
       { return buffered_bytes_view<std::views::all_t<R>>(std::views::all(std::forward<R>(range)), capacity_); }
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
       [[nodiscard]] friend auto operator|(R &&range, buffered_bytes_closure const &adaptor)
+        -> buffered_bytes_view<std::views::all_t<R>>
       { return adaptor(std::forward<R>(range)); }
 
     private:
@@ -207,8 +209,10 @@ namespace views {
 
   }// namespace detail
 
-  [[nodiscard]] inline constexpr auto buffered_bytes(std::size_t capacity) -> detail::buffered_bytes_closure
+  [[nodiscard]] constexpr auto buffered_bytes(std::size_t capacity) -> detail::buffered_bytes_closure
   { return detail::buffered_bytes_closure{ capacity }; }
 
 }// namespace views
 }// namespace dacoexec
+
+#endif // DACOEXEC_VIEWS_BUFFERED_BYTES_HPP

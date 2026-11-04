@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_HUFFMAN_TREE_HPP
+#define DACOEXEC_HUFFMAN_TREE_HPP
 
 #include <dacoexec/huffman/frequency.hpp>
 
@@ -10,8 +11,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace dacoexec {
-namespace huffman {
+namespace dacoexec::huffman {
 
   // Code length of every byte value. Zero means the symbol is absent.
   // A present symbol has a length of at least 1. Lengths are leaf depths and
@@ -33,7 +33,7 @@ namespace huffman {
   //
   // Construction uses a fixed array of 511 nodes and a fixed heap. It performs
   // no dynamic allocation.
-  [[nodiscard]] constexpr code_length_table build_code_lengths(frequency_table const &frequencies);
+  [[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies) -> code_length_table;
 
   namespace detail {
 
@@ -43,7 +43,8 @@ namespace huffman {
     // Not a valid node index. A leaf uses this value for both children.
     inline constexpr std::uint16_t invalid_link = std::numeric_limits<std::uint16_t>::max();
 
-    static_assert(max_tree_nodes == 511U);
+    inline constexpr std::size_t expected_tree_nodes = 511U;
+    static_assert(max_tree_nodes == expected_tree_nodes);
     static_assert(max_tree_nodes < invalid_link);
     static_assert(alphabet_size - 1U <= std::numeric_limits<std::uint8_t>::max());
 
@@ -69,7 +70,7 @@ namespace huffman {
     // Inverted comparison so std::push_heap keeps the minimum key at the front.
     struct heap_order
     {
-      [[nodiscard]] constexpr bool operator()(heap_entry const &lhs, heap_entry const &rhs) const noexcept
+      [[nodiscard]] constexpr auto operator()(heap_entry const &lhs, heap_entry const &rhs) const noexcept -> bool
       {
         if (lhs.frequency_ != rhs.frequency_) { return lhs.frequency_ > rhs.frequency_; }
         if (lhs.min_symbol_ != rhs.min_symbol_) { return lhs.min_symbol_ > rhs.min_symbol_; }
@@ -77,7 +78,7 @@ namespace huffman {
       }
     };
 
-    [[nodiscard]] constexpr bool is_leaf(tree_node const &node) noexcept
+    [[nodiscard]] constexpr auto is_leaf(tree_node const &node) noexcept -> bool
     { return node.left_ == invalid_link && node.right_ == invalid_link; }
 
     // Fixed-capacity Huffman forest. The object lives for one length computation.
@@ -88,35 +89,35 @@ namespace huffman {
       std::size_t heap_size_ = 0;
       std::uint16_t node_count_ = 0;
 
-      constexpr void push(heap_entry const &entry)
+      constexpr auto push(heap_entry const &entry) -> void
       {
         heap_.at(heap_size_) = entry;
         ++heap_size_;
         std::push_heap(heap_.begin(), std::next(heap_.begin(), static_cast<std::ptrdiff_t>(heap_size_)), heap_order{});
       }
 
-      [[nodiscard]] constexpr heap_entry pop()
+      [[nodiscard]] constexpr auto pop() -> heap_entry
       {
         std::pop_heap(heap_.begin(), std::next(heap_.begin(), static_cast<std::ptrdiff_t>(heap_size_)), heap_order{});
         --heap_size_;
         return heap_.at(heap_size_);
       }
 
-      constexpr void add_leaf(std::uint16_t symbol, std::uint64_t frequency)
+      constexpr auto add_leaf(std::uint16_t symbol, std::uint64_t frequency) -> void
       {
         auto const index = node_count_;
         nodes_.at(index) = tree_node{
-          frequency,
-          symbol,
-          invalid_link,
-          invalid_link,
-          symbol,
+          .frequency_ = frequency,
+          .min_symbol_ = symbol,
+          .left_ = invalid_link,
+          .right_ = invalid_link,
+          .symbol_ = symbol,
         };
         ++node_count_;
-        push(heap_entry{ frequency, symbol, index });
+        push(heap_entry{ .frequency_ = frequency, .min_symbol_ = symbol, .node_index_ = index });
       }
 
-      constexpr void merge_pair()
+      constexpr auto merge_pair() -> void
       {
         heap_entry const first = pop();
         heap_entry const second = pop();
@@ -131,17 +132,17 @@ namespace huffman {
         auto const index = node_count_;
         // The first popped node is the left child and the second is the right child.
         nodes_.at(index) = tree_node{
-          frequency,
-          min_symbol,
-          first.node_index_,
-          second.node_index_,
-          invalid_link,
+          .frequency_ = frequency,
+          .min_symbol_ = min_symbol,
+          .left_ = first.node_index_,
+          .right_ = second.node_index_,
+          .symbol_ = invalid_link,
         };
         ++node_count_;
-        push(heap_entry{ frequency, min_symbol, index });
+        push(heap_entry{ .frequency_ = frequency, .min_symbol_ = min_symbol, .node_index_ = index });
       }
 
-      [[nodiscard]] constexpr code_length_table depths_from(std::uint16_t root) const
+      [[nodiscard]] constexpr auto depths_from(std::uint16_t root) const -> code_length_table
       {
         struct frame
         {
@@ -152,7 +153,7 @@ namespace huffman {
         code_length_table lengths{};
         std::array<frame, max_tree_nodes> stack{};
         std::size_t top = 1;
-        stack.at(0) = frame{ root, 0 };
+        stack.at(0) = frame{ .index_ = root, .depth_ = 0 };
         while (top != 0) {
           frame const current = stack.at(top - 1);
           --top;
@@ -162,15 +163,15 @@ namespace huffman {
             continue;
           }
           auto const child_depth = static_cast<std::uint16_t>(current.depth_ + 1U);
-          stack.at(top) = frame{ node.right_, child_depth };
+          stack.at(top) = frame{ .index_ = node.right_, .depth_ = child_depth };
           ++top;
-          stack.at(top) = frame{ node.left_, child_depth };
+          stack.at(top) = frame{ .index_ = node.left_, .depth_ = child_depth };
           ++top;
         }
         return lengths;
       }
 
-      [[nodiscard]] constexpr code_length_table finish()
+      [[nodiscard]] constexpr auto finish() -> code_length_table
       {
         if (node_count_ == 0) { return {}; }
         if (node_count_ == 1) {
@@ -185,7 +186,7 @@ namespace huffman {
 
   }// namespace detail
 
-  [[nodiscard]] constexpr code_length_table build_code_lengths(frequency_table const &frequencies)
+  [[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies) -> code_length_table
   {
     detail::length_builder builder;
     for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
@@ -196,5 +197,6 @@ namespace huffman {
     return builder.finish();
   }
 
-}// namespace huffman
-}// namespace dacoexec
+}// namespace dacoexec::huffman
+
+#endif // DACOEXEC_HUFFMAN_TREE_HPP

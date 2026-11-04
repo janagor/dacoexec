@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DACOEXEC_BIT_BIT_OUTPUT_ITERATOR_HPP
+#define DACOEXEC_BIT_BIT_OUTPUT_ITERATOR_HPP
 
 #include <dacoexec/detail/byte.hpp>
 
@@ -23,13 +24,13 @@ namespace detail {
   };
 
   // Mask of the low `bit_count` bits. `bit_count` must be 0..32.
-  [[nodiscard]] constexpr std::uint32_t low_bit_mask(unsigned bit_count) noexcept
+  [[nodiscard]] constexpr auto low_bit_mask(unsigned bit_count) noexcept -> std::uint32_t
   { return static_cast<std::uint32_t>((std::uint64_t{ 1 } << bit_count) - std::uint64_t{ 1 }); }
 
   // `bit_count` must be 0..32 for ok. Wider counts are rejected. A value is
   // too wide when any bit above that width is set. Zero width allows only zero.
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  [[nodiscard]] constexpr codeword_status check_codeword(std::uint32_t value, unsigned bit_count) noexcept
+  [[nodiscard]] constexpr auto check_codeword(std::uint32_t value, unsigned bit_count) noexcept -> codeword_status
   {
     if (bit_count > max_codeword_bits) { return codeword_status::count_too_large; }
     std::uint32_t const mask = low_bit_mask(bit_count);
@@ -65,7 +66,7 @@ public:
   public:
     // Const assignment is required by std::indirectly_writable.
     // NOLINTNEXTLINE(cppcoreguidelines-c-copy-assignment-signature,misc-unconventional-assign-operator)
-    proxy const &operator=(bool bit) const;
+    auto operator=(bool bit) const -> proxy const &;
 
   private:
     friend class bit_output_iterator;
@@ -77,11 +78,11 @@ public:
 
   explicit bit_output_iterator(bit_writer<Out> &writer) noexcept : writer_(&writer) {}
 
-  [[nodiscard]] proxy operator*() const noexcept { return proxy{ writer_ }; }
+  [[nodiscard]] auto operator*() const noexcept -> proxy { return proxy{ writer_ }; }
 
-  bit_output_iterator &operator++() noexcept { return *this; }
+  auto operator++() noexcept -> bit_output_iterator & { return *this; }
 
-  bit_output_iterator operator++(int) noexcept { return *this; }
+  auto operator++([[maybe_unused]] int postfix) noexcept -> bit_output_iterator { return *this; }
 
 private:
   bit_writer<Out> *writer_ = nullptr;
@@ -131,7 +132,7 @@ public:
   explicit bit_writer(Out output) : output_(std::move(output)) {}
 
   bit_writer(bit_writer const &) = delete;
-  bit_writer &operator=(bit_writer const &) = delete;
+  auto operator=(bit_writer const &) -> bit_writer & = delete;
 
   bit_writer(bit_writer &&other) noexcept
     requires std::is_nothrow_move_constructible_v<Out>
@@ -141,6 +142,8 @@ public:
   // A throwing output-iterator move must not leave a usable writer. The new
   // writer is not constructed, and the source is retired because its iterator
   // may already have changed sinks.
+  // Throwing iterator moves are part of the contract.
+  // NOLINTNEXTLINE(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,hicpp-noexcept-move,performance-noexcept-move-constructor)
   bit_writer(bit_writer &&other)
     requires(!std::is_nothrow_move_constructible_v<Out>)
   try : output_(std::move(other.output_)) {
@@ -150,7 +153,7 @@ public:
     throw;
   }
 
-  bit_writer &operator=(bit_writer &&other) noexcept
+  auto operator=(bit_writer &&other) noexcept -> bit_writer &
     requires std::is_nothrow_move_assignable_v<Out>
   {
     if (this != &other) {
@@ -163,7 +166,9 @@ public:
   // Move assignment replaces this writer's output first. If that assignment
   // throws after retargeting the sink, both writers are retired so the
   // destination's old pending bits cannot be emitted to the new sink.
-  bit_writer &operator=(bit_writer &&other)
+  // Throwing iterator moves are part of the contract.
+  // NOLINTNEXTLINE(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,hicpp-noexcept-move,performance-noexcept-move-constructor)
+  auto operator=(bit_writer &&other) -> bit_writer &
     requires(!std::is_nothrow_move_assignable_v<Out>)
   {
     if (this != &other) {
@@ -181,10 +186,10 @@ public:
 
   ~bit_writer() = default;
 
-  void write_bit(bool bit) { write_bits(bit ? std::uint32_t{ 1 } : std::uint32_t{ 0 }, 1U); }
+  auto write_bit(bool bit) -> void { write_bits(bit ? std::uint32_t{ 1 } : std::uint32_t{ 0 }, 1U); }
 
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  void write_bits(std::uint32_t value, unsigned bit_count)
+  auto write_bits(std::uint32_t value, unsigned bit_count) -> void
   {
     ensure_writable();
     detail::codeword_status const status = detail::check_codeword(value, bit_count);
@@ -208,7 +213,7 @@ public:
   }
 
   // Emits the final partial byte, if any, and returns the zero-padding count.
-  [[nodiscard]] std::uint8_t finish()
+  [[nodiscard]] auto finish() -> std::uint8_t
   {
     if (failed_) { throw std::logic_error("dacoexec::bit_writer is unusable"); }
     if (finalized_) { return padding_; }
@@ -221,17 +226,17 @@ public:
     return padding_;
   }
 
-  [[nodiscard]] bit_output_iterator<Out> output_iterator() noexcept { return bit_output_iterator<Out>{ *this }; }
+  [[nodiscard]] auto output_iterator() noexcept -> bit_output_iterator<Out> { return bit_output_iterator<Out>{ *this }; }
 
 private:
-  void ensure_writable() const
+  auto ensure_writable() const -> void
   {
     if (failed_) { throw std::logic_error("dacoexec::bit_writer is unusable"); }
     if (finalized_) { throw std::logic_error("dacoexec::bit_writer write after finalization"); }
   }
 
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  void accept_chunk(std::uint32_t extracted, unsigned chunk)
+  auto accept_chunk(std::uint32_t extracted, unsigned chunk) -> void
   {
     unsigned const space = detail::bits_per_byte - pending_bits_;
     unsigned const insert_shift = space - chunk;
@@ -241,7 +246,7 @@ private:
     if (pending_bits_ == detail::bits_per_byte) { emit_byte(); }
   }
 
-  void emit_byte()
+  auto emit_byte() -> void
   {
     auto const value = static_cast<std::byte>(accumulator_);
     try {
@@ -255,7 +260,7 @@ private:
     pending_bits_ = 0;
   }
 
-  void transfer_from(bit_writer &other) noexcept
+  auto transfer_from(bit_writer &other) noexcept -> void
   {
     accumulator_ = other.accumulator_;
     pending_bits_ = other.pending_bits_;
@@ -265,7 +270,7 @@ private:
     other.retire();
   }
 
-  void retire() noexcept
+  auto retire() noexcept -> void
   {
     accumulator_ = 0;
     pending_bits_ = 0;
@@ -282,13 +287,18 @@ private:
   bool failed_ = false;
 };
 
+// Const assignment satisfies the output iterator proxy contract.
+// NOLINTBEGIN(cppcoreguidelines-c-copy-assignment-signature,misc-unconventional-assign-operator)
 template<class Out>
   requires std::output_iterator<Out, std::byte>
-// NOLINTNEXTLINE(cppcoreguidelines-c-copy-assignment-signature,misc-unconventional-assign-operator)
 auto bit_output_iterator<Out>::proxy::operator=(bool bit) const -> proxy const &
 {
   writer_->write_bit(bit);
   return *this;
 }
 
+// NOLINTEND(cppcoreguidelines-c-copy-assignment-signature,misc-unconventional-assign-operator)
+
 }// namespace dacoexec
+
+#endif // DACOEXEC_BIT_BIT_OUTPUT_ITERATOR_HPP
