@@ -2,14 +2,19 @@ if(NOT DEFINED SOURCE_DIR OR NOT DEFINED BUILD_DIR)
   message(FATAL_ERROR "SOURCE_DIR and BUILD_DIR are required")
 endif()
 
-set(stage "${BUILD_DIR}/Testing/Temporary/subproject-consumer")
+if(EXECUTION_SUBPROJECT)
+  set(consumer_fixture execution_subproject_consumer)
+else()
+  set(consumer_fixture subproject_consumer)
+endif()
+set(stage "${BUILD_DIR}/Testing/Temporary/${consumer_fixture}")
 set(consumer_build "${stage}/build")
 file(REMOVE_RECURSE "${stage}")
 
 set(configure_command
     ${CMAKE_COMMAND}
     -S
-    "${SOURCE_DIR}/test/fixtures/subproject_consumer"
+    "${SOURCE_DIR}/test/fixtures/${consumer_fixture}"
     -B
     "${consumer_build}"
     "-DDACOEXEC_SOURCE_DIR=${SOURCE_DIR}"
@@ -51,22 +56,25 @@ if(NOT configure_result EQUAL 0)
   message(FATAL_ERROR "Subproject configure failed (${configure_result})\n${configure_output}\n${configure_error}")
 endif()
 
-set(configure_log "${configure_output}${configure_error}")
-string(TOLOWER "${configure_log}" configure_log_lower)
-foreach(package IN ITEMS "catchorg/catch2" "fmtlib/fmt" "gabime/spdlog" "arthursonzogni/ftxui" "cliutils/cli11"
-                         "nvidia/stdexec")
-  string(FIND "${configure_log_lower}" "${package}" package_pos)
-  if(NOT package_pos EQUAL -1)
-    message(FATAL_ERROR "Subproject configuration fetched ${package}")
-  endif()
-endforeach()
+if(NOT EXECUTION_SUBPROJECT)
+  set(configure_log "${configure_output}${configure_error}")
+  string(TOLOWER "${configure_log}" configure_log_lower)
+  foreach(package IN ITEMS "catchorg/catch2" "fmtlib/fmt" "gabime/spdlog" "arthursonzogni/ftxui" "cliutils/cli11"
+                           "nvidia/stdexec")
+    string(FIND "${configure_log_lower}" "${package}" package_pos)
+    if(NOT package_pos EQUAL -1)
+      message(FATAL_ERROR "Subproject configuration fetched ${package}")
+    endif()
+  endforeach()
 
-if(EXISTS "${consumer_build}/_deps" OR EXISTS "${consumer_build}/dacoexec/_deps")
-  message(FATAL_ERROR "Subproject configuration populated _deps")
-endif()
-file(GLOB cpm_bootstrap "${consumer_build}/cmake/CPM_*.cmake" "${consumer_build}/dacoexec/cmake/CPM_*.cmake")
-if(cpm_bootstrap)
-  message(FATAL_ERROR "Subproject configuration downloaded CPM: ${cpm_bootstrap}")
+  if(EXISTS "${consumer_build}/_deps" OR EXISTS "${consumer_build}/dacoexec/_deps")
+    message(FATAL_ERROR "Subproject configuration populated _deps")
+  endif()
+  file(GLOB cpm_bootstrap "${consumer_build}/cmake/CPM_*.cmake" "${consumer_build}/dacoexec/cmake/CPM_*.cmake")
+  if(cpm_bootstrap)
+    message(FATAL_ERROR "Subproject configuration downloaded CPM: ${cpm_bootstrap}")
+  endif()
+
 endif()
 
 set(build_command ${CMAKE_COMMAND} --build "${consumer_build}")
@@ -100,4 +108,19 @@ if(NOT test_result EQUAL 0)
   message(FATAL_ERROR "Subproject consumer failed (${test_result})\n${test_output}\n${test_error}")
 endif()
 
-message(STATUS "Subproject consumer built without optional dependencies")
+if(EXECUTION_SUBPROJECT)
+  set(install_command ${CMAKE_COMMAND} --install "${consumer_build}" --prefix "${stage}/prefix")
+  if(CONFIG)
+    list(APPEND install_command --config "${CONFIG}")
+  endif()
+  execute_process(COMMAND ${install_command} RESULT_VARIABLE install_result
+    OUTPUT_VARIABLE install_output ERROR_VARIABLE install_error)
+  if(NOT install_result EQUAL 0)
+    message(FATAL_ERROR "Embedded install failed\n${install_output}\n${install_error}")
+  endif()
+  file(GLOB_RECURSE installed_files LIST_DIRECTORIES false "${stage}/prefix/*")
+  if(installed_files)
+    message(FATAL_ERROR "Embedded execution installed files: ${installed_files}")
+  endif()
+endif()
+message(STATUS "Subproject consumer passed: ${consumer_fixture}")

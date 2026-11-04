@@ -2,7 +2,12 @@ if(NOT DEFINED SOURCE_DIR OR NOT DEFINED BUILD_DIR)
   message(FATAL_ERROR "SOURCE_DIR and BUILD_DIR are required")
 endif()
 
-set(stage "${BUILD_DIR}/Testing/Temporary/install-consumer")
+if(EXECUTION_CONSUMER)
+  set(consumer_fixture execution_consumer)
+else()
+  set(consumer_fixture install_consumer)
+endif()
+set(stage "${BUILD_DIR}/Testing/Temporary/${consumer_fixture}")
 set(prefix_a "${stage}/prefix-a")
 set(prefix_b "${stage}/prefix-b")
 set(consumer_build "${stage}/build")
@@ -79,7 +84,7 @@ set(ENV{CMAKE_PREFIX_PATH} "")
 set(configure_command
     ${CMAKE_COMMAND}
     -S
-    "${SOURCE_DIR}/test/fixtures/install_consumer"
+    "${SOURCE_DIR}/test/fixtures/${consumer_fixture}"
     -B
     "${consumer_build}"
     "-DCMAKE_PREFIX_PATH=${prefix_b}"
@@ -88,6 +93,14 @@ set(configure_command
     -DCMAKE_CXX_EXTENSIONS=OFF
     "-DDACOEXEC_SOURCE_DIR=${SOURCE_DIR}"
     "-DDACOEXEC_INSTALL_PREFIX=${prefix_b}")
+if(EXECUTION_CONSUMER AND STDEXEC_PACKAGE_DIR
+   AND NOT EXISTS "${prefix_b}/lib/cmake/stdexec"
+   AND NOT EXISTS "${prefix_b}/lib64/cmake/stdexec")
+  list(APPEND configure_command "-Dstdexec_DIR=${STDEXEC_PACKAGE_DIR}")
+endif()
+if(NOT EXECUTION_CONSUMER)
+  list(APPEND configure_command -DCMAKE_DISABLE_FIND_PACKAGE_stdexec=ON)
+endif()
 if(GENERATOR)
   list(APPEND configure_command -G "${GENERATOR}")
 endif()

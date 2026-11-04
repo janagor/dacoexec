@@ -107,6 +107,9 @@ if(dacoexec_TEST_SUBPROJECT_CONSUMER)
 endif()
 
 if(dacoexec_TEST_INSTALL_CONSUMER AND dacoexec_INSTALL)
+  add_test(NAME install.core_only COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments}
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_core_only_install.cmake)
+  set_tests_properties(install.core_only PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
   add_test(NAME install.consumer COMMAND ${CMAKE_COMMAND} ${dacoexec_infrastructure_arguments} -P
                                          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_install_consumer.cmake)
   set_tests_properties(
@@ -154,4 +157,50 @@ set_target_properties(dacoexec_public_header_tests PROPERTIES
   UNITY_BUILD OFF DISABLE_PRECOMPILE_HEADERS ON)
 if(MSVC)
   target_compile_options(dacoexec_public_header_tests PRIVATE /Zc:__cplusplus)
+endif()
+
+if(dacoexec_BUILD_EXECUTION)
+  if(dacoexec_TEST_SUBPROJECT_CONSUMER)
+    add_test(NAME subproject.execution_consumer COMMAND ${CMAKE_COMMAND}
+      ${dacoexec_infrastructure_arguments} -DEXECUTION_SUBPROJECT=ON
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_subproject_consumer.cmake)
+    set_tests_properties(subproject.execution_consumer PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+  endif()
+
+  add_executable(dacoexec_execution_tests execution_tests.cpp)
+  target_link_libraries(dacoexec_execution_tests PRIVATE dacoexec::execution
+    dacoexec_options dacoexec_warnings Catch2::Catch2WithMain)
+  if(dacoexec_catch_compile_definitions)
+    target_compile_definitions(dacoexec_execution_tests PRIVATE ${dacoexec_catch_compile_definitions})
+  endif()
+  if(MSVC)
+    target_compile_options(dacoexec_execution_tests PRIVATE /Zc:__cplusplus)
+  endif()
+  dacoexec_configure_linker(dacoexec_execution_tests)
+  catch_discover_tests(dacoexec_execution_tests PROPERTIES TIMEOUT 120)
+
+  if(dacoexec_TEST_INSTALL_CONSUMER AND dacoexec_INSTALL)
+    add_test(NAME install.execution_consumer COMMAND ${CMAKE_COMMAND}
+      ${dacoexec_infrastructure_arguments} -DEXECUTION_CONSUMER=ON
+      "-DSTDEXEC_PACKAGE_DIR=${stdexec_DIR}"
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_install_consumer.cmake)
+    set_tests_properties(install.execution_consumer PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+  endif()
+
+  set(execution_header_sources "")
+  foreach(header IN LISTS DACOEXEC_EXECUTION_HEADERS)
+    file(RELATIVE_PATH relative_header "${PROJECT_SOURCE_DIR}/include" "${header}")
+    string(MAKE_C_IDENTIFIER "${relative_header}" header_id)
+    set(header_source "${CMAKE_CURRENT_BINARY_DIR}/public_headers/${header_id}.cpp")
+    file(GENERATE OUTPUT "${header_source}" CONTENT "#include <${relative_header}> // IWYU pragma: keep\n")
+    list(APPEND execution_header_sources "${header_source}")
+  endforeach()
+  add_library(dacoexec_execution_header_tests OBJECT ${execution_header_sources})
+  target_link_libraries(dacoexec_execution_header_tests PRIVATE dacoexec::execution dacoexec_warnings)
+  set_target_properties(dacoexec_execution_header_tests PROPERTIES
+    CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+    UNITY_BUILD OFF DISABLE_PRECOMPILE_HEADERS ON)
+  if(MSVC)
+    target_compile_options(dacoexec_execution_header_tests PRIVATE /Zc:__cplusplus)
+  endif()
 endif()
