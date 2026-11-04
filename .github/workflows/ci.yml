@@ -213,7 +213,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20
             -DCMAKE_CXX_STANDARD_REQUIRED=ON
             -DCMAKE_CXX_EXTENSIONS=OFF
-            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_BUILD_EXECUTION=ON
             -Ddacoexec_WARNINGS_AS_ERRORS=ON
             -Ddacoexec_TEST_INSTALL_CONSUMER=${{ matrix.install_consumer }}
             -Ddacoexec_TEST_SUBPROJECT_CONSUMER=${{ matrix.subproject }}
@@ -292,7 +292,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 `
             -DCMAKE_CXX_STANDARD_REQUIRED=ON `
             -DCMAKE_CXX_EXTENSIONS=OFF `
-            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON `
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_BUILD_EXECUTION=ON `
             -Ddacoexec_WARNINGS_AS_ERRORS=ON `
             -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=19.43 `
             -Ddacoexec_TEST_INSTALL_CONSUMER=ON `
@@ -340,7 +340,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 `
             -DCMAKE_CXX_STANDARD_REQUIRED=ON `
             -DCMAKE_CXX_EXTENSIONS=OFF `
-            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON `
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_BUILD_EXECUTION=ON `
             -Ddacoexec_WARNINGS_AS_ERRORS=ON `
             -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=21 `
             -Ddacoexec_TEST_INSTALL_CONSUMER=OFF `
@@ -394,7 +394,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_CXX_EXTENSIONS=OFF \
-            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_BUILD_EXECUTION=ON \
             -Ddacoexec_WARNINGS_AS_ERRORS=ON \
             -Ddacoexec_TEST_INSTALL_CONSUMER=OFF \
             -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
@@ -430,7 +430,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_CXX_EXTENSIONS=OFF \
-            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_BUILD_EXECUTION=ON \
             -Ddacoexec_WARNINGS_AS_ERRORS=ON \
             -Ddacoexec_ENABLE_SANITIZER_ADDRESS=ON \
             -Ddacoexec_ENABLE_SANITIZER_UNDEFINED=ON \
@@ -468,7 +468,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_CXX_EXTENSIONS=OFF \
-            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_BUILD_EXECUTION=ON \
             -Ddacoexec_WARNINGS_AS_ERRORS=ON \
             -Ddacoexec_ENABLE_CLANG_TIDY=ON \
             -Ddacoexec_TEST_INSTALL_CONSUMER=OFF \
@@ -530,3 +530,29 @@ jobs:
         run: cmake --build build --target dacoexec_streaming_memory_tests
       - name: Verify more than 4 GiB in both directions
         run: ctest --test-dir build -R '^streaming.large$' --output-on-failure
+
+  thread-sanitizer:
+    name: Clang 22 ThreadSanitizer execution
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm-22.1.8
+          cmake: true
+          ninja: true
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON
+          -DCMAKE_CXX_EXTENSIONS=OFF
+          -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=22
+          -Ddacoexec_BUILD_EXECUTION=ON -Ddacoexec_BUILD_TESTS=ON
+          -Ddacoexec_ENABLE_SANITIZER_THREAD=ON
+          -Ddacoexec_TEST_INSTALL_CONSUMER=OFF
+          -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
+      - name: Build execution tests
+        run: cmake --build build --target dacoexec_execution_tests
+      - name: Test execution races
+        run: ./build/test/dacoexec_execution_tests '[execution]'
