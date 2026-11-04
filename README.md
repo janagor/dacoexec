@@ -330,3 +330,65 @@ Existing destinations require `--force`. Failed operations preserve existing
 outputs. CLI11 2.6.1 is resolved only for CLI builds; the header-only core has
 no additional dependency. Dedicated large-stream coverage is enabled with
 `dacoexec_TEST_LARGE_STREAMS`; it is excluded from default test runs.
+
+### Optional parallel Huffman encoding
+
+Enable `dacoexec_BUILD_EXECUTION=ON` to provide `dacoexec::execution`.
+It resolves an existing `STDEXEC::stdexec` target, an installed `stdexec`
+package, or NVIDIA/stdexec v0.11.0 pinned to
+`ead186b1d8db3ebe37a946ff84a6ce08bf795153`. The option defaults to OFF;
+core-only builds and `<dacoexec/dacoexec.hpp>` do not require stdexec.
+
+```cpp
+#include <dacoexec/huffman/execution.hpp>
+#include <exec/static_thread_pool.hpp>
+#include <stdexec/execution.hpp>
+
+constexpr std::size_t workers = 4;
+exec::static_thread_pool pool{ workers };
+auto sender = dacoexec::huffman::encode_parallel_on(
+  pool.get_scheduler(), input, sink);
+auto result = stdexec::sync_wait(std::move(sender));
+```
+
+The single-use sender is lazy and completes with `stream_statistics`,
+`std::exception_ptr`, or stopped. It owns rvalue ranges and borrows lvalue
+ranges. Keep the sink, borrowed input, and scheduler context alive until
+completion. Source reads and sink writes are serialized; they may migrate
+from the starting thread to the worker that completes a batch. Thread-affine
+sources and sinks need an external adapter.
+
+`parallel_options` defaults to 1 MiB blocks and four blocks per batch.
+Only independent block encoding runs concurrently. Every batch drains before
+its frames are written in input order, producing identical DHF1 bytes to
+`compress_stream()`. No next-batch block is acquired until the current
+batch is committed and released. Retained input and result storage is
+`O(max_in_flight * (block_size + encoded_frame_size))`, independent of input
+length. Codec temporaries add per-worker storage, and input adaptors may
+have their own staging buffers; 4 MiB is input payload capacity, not total
+process memory.
+
+Cancellation comes from the receiver environment. An already stopped
+operation reads and writes nothing. Cancellation during a batch requests
+stop on scheduled work and drains running compression before completing
+stopped. Running CPU compression is cooperative at block boundaries.
+Worker errors are collected before committing any frame from their batch;
+the lowest input index with an error wins, including when cancellation races
+with a recorded error. Internal errors stop further dispatch but do not cancel
+already-started siblings: all are drained to preserve deterministic error
+precedence. External cancellation still propagates to scheduled children through
+the receiver environment. Earlier batches remain written.
+Source, scheduler, and sink exceptions propagate without retries. A sink
+failure can leave a partially written frame; neither failure nor observed
+cancellation writes END.
+
+Installed consumers request the optional component:
+
+```cmake
+find_package(dacoexec CONFIG REQUIRED COMPONENTS execution)
+target_link_libraries(app PRIVATE dacoexec::execution)
+```
+
+This requires an installed stdexec package discoverable through
+`CMAKE_PREFIX_PATH` or `stdexec_DIR`. Installed consumers never download it.
+A plain `find_package(dacoexec CONFIG REQUIRED)` loads only the core target.
