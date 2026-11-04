@@ -251,3 +251,56 @@ cached codeword. Iterator copies share a single pass, and moving the view keeps
 active iterators valid. The owning view must outlive its iterators. Source
 exceptions propagate unchanged; an absent symbol throws `std::invalid_argument`.
 Either error permanently ends that view's iteration.
+
+### Owned Huffman blocks and lazy decoding
+
+`<dacoexec/huffman/block.hpp>` provides move-only `encoded_block` and consumes
+owned blocks by value. Sequence numbers survive compression and decompression:
+
+```cpp
+constexpr std::uint64_t sequence = 42;
+constexpr std::size_t block_size = 4096;
+auto input = dacoexec::byte_block{
+    sequence, std::vector<std::byte>(block_size, std::byte{'A'})};
+auto encoded = dacoexec::huffman::compress_block(std::move(input));
+auto decoded = dacoexec::huffman::decompress_block(std::move(encoded), block_size);
+```
+
+Compression selects canonical Huffman only when `ceil(encoded_bits / 8) + 256`
+is strictly smaller than the input. The 256-byte cost is the complete code length
+table; ties, empty input and unsupported code lengths above 32 bits select RAW.
+RAW moves the original buffer, has zero lengths and padding, and its payload size
+must equal the declared uncompressed size. Huffman blocks represent nonempty
+input and contain MSB-first packed codewords with 0–7 zero-filled low padding
+bits. This is an internal block model, not an on-disk format.
+
+`decompress_block` checks the explicit output limit before allocating output.
+Malformed metadata, invalid canonical lengths, truncated codewords, invalid
+transitions, nonzero padding, extra payload and mismatched output counts throw
+`dacoexec::huffman::decode_error`. Allocation failures propagate normally; no
+partially decoded result is returned.
+
+For incremental consumption, include `<dacoexec/huffman/decode_view.hpp>`:
+
+```cpp
+auto decoded = encoded_bytes | dacoexec::huffman::views::decode(
+    codebook, valid_bit_count, expected_symbol_count);
+for (std::byte symbol : decoded) {
+    consume(symbol);
+}
+```
+
+The view copies the codebook, owns rvalue sources and borrows suitable lvalues.
+Construction reads nothing; `begin()` stages the first byte. Iterator copies
+share one position, and moving the view preserves active iterators. The view is
+move-only, single-pass and non-borrowed; destroying its owner invalidates its
+iterators. Any decoding or source failure permanently ends iteration, while
+source exceptions propagate unchanged. Exhaust iteration to validate the exact
+bit and symbol counts, padding and absence of trailing bytes.
+
+The lazy decoder holds a fixed-capacity trie, one cached source byte and one
+staged output byte in a single owned state allocation; it does not allocate an
+output-sized buffer or materialize bits. The eager codec allocates at most
+block-sized buffers and does not buffer an entire stream. Both headers are
+available through the dependency-free `dacoexec::dacoexec` interface target and
+the umbrella header.
