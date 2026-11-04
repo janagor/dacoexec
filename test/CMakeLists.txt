@@ -37,7 +37,8 @@ add_test(NAME cmake.sanitizers.apple_excludes_leak
 add_test(NAME cmake.sanitizers.non_apple_includes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_non_apple_includes_leak.cmake)
 
-add_executable(dacoexec_tests tests.cpp ranges_tests.cpp bit_tests.cpp huffman_tests.cpp huffman_codec_tests.cpp huffman_decode_view_tests.cpp)
+add_executable(dacoexec_tests tests.cpp ranges_tests.cpp bit_tests.cpp huffman_tests.cpp huffman_codec_tests.cpp huffman_decode_view_tests.cpp streaming_tests.cpp cli_file_tests.cpp)
+target_compile_definitions(dacoexec_tests PRIVATE DACOEXEC_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 target_link_libraries(
   dacoexec_tests
   PRIVATE dacoexec::dacoexec
@@ -114,4 +115,43 @@ if(dacoexec_TEST_INSTALL_CONSUMER AND dacoexec_INSTALL)
                900
                RUN_SERIAL
                TRUE)
+endif()
+
+add_executable(dacoexec_streaming_memory_tests streaming_memory_tests.cpp)
+target_link_libraries(dacoexec_streaming_memory_tests PRIVATE dacoexec::dacoexec dacoexec_options dacoexec_warnings)
+if(MSVC)
+  target_compile_options(dacoexec_streaming_memory_tests PRIVATE /Zc:__cplusplus)
+endif()
+dacoexec_configure_linker(dacoexec_streaming_memory_tests)
+add_test(NAME streaming.memory COMMAND dacoexec_streaming_memory_tests)
+option(dacoexec_TEST_LARGE_STREAMS "Run streaming tests exceeding 4 GiB" OFF)
+if(dacoexec_TEST_LARGE_STREAMS)
+  add_test(NAME streaming.large COMMAND dacoexec_streaming_memory_tests --large)
+  set_tests_properties(streaming.large PROPERTIES LABELS large TIMEOUT 7200)
+endif()
+if(dacoexec_BUILD_CLI)
+  add_test(NAME cli.smoke COMMAND ${CMAKE_COMMAND}
+    -DCLI=$<TARGET_FILE:dacoexec_cli>
+    -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-smoke
+    -DFIXTURE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/fixtures
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_cli_smoke.cmake)
+endif()
+
+# Each translation unit includes just one public header. Disable unity and PCH
+# so neither can conceal missing includes, even in an enclosing build.
+set(dacoexec_header_test_sources "")
+foreach(header IN LISTS DACOEXEC_HEADERS)
+  file(RELATIVE_PATH relative_header "${PROJECT_SOURCE_DIR}/include" "${header}")
+  string(MAKE_C_IDENTIFIER "${relative_header}" header_id)
+  set(header_source "${CMAKE_CURRENT_BINARY_DIR}/public_headers/${header_id}.cpp")
+  file(GENERATE OUTPUT "${header_source}" CONTENT "#include <${relative_header}> // IWYU pragma: keep\n")
+  list(APPEND dacoexec_header_test_sources "${header_source}")
+endforeach()
+add_library(dacoexec_public_header_tests OBJECT ${dacoexec_header_test_sources})
+target_link_libraries(dacoexec_public_header_tests PRIVATE dacoexec::dacoexec dacoexec_warnings)
+set_target_properties(dacoexec_public_header_tests PROPERTIES
+  CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+  UNITY_BUILD OFF DISABLE_PRECOMPILE_HEADERS ON)
+if(MSVC)
+  target_compile_options(dacoexec_public_header_tests PRIVATE /Zc:__cplusplus)
 endif()

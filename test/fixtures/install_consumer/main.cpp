@@ -20,6 +20,7 @@
 
 [[nodiscard]] auto installed_block_round_trip() -> bool;
 [[nodiscard]] auto installed_lazy_decode() -> bool;
+[[nodiscard]] auto installed_stream_round_trip() -> bool;
 
 int main()
 {
@@ -92,7 +93,7 @@ int main()
   std::vector<std::byte> const golden_bytes{ std::byte{ 0x05 }, std::byte{ 0x6E } };
   if (canonical_writer.finish() != golden_padding || encoded != golden_bytes) { return 7; }
 
-  if (!installed_block_round_trip() || !installed_lazy_decode()) { return 1; }
+  if (!installed_block_round_trip() || !installed_lazy_decode() || !installed_stream_round_trip()) { return 1; }
 
   std::cout << "dacoexec install consumer ok\n";
   return 0;
