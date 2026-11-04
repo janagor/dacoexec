@@ -3,6 +3,8 @@
 
 #include <dacoexec/bit/bit_output_iterator.hpp>
 #include <dacoexec/concepts.hpp>
+#include <dacoexec/huffman/block.hpp>
+#include <dacoexec/huffman/decode_view.hpp>
 #include <dacoexec/huffman/canonical.hpp>
 #include <dacoexec/huffman/codewords_view.hpp>
 #include <dacoexec/huffman/frequency.hpp>
