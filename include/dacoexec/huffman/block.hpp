@@ -1,3 +1,6 @@
+//! \file
+//! Owned block compression, RAW fallback, and checked decompression.
+
 #ifndef DACOEXEC_HUFFMAN_BLOCK_HPP
 #define DACOEXEC_HUFFMAN_BLOCK_HPP
 
@@ -18,19 +21,30 @@
 
 namespace dacoexec::huffman {
 
+/**
+ * Payload representation: original bytes or canonical Huffman bits.
+ */
 enum class block_encoding : std::uint8_t { raw, canonical_huffman };
 
-// Internal owning block model, independent of any serialized format.
-// RAW has zero lengths/padding and payload size equal to uncompressed_size_.
-// Huffman represents nonempty input, with canonical lengths and zero-filled
-// low padding bits (fewer than one byte). sequence_ survives both operations.
+/**
+ * Move-only owning block model, independent of any serialized format.
+ * RAW has zero lengths/padding and payload size equal to uncompressed_size_.
+ * Huffman represents nonempty input, with canonical lengths and zero-filled
+ * low padding bits (fewer than one byte). sequence_ survives both operations.
+ */
 struct encoded_block
 {
+  //! Source block position, preserved across compression and decompression.
   std::uint64_t sequence_ = 0;
+  //! Selects payload interpretation.
   block_encoding encoding_ = block_encoding::raw;
+  //! Exact decoded byte count.
   std::uint64_t uncompressed_size_ = 0;
+  //! Owned RAW bytes or MSB-first packed Huffman data.
   std::vector<std::byte> payload_;
+  //! Per-symbol canonical widths; all zero for RAW.
   code_length_table lengths_{};
+  //! Unused zero low bits in the last Huffman byte; zero for RAW.
   std::uint8_t padding_bits_ = 0;
 
   encoded_block() = default;
@@ -82,8 +96,24 @@ namespace detail {
   }
 }// namespace detail
 
-// Consumes one block. Choose Huffman only when packed bytes plus the complete
-// length table are strictly smaller than the original. RAW moves the buffer.
+/**
+ * Consumes one block. Choose Huffman only when packed bytes plus the complete
+ * length table are strictly smaller than the original. RAW moves the buffer.
+ * Empty input, ties, widths above max_canonical_bits, and unrepresentable
+ * encoded bit totals select RAW. The cost includes the 256-byte length table,
+ * but no external framing. Huffman payloads have zero-filled low padding bits.
+ *
+ * @param block Owned bytes to consume; sequence_ is preserved.
+ * @return Independent owned encoded data.
+ * @throws std::overflow_error If frequency counting or tree sums overflow.
+ * Allocation failures propagate.
+ * @code
+ * auto encoded = huffman::compress_block(std::move(block));
+ * auto decoded = huffman::decompress_block(std::move(encoded), output_limit);
+ * @endcode
+ *
+ * @see decompress_block
+ */
 [[nodiscard]] inline auto compress_block(dacoexec::byte_block block) -> encoded_block
 {
   encoded_block result;
@@ -111,10 +141,25 @@ namespace detail {
   return result;
 }
 
-// Malformed content throws decode_error; allocation failures propagate.
-// The output bound is checked before reconstructing or allocating output.
-// infer_padding is for framing formats without a padding-count field: supply
-// padding_bits_ == 0 and accept only zero padding in the final partial byte.
+/**
+ * Malformed content throws decode_error; allocation failures propagate.
+ * The output bound is checked before reconstructing or allocating output.
+ * infer_padding is for framing formats without a padding-count field: supply
+ * padding_bits_ == 0 and accept only zero padding in the final partial byte.
+ * Explicit mode subtracts padding_bits_ from payload bits and requires an exact
+ * meaningful-bit count. Inferred mode derives the fewer-than-eight zero bits
+ * left after uncompressed_size_ symbols. Both modes reject trailing bytes.
+ * RAW metadata requires equal payload/output sizes and zero lengths/padding.
+ *
+ * @param block Owned encoded data consumed by this operation.
+ * @param max_output_bytes Maximum decoded bytes, checked before output allocation.
+ * @param infer_padding Infer final padding instead of using an explicit count.
+ * @return Independently owned bytes with the original sequence number; RAW
+ *     transfers the payload directly. No partial output is returned on failure.
+ * @throws decode_error If metadata, code lengths, payload, padding, or bounds
+ *     are invalid.
+ * @see compress_block
+ */
 [[nodiscard]] inline auto decompress_block(encoded_block block, std::size_t max_output_bytes, bool infer_padding = false) -> dacoexec::byte_block
 {
   detail::validate_block(block, max_output_bytes);

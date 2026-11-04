@@ -1,3 +1,9 @@
+//! \file
+//! Public entry point for dependency-free byte views, bit I/O, and Huffman coding.
+//!
+//! Header-only C++20 library. Optional sender-based parallel APIs are provided
+//! separately by huffman/execution.hpp and require stdexec.
+
 #ifndef DACOEXEC_DACOEXEC_HPP
 #define DACOEXEC_DACOEXEC_HPP
 
@@ -16,8 +22,5 @@
 #include <dacoexec/views/blocks.hpp>
 #include <dacoexec/views/buffered_bytes.hpp>
 
-// dacoexec is a header-only C++20 library.
-// Public entry point for the byte and bit adaptors and Huffman coding.
-// The core target stays free of third-party dependencies.
 
 #endif // DACOEXEC_DACOEXEC_HPP

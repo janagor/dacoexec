@@ -1,3 +1,6 @@
+//! \file
+//! Deterministic, allocation-free Huffman code-length construction.
+
 #ifndef DACOEXEC_HUFFMAN_TREE_HPP
 #define DACOEXEC_HUFFMAN_TREE_HPP
 
@@ -13,26 +16,35 @@
 
 namespace dacoexec::huffman {
 
-  // Code length of every byte value. Zero means the symbol is absent.
-  // A present symbol has a length of at least 1. Lengths are leaf depths and
-  // are stored in full: a 256-symbol tree can reach depth 255, which still
-  // fits in std::uint8_t.
+  /**
+   * Code length of every byte value. Zero means the symbol is absent.
+   * A present symbol has a length of at least 1. Lengths are leaf depths and
+   * are stored in full: a 256-symbol tree can reach depth 255, which still
+   * fits in std::uint8_t.
+   */
   using code_length_table = std::array<std::uint8_t, alphabet_size>;
 
-  // Build one deterministic Huffman length for every byte value.
-  //
-  // Equal frequencies are ordered by the smallest symbol in the subtree, then
-  // by the earlier node. The result does not depend on pointer values,
-  // allocation, or the order in which the table was filled. The same table
-  // produces the same lengths on every supported compiler.
-  //
-  // An empty table yields all zeros. One present symbol receives length 1, so
-  // zero stays reserved for absent symbols. Two present symbols both receive
-  // length 1. A parent frequency that would pass the maximum std::uint64_t
-  // throws std::overflow_error.
-  //
-  // Construction uses a fixed array of 511 nodes and a fixed heap. It performs
-  // no dynamic allocation.
+  /**
+   * Build one deterministic Huffman length for every byte value.
+   *
+   * Equal frequencies are ordered by the smallest symbol in the subtree, then
+   * by the earlier node. The result does not depend on pointer values,
+   * allocation, or the order in which the table was filled. The same table
+   * produces the same lengths on every supported compiler.
+   *
+   * An empty table yields all zeros. One present symbol receives length 1, so
+   * zero stays reserved for absent symbols. Two present symbols both receive
+   * length 1. A parent frequency that would pass the maximum std::uint64_t
+   * throws std::overflow_error.
+   *
+   * Construction uses a fixed array of 511 nodes and a fixed heap. It performs
+   * no dynamic allocation.
+   *
+   * @param frequencies Occurrence counts; zeros denote absent symbols.
+   * @return Per-symbol depths, including zeros for absent symbols.
+   * @throws std::overflow_error If a merged frequency exceeds std::uint64_t.
+   * @see make_canonical_codebook
+   */
   [[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies) -> code_length_table;
 
   namespace detail {

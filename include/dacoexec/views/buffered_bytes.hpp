@@ -1,3 +1,6 @@
+//! \file
+//! Bounded read-ahead windows over single-pass byte sources.
+
 #ifndef DACOEXEC_VIEWS_BUFFERED_BYTES_HPP
 #define DACOEXEC_VIEWS_BUFFERED_BYTES_HPP
 
@@ -16,28 +19,36 @@
 
 namespace dacoexec {
 
-// Lazy window over a byte input range.
-//
-// The view yields one std::byte at a time, but it reads the source in windows
-// of at most `capacity` bytes. A window is filled only when the previous one
-// has been consumed, so a byte sequence continues across those boundaries.
-// Character values are converted when they enter the window. The conversion
-// preserves high bits and does not depend on host endianness.
-//
-// Construction reads nothing. begin() fills the first window. The source, the
-// window, and the read cursor live in one heap state object. Moving the view
-// transfers that object, so a view that has already started keeps its place,
-// including a partly consumed window. Iterators refer to the state and remain
-// usable after the view is moved. Destroying the view that owns the state
-// invalidates them. A moved-from view is empty.
-//
-// The range is single-pass. Copying an iterator aliases the same byte; it
-// does not restart the source or duplicate the window. Repeated begin() calls
-// resume the in-progress pass. A buffer size of zero throws
-// std::invalid_argument. The window buffer starts at a capacity of at most
-// 4096 bytes and doubles until it reaches the requested size. An empty source
-// allocates nothing. An exception from the source propagates unchanged. The
-// unfinished window is discarded, and later iteration does not resume.
+/**
+ * Lazy window over a byte input range.
+ *
+ * The view yields one std::byte at a time, but it reads the source in windows
+ * of at most `capacity` bytes. A window is filled only when the previous one
+ * has been consumed, so a byte sequence continues across those boundaries.
+ * Character values are converted when they enter the window. The conversion
+ * preserves high bits and does not depend on host endianness.
+ *
+ * Construction reads nothing. begin() fills the first window. The source, the
+ * window, and the read cursor live in one heap state object. Moving the view
+ * transfers that object, so a view that has already started keeps its place,
+ * including a partly consumed window. Iterators refer to the state and remain
+ * usable after the view is moved. Destroying the view that owns the state
+ * invalidates them. A moved-from view is empty.
+ *
+ * The range is single-pass. Copying an iterator aliases the same byte; it
+ * does not restart the source or duplicate the window. Repeated begin() calls
+ * resume the in-progress pass. A buffer size of zero throws
+ * std::invalid_argument. The window buffer starts at a capacity of at most
+ * 4096 bytes and doubles until it reaches the requested size. An empty source
+ * allocates nothing. An exception from the source propagates unchanged. The
+ * unfinished window is discarded, and later iteration does not resume.
+ *
+ * The stored source view may borrow external storage; that storage must remain
+ * valid during iteration. Move assignment invalidates iterators into the
+ * destination's replaced state. A default-constructed view is empty.
+ *
+ * @see views::buffered_bytes
+ */
 template<std::ranges::view V>
   requires byte_input_range<V>
 class buffered_bytes_view : public std::ranges::view_interface<buffered_bytes_view<V>>
@@ -115,6 +126,12 @@ class buffered_bytes_view : public std::ranges::view_interface<buffered_bytes_vi
 public:
   buffered_bytes_view() = default;
 
+  /**
+   * Stores the source view without reading it.
+   *
+   * @param capacity Maximum bytes per read-ahead window.
+   * @throws std::invalid_argument If capacity is zero.
+   */
   buffered_bytes_view(V base, std::size_t capacity) : state_(std::make_unique<state>(std::move(base), capacity))
   {
     if (capacity == 0) {
@@ -135,6 +152,11 @@ public:
 
   ~buffered_bytes_view() = default;
 
+  /**
+   * Single-pass cursor sharing the view state; copies do not provide independent passes.
+   *
+   * @pre Dereference requires a live owning state and a non-end position.
+   */
   class iterator
   {
   public:
@@ -166,6 +188,11 @@ public:
     state *state_ = nullptr;
   };
 
+  /**
+   * Starts lazy consumption on first use, then returns the current shared position.
+   *
+   * Source exceptions propagate according to the class contract.
+   */
   [[nodiscard]] auto begin() -> iterator
   {
     if (state_ == nullptr) { return iterator{ nullptr }; }
@@ -209,6 +236,18 @@ namespace views {
 
   }// namespace detail
 
+  /**
+   * Creates a bounded read-ahead adaptor yielding std::byte values.
+   *
+   * @param capacity Maximum bytes read into each window.
+   * @throws std::invalid_argument If capacity is zero.
+   *
+   * @code
+   * auto buffered = bytes | dacoexec::views::buffered_bytes(window_size);
+   * @endcode
+   *
+   * @see buffered_bytes_view
+   */
   [[nodiscard]] constexpr auto buffered_bytes(std::size_t capacity) -> detail::buffered_bytes_closure
   { return detail::buffered_bytes_closure{ capacity }; }
 

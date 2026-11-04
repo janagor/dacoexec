@@ -1,3 +1,6 @@
+//! \file
+//! MSB-first bit packing and non-owning boolean output iterators.
+
 #ifndef DACOEXEC_BIT_BIT_OUTPUT_ITERATOR_HPP
 #define DACOEXEC_BIT_BIT_OUTPUT_ITERATOR_HPP
 
@@ -44,11 +47,13 @@ template<class Out>
   requires std::output_iterator<Out, std::byte>
 class bit_writer;
 
-// Output iterator that writes each assigned bool as one bit of a bit_writer.
-//
-// Copying the iterator copies the handle, not the packing state. Every copy
-// refers to the same writer. Incrementing does not emit a byte. The iterator
-// must not outlive the writer, and a move of the writer invalidates it.
+/**
+ * Output iterator that writes each assigned bool as one bit of a bit_writer.
+ *
+ * Copying the iterator copies the handle, not the packing state. Every copy
+ * refers to the same writer. Incrementing does not emit a byte. The iterator
+ * must not outlive the writer, and a move of the writer invalidates it.
+ */
 template<class Out>
   requires std::output_iterator<Out, std::byte>
 class bit_output_iterator
@@ -61,9 +66,17 @@ public:
   using pointer = void;
   using reference = void;
 
+  /**
+   * Assignment handle forwarding a bool to the owning writer.
+   *
+   * It shares the iterator lifetime requirements; assignment may throw as write_bit().
+   */
   class proxy
   {
   public:
+    /**
+     * Appends one bit through the bound writer, with write_bit()'s failure behavior.
+     */
     // Const assignment is required by std::indirectly_writable.
     // NOLINTNEXTLINE(cppcoreguidelines-c-copy-assignment-signature,misc-unconventional-assign-operator)
     auto operator=(bool bit) const -> proxy const &;
@@ -76,6 +89,9 @@ public:
     bit_writer<Out> *writer_ = nullptr;
   };
 
+  /**
+   * Binds a non-owning handle; writer must remain alive and unmoved.
+   */
   explicit bit_output_iterator(bit_writer<Out> &writer) noexcept : writer_(&writer) {}
 
   [[nodiscard]] auto operator*() const noexcept -> proxy { return proxy{ writer_ }; }
@@ -88,52 +104,66 @@ private:
   bit_writer<Out> *writer_ = nullptr;
 };
 
-// Packs bits into bytes, most significant bit first.
-//
-// write_bit writes one bit. write_bits writes the low `bit_count` bits of
-// `value`, highest of those bits first. `bit_count` is 0 through 32. A
-// zero-length write of a zero value does nothing. Counts above 32, and values
-// with bits set outside the declared width, throw std::invalid_argument.
-// A finalized or failed writer throws std::logic_error before those argument
-// checks. A 32-bit integer is never shifted by 32.
-//
-// Only one partial output byte is buffered. Filled bits occupy its high
-// positions and the unused low bits stay zero. A full byte is emitted
-// immediately. There is no intermediate bit container.
-//
-// finish() emits a partial byte padded with zero bits on the right and
-// returns how many padding bits were added, which is 0 through 7. A later
-// finish() returns that same count and writes nothing. The destructor does
-// not emit the partial byte. Writing after finish() throws std::logic_error.
-//
-// If the output iterator throws, that exception propagates and the writer
-// refuses further writes and finalization. Bytes the sink already accepted
-// stay where they are. The failed byte is not retried, and a partially
-// written sink is not rolled back.
-//
-// Moving a writer transfers the partial byte and the output iterator. A
-// successful move assignment discards the destination writer's previous
-// pending bits without writing them. The moved-from writer rejects further
-// writes and finalization. Moving invalidates output iterators that referred
-// to either writer.
-//
-// If the output iterator's move constructor or move assignment throws, every
-// writer involved in that move is left unusable. Pending bits are discarded
-// and are not emitted, including when the iterator changes its sink and then
-// throws.
-//
-// output_iterator() is a C++20 output iterator of bool. Copies share this
-// writer's packing state.
+/**
+ * Packs bits into bytes, most significant bit first.
+ *
+ * write_bit writes one bit. write_bits writes the low `bit_count` bits of
+ * `value`, highest of those bits first. `bit_count` is 0 through 32. A
+ * zero-length write of a zero value does nothing. Counts above 32, and values
+ * with bits set outside the declared width, throw std::invalid_argument.
+ * A finalized or failed writer throws std::logic_error before those argument
+ * checks. A 32-bit integer is never shifted by 32.
+ *
+ * Only one partial output byte is buffered. Filled bits occupy its high
+ * positions and the unused low bits stay zero. A full byte is emitted
+ * immediately. There is no intermediate bit container.
+ *
+ * finish() emits a partial byte padded with zero bits on the right and
+ * returns how many padding bits were added, which is 0 through 7. A later
+ * finish() returns that same count and writes nothing. The destructor does
+ * not emit the partial byte. Writing after finish() throws std::logic_error.
+ *
+ * If the output iterator throws, that exception propagates and the writer
+ * refuses further writes and finalization. Bytes the sink already accepted
+ * stay where they are. The failed byte is not retried, and a partially
+ * written sink is not rolled back.
+ *
+ * Moving a writer transfers the partial byte and the output iterator. A
+ * successful move assignment discards the destination writer's previous
+ * pending bits without writing them. The moved-from writer rejects further
+ * writes and finalization. Moving invalidates output iterators that referred
+ * to either writer.
+ *
+ * If the output iterator's move constructor or move assignment throws, every
+ * writer involved in that move is left unusable. Pending bits are discarded
+ * and are not emitted, including when the iterator changes its sink and then
+ * throws.
+ *
+ * output_iterator() is a C++20 output iterator of bool. Copies share this
+ * writer's packing state.
+ */
 template<class Out>
   requires std::output_iterator<Out, std::byte>
 class bit_writer
 {
 public:
+  /**
+   * Takes ownership of the output cursor and starts with no pending bits.
+   *
+   * Moving the cursor into the writer may throw; destination storage is not owned.
+   */
   explicit bit_writer(Out output) : output_(std::move(output)) {}
 
   bit_writer(bit_writer const &) = delete;
   auto operator=(bit_writer const &) -> bit_writer & = delete;
 
+/**
+ * Transfers the cursor and pending bits, preserving finalization and failure state.
+ *
+ * The source becomes unusable. Existing handles to the source are invalidated.
+ * If a cursor move throws, the source is retired and no writer is constructed.
+ * @see bit_writer
+ */
   bit_writer(bit_writer &&other) noexcept
     requires std::is_nothrow_move_constructible_v<Out>
     : output_(std::move(other.output_))
@@ -153,6 +183,14 @@ public:
     throw;
   }
 
+/**
+ * Replaces the cursor and pending state, discarding this writer's pending bits.
+ *
+ * Self-assignment is a no-op. Otherwise both writers' handles are invalidated
+ * and the source becomes unusable. If cursor assignment throws, both writers
+ * are retired without emitting pending bits.
+ * @see bit_writer
+ */
   auto operator=(bit_writer &&other) noexcept -> bit_writer &
     requires std::is_nothrow_move_assignable_v<Out>
   {
@@ -186,8 +224,23 @@ public:
 
   ~bit_writer() = default;
 
+  /**
+   * Appends one bit, emitting a byte immediately when it becomes full.
+   *
+   * @throws std::logic_error If finalized, failed, or moved from.
+   * Output-iterator exceptions propagate and make the writer unusable.
+   */
   auto write_bit(bool bit) -> void { write_bits(bit ? std::uint32_t{ 1 } : std::uint32_t{ 0 }, 1U); }
 
+  /**
+   * Writes the low bit_count bits of value, highest bit first.
+   *
+   * @param value Codeword with no set bits above its declared width.
+   * @param bit_count Width from zero through 32; zero requires value == 0.
+   * @throws std::invalid_argument If the width or value is invalid.
+   * @throws std::logic_error If unusable or finalized, checked before arguments.
+   * Output exceptions propagate, retire the writer, and leave accepted bytes intact.
+   */
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   auto write_bits(std::uint32_t value, unsigned bit_count) -> void
   {
@@ -212,7 +265,13 @@ public:
     }
   }
 
-  // Emits the final partial byte, if any, and returns the zero-padding count.
+  /**
+   * Emits the final partial byte, if any, and returns the zero-padding count.
+   *
+   * @return Padding bits from zero through seven; repeated calls return the same count.
+   * @throws std::logic_error If failed or moved from.
+   * Output exceptions propagate and permanently disable the writer.
+   */
   [[nodiscard]] auto finish() -> std::uint8_t
   {
     if (failed_) { throw std::logic_error("dacoexec::bit_writer is unusable"); }
@@ -226,6 +285,17 @@ public:
     return padding_;
   }
 
+  /**
+   * Returns a non-owning bool output iterator sharing this writer's packing state.
+   *
+   * @code
+   * auto output = writer.output_iterator();
+   * *output++ = true;
+   * auto padding = writer.finish();
+   * @endcode
+   *
+   * @see bit_output_iterator
+   */
   [[nodiscard]] auto output_iterator() noexcept -> bit_output_iterator<Out> { return bit_output_iterator<Out>{ *this }; }
 
 private:

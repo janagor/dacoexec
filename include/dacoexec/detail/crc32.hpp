@@ -1,3 +1,6 @@
+//! \file
+//! Internal reflected IEEE CRC32 computation.
+
 #ifndef DACOEXEC_DETAIL_CRC32_HPP
 #define DACOEXEC_DETAIL_CRC32_HPP
 
@@ -10,6 +13,9 @@
 #include <span>
 
 namespace dacoexec::detail {
+// Reflected IEEE CRC32 (normal polynomial 0x04C11DB7): process low bits
+// first, start with all ones, and XOR with all ones after the final byte.
+// The empty sequence therefore has checksum zero.
 inline constexpr auto crc32_polynomial = std::uint32_t{ 0xEDB88320U };
 inline constexpr auto crc32_mask = std::numeric_limits<std::uint32_t>::max();
 inline constexpr auto crc32_table_size = std::size_t{ 1 } << bits_per_byte;

@@ -1,3 +1,6 @@
+//! \file
+//! Lazy mapping of byte symbols to canonical codewords.
+
 #ifndef DACOEXEC_HUFFMAN_CODEWORDS_VIEW_HPP
 #define DACOEXEC_HUFFMAN_CODEWORDS_VIEW_HPP
 
@@ -16,11 +19,21 @@
 
 namespace dacoexec::huffman {
 
-// Single-pass lazy byte-to-codeword mapping with one staged value. Construction
-// reads nothing; begin stages the first symbol. Copies of iterators alias the
-// same position. The source and codebook live in one owned heap state, which
-// survives moves of the view. Destroying its owner invalidates iterators.
-// Source failures and absent symbols propagate and permanently end iteration.
+/**
+ * Single-pass lazy byte-to-codeword mapping with one staged value. Construction
+ * reads nothing; begin stages the first symbol. Copies of iterators alias the
+ * same position. The source and codebook live in one owned heap state, which
+ * survives moves of the view. Destroying its owner invalidates iterators.
+ * Source failures and absent symbols propagate and permanently end iteration.
+ *
+ * Accepts a byte_input_range and returns codeword values by value. Increment
+ * advances one source symbol and stages its codeword; repeated begin() resumes
+ * the current pass. An absent symbol throws std::invalid_argument. A moved-from
+ * or default view is empty. Move assignment invalidates iterators to the old
+ * destination state. The stored source view may borrow external storage.
+ *
+ * @see views::codewords
+ */
 template<std::ranges::view V>
   requires byte_input_range<V>
 class codewords_view : public std::ranges::view_interface<codewords_view<V>>
@@ -93,6 +106,9 @@ class codewords_view : public std::ranges::view_interface<codewords_view<V>>
 public:
   codewords_view() = default;
 
+  /**
+   * Stores the source view and a codebook copy without reading the source.
+   */
   explicit codewords_view(V base, canonical_codebook codebook)
     : state_(std::make_unique<state>(std::move(base), codebook))
   {}
@@ -110,6 +126,11 @@ public:
 
   ~codewords_view() = default;
 
+  /**
+   * Single-pass cursor sharing the view state; copies do not provide independent passes.
+   *
+   * @pre Dereference requires a live owning state and a non-end position.
+   */
   class iterator
   {
   public:
@@ -141,6 +162,11 @@ public:
     state *state_ = nullptr;
   };
 
+  /**
+   * Starts lazy consumption on first use, then returns the current shared position.
+   *
+   * Source exceptions propagate according to the class contract.
+   */
   [[nodiscard]] auto begin() -> iterator
   {
     if (state_ == nullptr) { return iterator{ nullptr }; }
@@ -179,6 +205,18 @@ namespace views {
 
   }// namespace detail
 
+  /**
+   * Creates a lazy byte-to-codeword adaptor, storing a copy of the codebook.
+   *
+   * @param codebook Validated mapping; every encountered symbol must be present.
+   * Absent symbols throw std::invalid_argument during iteration.
+   *
+   * @code
+   * auto words = bytes | dacoexec::huffman::views::codewords(book);
+   * @endcode
+   *
+   * @see codewords_view
+   */
   [[nodiscard]] inline auto codewords(canonical_codebook codebook) -> detail::codewords_closure
   { return detail::codewords_closure{ codebook }; }
 

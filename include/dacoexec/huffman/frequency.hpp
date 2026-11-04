@@ -1,3 +1,6 @@
+//! \file
+//! Byte frequency counting with checked counters.
+
 #ifndef DACOEXEC_HUFFMAN_FREQUENCY_HPP
 #define DACOEXEC_HUFFMAN_FREQUENCY_HPP
 
@@ -14,23 +17,34 @@
 
 namespace dacoexec::huffman {
 
-  // Number of distinct byte values. Index 0 is the byte 0x00 and index 255 is 0xFF.
+  /**
+   * Number of distinct byte values. Index 0 is the byte 0x00 and index 255 is 0xFF.
+   */
   inline constexpr std::size_t alphabet_size = 256;
 
-  // Occurrence count of every byte value. A zero entry means that symbol is absent.
+  /**
+   * Occurrence count of every byte value. A zero entry means that symbol is absent.
+   */
   using frequency_table = std::array<std::uint64_t, alphabet_size>;
 
-  // Add one count for each byte in `input`.
-  //
-  // The range is read once and is not copied or buffered. Move-only, unsized,
-  // and single-pass ranges are accepted. Each element is converted with the
-  // same unsigned-byte rules as the rest of the library, including a proxy
-  // whose value_type is a supported byte type. Signed character values keep
-  // the low eight bits, so 0x00, 0x80, and 0xFF stay distinct.
-  //
-  // A counter stops at the maximum std::uint64_t. The next occurrence of that
-  // symbol throws std::overflow_error. An exception from the source, or that
-  // overflow, leaves earlier increments applied.
+  /**
+   * Add one count for each byte in `input`.
+   *
+   * The range is read once and is not copied or buffered. Move-only, unsized,
+   * and single-pass ranges are accepted. Each element is converted with the
+   * same unsigned-byte rules as the rest of the library, including a proxy
+   * whose value_type is a supported byte type. Signed character values keep
+   * the low eight bits, so 0x00, 0x80, and 0xFF stay distinct.
+   *
+   * A counter stops at the maximum std::uint64_t. The next occurrence of that
+   * symbol throws std::overflow_error. An exception from the source, or that
+   * overflow, leaves earlier increments applied.
+   *
+   * @param frequencies Existing counters to mutate without clearing them.
+   * @param input Byte input range consumed once.
+   * @throws std::overflow_error If an increment cannot fit in std::uint64_t.
+   * @see count_frequencies
+   */
   template<byte_input_range R> constexpr auto accumulate_frequencies(frequency_table &frequencies, R &&input) -> void
   {
     auto &&range = std::forward<R>(input);
@@ -49,10 +63,17 @@ namespace dacoexec::huffman {
     }
   }
 
-  // Count byte symbols in `input`.
-  //
-  // This is accumulate_frequencies on a zeroed table. The caller receives a
-  // finished table, or the function throws and no table is returned.
+  /**
+   * Count byte symbols in `input`.
+   *
+   * This is accumulate_frequencies on a zeroed table. The caller receives a
+   * finished table, or the function throws and no table is returned.
+   *
+   * @return Counts indexed by unsigned byte value.
+   * @throws std::overflow_error If a symbol count cannot fit in std::uint64_t.
+   * Source exceptions propagate.
+   * @see accumulate_frequencies
+   */
   template<byte_input_range R> [[nodiscard]] constexpr auto count_frequencies(R &&input) -> frequency_table
   {
     frequency_table frequencies{};

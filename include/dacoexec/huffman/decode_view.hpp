@@ -1,3 +1,6 @@
+//! \file
+//! Bounded-count Huffman decoding and terminal payload validation.
+
 #ifndef DACOEXEC_HUFFMAN_DECODE_VIEW_HPP
 #define DACOEXEC_HUFFMAN_DECODE_VIEW_HPP
 
@@ -18,6 +21,12 @@
 
 namespace dacoexec::huffman {
 
+/**
+ * Malformed Huffman block metadata or payload, including output-bound violations.
+ *
+ * Diagnostics use the inherited std::runtime_error constructors.
+ * @see decompress_block
+ */
 class decode_error : public std::runtime_error
 {
 public:
@@ -61,10 +70,28 @@ namespace detail {
   };
 }// namespace detail
 
-// Single-pass decoding with one staged byte and a fixed-capacity trie.
-// Construction never reads the source. Iterator copies share a position;
-// moving the owner preserves that position. Any failure permanently ends it.
-// Exhausting iteration checks exact bit/symbol counts, zero padding and EOF.
+/**
+ * Single-pass decoding with one staged byte and a fixed-capacity trie.
+ * Construction never reads the source. Iterator copies share a position;
+ * moving the owner preserves that position. Any failure permanently ends it.
+ * Exhausting iteration checks exact bit/symbol counts, zero padding and EOF.
+ *
+ * Accepts a byte_input_range of packed bytes and yields std::byte values in
+ * MSB-first codeword order. begin() stages the first symbol; increment decodes
+ * the next or validates the end. Stopping early skips final validation.
+ * Explicit mode requires exactly the declared meaningful bits. Inferred mode
+ * additionally accepts a final partial byte of fewer than eight zero bits.
+ * Truncation, invalid trie transitions, count mismatches, nonzero padding and
+ * trailing bytes throw decode_error. Source exceptions propagate unchanged.
+ *
+ * The source view, fixed trie and cursor belong to one heap state. Iterators
+ * survive moves of a started view; destroying its owner invalidates them.
+ * Move assignment also invalidates iterators to the destination's old state.
+ * Repeated begin() resumes the pass; default and moved-from views are empty.
+ * Borrowed source storage must outlive iteration.
+ *
+ * @see views::decode
+ */
 template<std::ranges::view V>
   requires byte_input_range<V>
 class decode_view : public std::ranges::view_interface<decode_view<V>>
@@ -173,6 +200,14 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
 public:
   decode_view() = default;
 
+  /**
+   * Stores the source and constructs its decoding trie without reading input.
+   *
+   * @param bits Meaningful bit count, or full payload bits for inferred padding.
+   * @param symbols Exact decoded byte count.
+   * @param infer_padding Allow a final partial byte of zero padding.
+   * @see views::decode
+   */
   explicit decode_view(V base, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding = false)
     : state_(std::make_unique<state>(std::move(base), codebook, bits, symbols, infer_padding))
   {}
@@ -190,6 +225,11 @@ public:
 
   ~decode_view() = default;
 
+  /**
+   * Single-pass cursor sharing the view state; copies do not provide independent passes.
+   *
+   * @pre Dereference requires a live owning state and a non-end position.
+   */
   class iterator
   {
   public:
@@ -221,6 +261,11 @@ public:
     state *state_ = nullptr;
   };
 
+  /**
+   * Starts lazy consumption on first use, then returns the current shared position.
+   *
+   * Source exceptions propagate according to the class contract.
+   */
   [[nodiscard]] auto begin() -> iterator
   {
     if (state_ == nullptr) { return iterator{ nullptr }; }
@@ -264,6 +309,24 @@ namespace views {
 
   }// namespace detail
 
+  /**
+   * Creates a lazy MSB-first byte-payload decoder with an owned codebook copy.
+   *
+   * @param codebook Validated canonical mapping.
+   * @param valid_bit_count Available meaningful bits, or the full payload bit count
+   *     when inferring padding.
+   * @param expected_symbol_count Exact number of bytes to produce.
+   * @param infer_padding Permit fewer than eight unused zero bits in the final
+   *     byte after the expected symbols; otherwise require exact meaningful bits.
+   * Malformed content throws decode_error during iteration. Exhaust the view to
+   * validate trailing bits, zero padding, and source exhaustion.
+   *
+   * @code
+   * auto decoded = payload | dacoexec::huffman::views::decode(book, bits, symbols);
+   * @endcode
+   *
+   * @see decode_view
+   */
   [[nodiscard]] inline auto decode(canonical_codebook codebook, std::uint64_t valid_bit_count, std::uint64_t expected_symbol_count, bool infer_padding = false) -> detail::decode_closure
   { return detail::decode_closure{ codebook, valid_bit_count, expected_symbol_count, infer_padding }; }
 

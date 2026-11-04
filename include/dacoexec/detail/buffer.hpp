@@ -1,3 +1,6 @@
+//! \file
+//! Internal bounded buffer growth without capacity overflow.
+
 #ifndef DACOEXEC_DETAIL_BUFFER_HPP
 #define DACOEXEC_DETAIL_BUFFER_HPP
 

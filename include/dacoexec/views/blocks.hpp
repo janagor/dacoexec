@@ -1,3 +1,6 @@
+//! \file
+//! Single-pass partitioning into independently owned byte blocks.
+
 #ifndef DACOEXEC_VIEWS_BLOCKS_HPP
 #define DACOEXEC_VIEWS_BLOCKS_HPP
 
@@ -18,15 +21,19 @@
 
 namespace dacoexec {
 
-// One owned slice of a byte stream.
-//
-// sequence_ starts at zero for the first block and increases by one. bytes_ is
-// the block's own storage. The type is move-only so a block is transferred
-// instead of copied. Moved-from blocks keep a valid sequence and a valid,
-// unspecified buffer.
+/**
+ * One owned slice of a byte stream.
+ *
+ * sequence_ starts at zero for the first block and increases by one. bytes_ is
+ * the block's own storage. The type is move-only so a block is transferred
+ * instead of copied. Moved-from blocks keep a valid sequence and a valid,
+ * unspecified buffer.
+ */
 struct byte_block
 {
+  //! Zero-based block position assigned by blocks_view; preserved by the codec.
   std::uint64_t sequence_ = 0;
+  //! Independently owned uncompressed bytes.
   std::vector<std::byte> bytes_;
 
   byte_block() = default;
@@ -42,34 +49,45 @@ struct byte_block
   ~byte_block() = default;
 };
 
-// Lazy partition of a byte input range into owned blocks of at most block_size
-// bytes.
-//
-// The view reads nothing until begin(). Each increment fills the next block.
-// Only one block is staged. Moving a block out of the iterator transfers that
-// storage; destroying the source afterwards leaves transferred blocks unchanged.
-//
-// The source, cursor, and staged block live in one heap state object. Moving
-// the view transfers that object, so a view that has already started keeps its
-// place in the input. Iterators refer to the state and remain usable after the
-// view is moved. Destroying the view that owns the state invalidates them. A
-// moved-from view is empty.
-//
-// Dereference rules:
-// 1. A block can be moved out of the iterator's current value.
-// 2. Dereferencing again without advancing observes a moved-from value.
-// 3. References from dereference are invalidated when the iterator advances.
-// 4. Blocks already moved out stay valid and independently owned.
-//
-// The range is single-pass. Copying an iterator aliases the same staged
-// block; it does not restart the source or duplicate the buffer. Repeated
-// begin() calls resume the in-progress pass. A block size of zero throws
-// std::invalid_argument. Each block buffer starts at a capacity of at most
-// 4096 bytes and then doubles until it reaches the configured block size.
-// After the block numbered 2^64-1, a further non-empty block throws
-// std::overflow_error. An exhausted source ends without that error. An
-// exception from the source abandons the unfinished block and propagates
-// unchanged.
+/**
+ * Lazy partition of a byte input range into owned blocks of at most block_size
+ * bytes.
+ *
+ * The view reads nothing until begin(). Each increment fills the next block.
+ * Only one block is staged. Moving a block out of the iterator transfers that
+ * storage; destroying the source afterwards leaves transferred blocks unchanged.
+ *
+ * The source, cursor, and staged block live in one heap state object. Moving
+ * the view transfers that object, so a view that has already started keeps its
+ * place in the input. Iterators refer to the state and remain usable after the
+ * view is moved. Destroying the view that owns the state invalidates them. A
+ * moved-from view is empty.
+ *
+ * Dereference rules:
+ * 1. A block can be moved out of the iterator's current value.
+ * 2. Dereferencing again without advancing observes a moved-from value.
+ * 3. References from dereference are invalidated when the iterator advances.
+ * 4. Blocks already moved out stay valid and independently owned.
+ *
+ * The range is single-pass. Copying an iterator aliases the same staged
+ * block; it does not restart the source or duplicate the buffer. Repeated
+ * begin() calls resume the in-progress pass. A block size of zero throws
+ * std::invalid_argument. Each block buffer starts at a capacity of at most
+ * 4096 bytes and then doubles until it reaches the configured block size.
+ * After the block numbered 2^64-1, a further non-empty block throws
+ * std::overflow_error. An exhausted source ends without that error. An
+ * exception from the source abandons the unfinished block and propagates
+ * unchanged. Failures while filling a block permanently end the pass. Exceptions
+ * from initial cursor acquisition, end/sentinel checks, or sequence overflow
+ * propagate without a general recovery guarantee.
+ *
+ * @tparam V Single-pass input view satisfying byte_input_range.
+ * @see views::blocks
+ *
+ * The stored source view may borrow external storage; that storage must remain
+ * valid during iteration. Move assignment invalidates iterators into the
+ * destination's replaced state. A default-constructed view is empty.
+ */
 template<std::ranges::view V>
   requires byte_input_range<V>
 class blocks_view : public std::ranges::view_interface<blocks_view<V>>
@@ -156,6 +174,12 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
 public:
   blocks_view() = default;
 
+  /**
+   * Stores the source view without reading it.
+   *
+   * @param block_size Maximum bytes in a staged block.
+   * @throws std::invalid_argument If block_size is zero.
+   */
   explicit blocks_view(V base, std::size_t block_size)
   {
     if (block_size == 0) { throw std::invalid_argument("dacoexec::views::blocks requires a positive block size"); }
@@ -175,6 +199,11 @@ public:
 
   ~blocks_view() = default;
 
+  /**
+   * Single-pass cursor sharing the view state; copies do not provide independent passes.
+   *
+   * @pre Dereference requires a live owning state and a non-end position.
+   */
   class iterator
   {
   public:
@@ -185,9 +214,11 @@ public:
     using reference = byte_block &&;
     using pointer = void;
 
-    // Returns the staged block as an rvalue so range-for can move it out.
-    // A second dereference without ++ observes the moved-from block.
-    // Dereferencing an end iterator is outside the input-iterator contract.
+    /**
+     * Returns the staged block as an rvalue so range-for can move it out.
+     * A second dereference without ++ observes the moved-from block.
+     * Dereferencing an end iterator is outside the input-iterator contract.
+     */
     // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
     [[nodiscard]] auto operator*() const -> byte_block && { return std::move(state_->current_.value()); }
 
@@ -213,6 +244,11 @@ public:
     state *state_ = nullptr;
   };
 
+  /**
+   * Starts lazy consumption on first use, then returns the current shared position.
+   *
+   * Source exceptions propagate according to the class contract.
+   */
   [[nodiscard]] auto begin() -> iterator
   {
     if (state_ == nullptr) { return iterator{ nullptr }; }
@@ -254,6 +290,18 @@ namespace views {
 
   }// namespace detail
 
+  /**
+   * Creates an adaptor partitioning a viewable byte_input_range into owned blocks.
+   *
+   * @param block_size Maximum bytes per block; the last block may be shorter.
+   * @throws std::invalid_argument If block_size is zero.
+   *
+   * @code
+   * auto chunks = bytes | dacoexec::views::blocks(block_size);
+   * @endcode
+   *
+   * @see blocks_view
+   */
   [[nodiscard]] constexpr auto blocks(std::size_t block_size) -> detail::blocks_closure
   { return detail::blocks_closure{ block_size }; }
 

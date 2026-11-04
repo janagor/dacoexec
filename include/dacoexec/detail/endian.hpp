@@ -1,3 +1,6 @@
+//! \file
+//! Internal little-endian integer serialization.
+
 #ifndef DACOEXEC_DETAIL_ENDIAN_HPP
 #define DACOEXEC_DETAIL_ENDIAN_HPP
 
@@ -9,6 +12,9 @@
 #include <span>
 
 namespace dacoexec::detail {
+// Assemble and extract bytes explicitly so host endianness never affects
+// the wire format. Internal callers use unsigned 16- or 32-bit integers; the
+// uint64_t accumulator keeps their intermediate shifts representable.
 template<class T>
 [[nodiscard]] constexpr auto read_le(std::span<const std::byte, sizeof(T)> bytes) -> T
 {

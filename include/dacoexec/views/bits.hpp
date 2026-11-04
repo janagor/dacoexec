@@ -1,3 +1,6 @@
+//! \file
+//! Lazy MSB-first byte-to-bit adaptation.
+
 #ifndef DACOEXEC_VIEWS_BITS_HPP
 #define DACOEXEC_VIEWS_BITS_HPP
 
@@ -22,26 +25,32 @@ namespace detail {
 
 }// namespace detail
 
-// Lazy view of the bits in a byte input range.
-//
-// Each byte becomes eight bool values, bit 7 first and bit 0 last. The order
-// does not depend on the host endianness. An empty byte range yields no bits.
-// The view never allocates a bit buffer. It caches one source byte, so the
-// underlying iterator is dereferenced once per byte rather than once per bit.
-//
-// Construction reads nothing. begin() reads the first byte. Advancing past
-// bit 0 reads the next byte, or reaches the end when the source is exhausted.
-//
-// The source and the one-byte cache live in one heap state object. Moving the
-// view transfers that object, so a view that has already started keeps its
-// place in the input. Iterators refer to the state and remain usable after
-// the view is moved. Destroying the view that owns the state invalidates
-// them. A moved-from view is empty.
-//
-// The range is single-pass. Copying an iterator aliases the same bit
-// position; it does not restart the source. Repeated begin() calls resume the
-// in-progress pass. An exception from the source propagates unchanged. No bit
-// is invented for the failed read, and later iteration does not resume.
+/**
+ * Lazy view of the bits in a byte input range.
+ *
+ * Each byte becomes eight bool values, bit 7 first and bit 0 last. The order
+ * does not depend on the host endianness. An empty byte range yields no bits.
+ * The view never allocates a bit buffer. It caches one source byte, so the
+ * underlying iterator is dereferenced once per byte rather than once per bit.
+ *
+ * Construction reads nothing. begin() reads the first byte. Advancing past
+ * bit 0 reads the next byte, or reaches the end when the source is exhausted.
+ *
+ * The source and the one-byte cache live in one heap state object. Moving the
+ * view transfers that object, so a view that has already started keeps its
+ * place in the input. Iterators refer to the state and remain usable after
+ * the view is moved. Destroying the view that owns the state invalidates
+ * them. A moved-from view is empty.
+ *
+ * The range is single-pass. Copying an iterator aliases the same bit
+ * position; it does not restart the source. Repeated begin() calls resume the
+ * in-progress pass. An exception from the source propagates unchanged. No bit
+ * is invented for the failed read, and later iteration does not resume.
+ *
+ * The stored source view may borrow external storage; that storage must remain
+ * valid during iteration. Move assignment invalidates iterators into the
+ * destination's replaced state. A default-constructed view is empty.
+ */
 template<std::ranges::view V>
   requires byte_input_range<V>
 class bits_view : public std::ranges::view_interface<bits_view<V>>
@@ -118,6 +127,9 @@ class bits_view : public std::ranges::view_interface<bits_view<V>>
 public:
   bits_view() = default;
 
+  /**
+   * Stores the source view without consuming it; state allocation may throw.
+   */
   explicit bits_view(V base) : state_(std::make_unique<state>(std::move(base))) {}
 
   bits_view(bits_view const &) = delete;
@@ -133,6 +145,11 @@ public:
 
   ~bits_view() = default;
 
+  /**
+   * Single-pass cursor sharing the view state; copies do not provide independent passes.
+   *
+   * @pre Dereference requires a live owning state and a non-end position.
+   */
   class iterator
   {
   public:
@@ -164,6 +181,11 @@ public:
     state *state_ = nullptr;
   };
 
+  /**
+   * Starts lazy consumption on first use, then returns the current shared position.
+   *
+   * Source exceptions propagate according to the class contract.
+   */
   [[nodiscard]] auto begin() -> iterator
   {
     if (state_ == nullptr) { return iterator{ nullptr }; }
@@ -197,6 +219,15 @@ namespace views {
 
   }// namespace detail
 
+  /**
+   * Creates a lazy byte-to-bool adaptor for a viewable byte_input_range.
+   *
+   * @code
+   * auto bit_values = bytes | dacoexec::views::bits();
+   * @endcode
+   *
+   * @see bits_view
+   */
   [[nodiscard]] constexpr auto bits() noexcept -> detail::bits_closure { return detail::bits_closure{}; }
 
 }// namespace views

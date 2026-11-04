@@ -1,3 +1,6 @@
+//! \file
+//! Internal byte normalization and bit-width conventions.
+
 #ifndef DACOEXEC_DETAIL_BYTE_HPP
 #define DACOEXEC_DETAIL_BYTE_HPP
 
