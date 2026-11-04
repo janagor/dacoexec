@@ -180,7 +180,7 @@ A core-only configure (`-Ddacoexec_BUILD_TESTS=OFF`) does not download Catch2 or
 | Option | Standalone | Subproject | Purpose |
 | --- | --- | --- | --- |
 | `dacoexec_BUILD_TESTS` | ON | OFF | Catch2 smoke tests and consumer fixtures |
-| `dacoexec_BUILD_CLI` | OFF | OFF | Rejected until the production CLI exists |
+| `dacoexec_BUILD_CLI` | OFF | OFF | Build the CLI11 compression/decompression executable |
 | `dacoexec_BUILD_FUZZ_TESTS` | OFF | OFF | Rejected until codec fuzz targets exist |
 | `dacoexec_BUILD_BENCHMARKS` | OFF | OFF | Rejected until benchmark targets exist |
 | `dacoexec_INSTALL` | ON | OFF | Install rules for `dacoexec::dacoexec` |
@@ -304,3 +304,29 @@ output-sized buffer or materialize bits. The eager codec allocates at most
 block-sized buffers and does not buffer an entire stream. Both headers are
 available through the dependency-free `dacoexec::dacoexec` interface target and
 the umbrella header.
+
+### DHF1 streaming and CLI
+
+`<dacoexec/huffman/stream.hpp>` exposes sequential `compress_stream` and
+`decompress_stream` for byte ranges and bulk output sinks. The default block
+size is 1 MiB, with a 16 MiB hard limit. Archives include CRC32 integrity checks,
+independent RAW or Huffman frames, and a mandatory terminator. See the
+[normative DHF1 specification](docs/dhf1.md) for layout, error semantics and limits.
+
+```cpp
+std::vector<std::byte> archive;
+dacoexec::io::iterator_sink sink(std::back_inserter(archive));
+auto statistics = dacoexec::huffman::compress_stream(input, sink);
+```
+
+Enable `dacoexec_BUILD_CLI` to build and install the `dacoexec` executable:
+
+```sh
+dacoexec compress --algorithm huffman input.bin output.dhf
+dacoexec decompress output.dhf restored.bin
+```
+
+Existing destinations require `--force`. Failed operations preserve existing
+outputs. CLI11 2.6.1 is resolved only for CLI builds; the header-only core has
+no additional dependency. Dedicated large-stream coverage is enabled with
+`dacoexec_TEST_LARGE_STREAMS`; it is excluded from default test runs.

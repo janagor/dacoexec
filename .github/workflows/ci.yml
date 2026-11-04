@@ -213,7 +213,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20
             -DCMAKE_CXX_STANDARD_REQUIRED=ON
             -DCMAKE_CXX_EXTENSIONS=OFF
-            -Ddacoexec_BUILD_TESTS=ON
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON
             -Ddacoexec_WARNINGS_AS_ERRORS=ON
             -Ddacoexec_TEST_INSTALL_CONSUMER=${{ matrix.install_consumer }}
             -Ddacoexec_TEST_SUBPROJECT_CONSUMER=${{ matrix.subproject }}
@@ -292,7 +292,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 `
             -DCMAKE_CXX_STANDARD_REQUIRED=ON `
             -DCMAKE_CXX_EXTENSIONS=OFF `
-            -Ddacoexec_BUILD_TESTS=ON `
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON `
             -Ddacoexec_WARNINGS_AS_ERRORS=ON `
             -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=19.43 `
             -Ddacoexec_TEST_INSTALL_CONSUMER=ON `
@@ -340,7 +340,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 `
             -DCMAKE_CXX_STANDARD_REQUIRED=ON `
             -DCMAKE_CXX_EXTENSIONS=OFF `
-            -Ddacoexec_BUILD_TESTS=ON `
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON `
             -Ddacoexec_WARNINGS_AS_ERRORS=ON `
             -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=21 `
             -Ddacoexec_TEST_INSTALL_CONSUMER=OFF `
@@ -394,7 +394,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_CXX_EXTENSIONS=OFF \
-            -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON \
             -Ddacoexec_WARNINGS_AS_ERRORS=ON \
             -Ddacoexec_TEST_INSTALL_CONSUMER=OFF \
             -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
@@ -430,7 +430,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_CXX_EXTENSIONS=OFF \
-            -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON \
             -Ddacoexec_WARNINGS_AS_ERRORS=ON \
             -Ddacoexec_ENABLE_SANITIZER_ADDRESS=ON \
             -Ddacoexec_ENABLE_SANITIZER_UNDEFINED=ON \
@@ -468,7 +468,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=20 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_CXX_EXTENSIONS=OFF \
-            -Ddacoexec_BUILD_TESTS=ON \
+            -Ddacoexec_BUILD_CLI=ON -Ddacoexec_BUILD_TESTS=ON \
             -Ddacoexec_WARNINGS_AS_ERRORS=ON \
             -Ddacoexec_ENABLE_CLANG_TIDY=ON \
             -Ddacoexec_TEST_INSTALL_CONSUMER=OFF \
@@ -502,3 +502,31 @@ jobs:
           cmake-format --version
           mapfile -t files < <(git ls-files 'CMakeLists.txt' '*.cmake' ':!:cmake/CPM.cmake')
           cmake-format --check -c .cmake-format.yaml "${files[@]}"
+
+  large-stream:
+    name: GCC 16 large streaming
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aminya/setup-cpp@v1
+        with:
+          compiler: gcc-16
+          cmake: true
+          ninja: true
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-16
+          -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=16
+          -DCMAKE_CXX_STANDARD_REQUIRED=ON
+          -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_EXTENSIONS=OFF
+          -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_TEST_LARGE_STREAMS=ON
+          -Ddacoexec_ENABLE_CLANG_TIDY=OFF -Ddacoexec_ENABLE_CPPCHECK=OFF
+          -Ddacoexec_TEST_INSTALL_CONSUMER=OFF -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
+      - name: Verify compiler version
+        run: g++-16 --version
+      - name: Build streaming integration executable
+        run: cmake --build build --target dacoexec_streaming_memory_tests
+      - name: Verify more than 4 GiB in both directions
+        run: ctest --test-dir build -R '^streaming.large$' --output-on-failure
