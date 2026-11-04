@@ -62,6 +62,7 @@ macro(dacoexec_setup_options)
   endif()
 
   option(dacoexec_BUILD_TESTS "Build the unit and infrastructure tests" ${dacoexec_standalone_default})
+  option(dacoexec_BUILD_EXECUTION "Build optional stdexec parallel execution support" OFF)
   option(dacoexec_BUILD_CLI "Build the command-line interface" OFF)
   option(dacoexec_BUILD_FUZZ_TESTS "Build codec fuzz tests (not implemented yet)" OFF)
   option(dacoexec_BUILD_BENCHMARKS "Build benchmarks (not implemented yet)" OFF)
@@ -110,6 +111,7 @@ macro(dacoexec_setup_options)
   if(NOT PROJECT_IS_TOP_LEVEL)
     mark_as_advanced(
       dacoexec_BUILD_TESTS
+      dacoexec_BUILD_EXECUTION
       dacoexec_BUILD_CLI
       dacoexec_BUILD_FUZZ_TESTS
       dacoexec_BUILD_BENCHMARKS

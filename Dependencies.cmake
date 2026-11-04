@@ -1,5 +1,4 @@
-# NVIDIA stdexec 0.11.0. Registered for a later execution target. PR 0 does not
-# fetch it; the core library has no execution-framework dependency.
+# NVIDIA stdexec 0.11.0. Fetched only for the optional execution target.
 set(DACOEXEC_STDEXEC_GIT_TAG
     "ead186b1d8db3ebe37a946ff84a6ce08bf795153"
     CACHE STRING "NVIDIA/stdexec source revision")
@@ -77,6 +76,26 @@ function(dacoexec_setup_dependencies)
   set(dacoexec_tests_enabled
       "${dacoexec_tests_enabled}"
       PARENT_SCOPE)
+
+  if(dacoexec_BUILD_EXECUTION)
+    # Only install a dependency fetched for our standalone installation.
+    # Existing targets and installed packages return before CPM options apply.
+    set(_dacoexec_install_stdexec OFF)
+    if(dacoexec_INSTALL AND PROJECT_IS_TOP_LEVEL)
+      set(_dacoexec_install_stdexec ON)
+    endif()
+    _dacoexec_require_package(
+      NAME stdexec
+      TARGET STDEXEC::stdexec
+      GIT_TAG "${DACOEXEC_STDEXEC_GIT_TAG}"
+      GITHUB_REPOSITORY "NVIDIA/stdexec"
+      OPTIONS
+        "STDEXEC_BUILD_TESTS OFF"
+        "STDEXEC_BUILD_EXAMPLES OFF"
+        "STDEXEC_ENABLE_CUDA OFF"
+        "STDEXEC_ENABLE_IO_URING OFF"
+        "STDEXEC_INSTALL ${_dacoexec_install_stdexec}")
+  endif()
 
   if(dacoexec_BUILD_CLI)
     _dacoexec_require_package(
