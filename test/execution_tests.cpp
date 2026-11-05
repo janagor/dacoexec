@@ -304,14 +304,12 @@ TEST_CASE("Ordered batches bound acquisition and tolerate reversed completion", 
     return index;
   };
   constexpr auto count = (batch_size * 2) + 1;
-  auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-    integer_source{ .count_ = count, .committed_ = &committed, .acquired_ = &acquired },
-    process,
-    batch_size);
-  auto future = std::async(std::launch::async,
-    // Senders are consumed as rvalues even when this specialization is trivially copyable.
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    [sender = std::move(sender)]() mutable -> void { static_cast<void>(stdexec::sync_wait(std::move(sender))); });
+  auto future = std::async(std::launch::async, [&]() -> void {
+    static_cast<void>(stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
+      integer_source{ .count_ = count, .committed_ = &committed, .acquired_ = &acquired },
+      process,
+      batch_size)));
+  });
   entered.wait();
   auto const first_batch_reads = acquired.load();
   release.count_down();
@@ -336,13 +334,11 @@ TEST_CASE("Worker failures drain the batch and select its lowest failing index",
     if (index == 0) { throw std::runtime_error("first block"); }
     throw std::runtime_error("later block");
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-    integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
-    process,
-    batch_size);
-  // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-  REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "first block");
+  REQUIRE_THROWS_WITH(stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
+                        integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
+                        process,
+                        batch_size)),
+    "first block");
   REQUIRE(finished.load() == batch_size);
   REQUIRE(acquired.load() == batch_size);
   REQUIRE(committed.empty());
@@ -385,16 +381,14 @@ TEST_CASE("Cancellation drains active workers without committing their batch", "
     finished.fetch_add(1);
     return index;
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-    integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
-    process,
-    batch_size);
   std::promise<int> promise;
   auto future = promise.get_future();
-  // Senders are consumed as rvalues even when this specialization is trivially copyable.
   auto operation =
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+    stdexec::connect(dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
+                       integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
+                       process,
+                       batch_size),
+      completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
   stdexec::start(operation);
   entered.wait();
   stop.request_stop();
@@ -468,17 +462,15 @@ TEST_CASE("Submission failures retain and drain previously started operations", 
     finished.fetch_add(1);
     return index;
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(scheduler,
-    integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
-    process,
-    batch_size);
   stdexec::inplace_stop_source const stop;
   std::promise<int> promise;
   auto future = promise.get_future();
-  // Senders are consumed as rvalues even when this specialization is trivially copyable.
   auto operation =
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+    stdexec::connect(dacoexec::execution::ordered_parallel_on(scheduler,
+                       integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
+                       process,
+                       batch_size),
+      completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
   stdexec::start(operation);
   entered.wait();
   auto const before_release = future.wait_for(std::chrono::seconds::zero());
@@ -529,14 +521,11 @@ TEST_CASE("Synchronous scheduling advances batches without recursive stack growt
   constexpr std::size_t many_batches = 10000;
   std::atomic<std::size_t> acquired{ 0 };
   std::vector<std::size_t> committed;
-  auto sender = dacoexec::execution::ordered_parallel_on(
+  auto const completed = stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(
     stdexec::inline_scheduler{},
     integer_source{ .count_ = many_batches, .committed_ = &committed, .acquired_ = &acquired },
     [](std::size_t value) -> std::size_t { return value; },
-    1);
-  // This sender API consumes an rvalue, including trivially copyable specializations.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-  auto const completed = stdexec::sync_wait(std::move(sender));
+    1));
   REQUIRE(completed.has_value());
   REQUIRE(committed.size() == many_batches);
 }
@@ -576,18 +565,16 @@ TEST_CASE("Cancellation between batches prevents further acquisition", "[executi
   };
   std::atomic<std::size_t> acquired{ 0 };
   std::vector<std::size_t> committed;
-  auto sender = dacoexec::execution::ordered_parallel_on(
-    stdexec::inline_scheduler{},
-    stopping_source{
-      integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired }, &stop },
-    [](std::size_t value) -> std::size_t { return value; },
-    batch_size);
   std::promise<int> promise;
   auto future = promise.get_future();
-  // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  auto operation =
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+  auto operation = stdexec::connect(
+    dacoexec::execution::ordered_parallel_on(
+      stdexec::inline_scheduler{},
+      stopping_source{
+        integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired }, &stop },
+      [](std::size_t value) -> std::size_t { return value; },
+      batch_size),
+    completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
   stdexec::start(operation);
   REQUIRE(future.get() == 1);
   REQUIRE(acquired.load() == batch_size);
@@ -600,17 +587,15 @@ TEST_CASE("Failed batches leave only previously committed batches", "[execution]
   for (auto const failing_index : failing_indices) {
     std::atomic<std::size_t> acquired{ 0 };
     std::vector<std::size_t> committed;
-    auto sender = dacoexec::execution::ordered_parallel_on(
-      stdexec::inline_scheduler{},
-      integer_source{ .count_ = batch_size * 3, .committed_ = &committed, .acquired_ = &acquired },
-      [failing_index](std::size_t index) -> std::size_t {
-        if (index == failing_index) { throw std::runtime_error("encoding failed"); }
-        return index;
-      },
-      batch_size);
-    // Senders are consumed as rvalues even when this specialization is trivially copyable.
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "encoding failed");
+    REQUIRE_THROWS_WITH(stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(
+                          stdexec::inline_scheduler{},
+                          integer_source{ .count_ = batch_size * 3, .committed_ = &committed, .acquired_ = &acquired },
+                          [failing_index](std::size_t index) -> std::size_t {
+                            if (index == failing_index) { throw std::runtime_error("encoding failed"); }
+                            return index;
+                          },
+                          batch_size)),
+      "encoding failed");
     auto const successful_batches = failing_index / batch_size;
     REQUIRE(committed.size() == successful_batches * batch_size);
     REQUIRE(acquired.load() == (successful_batches + 1) * batch_size);
@@ -641,7 +626,7 @@ TEST_CASE("Encoded results are released before acquiring the next batch", "[exec
     auto commit([[maybe_unused]] result const &value) const -> void {}
     [[nodiscard]] auto finish() const -> bool { return *released_; }
   };
-  auto sender = dacoexec::execution::ordered_parallel_on(
+  auto completed = stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(
     stdexec::inline_scheduler{},
     source{ .previous_ = &previous_results, .released_ = &released_before_next_batch },
     [&previous_results](std::size_t value) -> result {
@@ -649,10 +634,7 @@ TEST_CASE("Encoded results are released before acquiring the next batch", "[exec
       if (value < batch_size) { previous_results.push_back(encoded); }
       return encoded;
     },
-    batch_size);
-  // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-  auto completed = stdexec::sync_wait(std::move(sender));
+    batch_size));
   REQUIRE(completed.has_value());
   if (!completed) {
     FAIL("Result lifetime test completed stopped");
@@ -668,17 +650,15 @@ TEST_CASE("Scheduler error completions are recorded before joining the batch", "
   std::atomic<std::size_t> acquired{ 0 };
   std::atomic<std::size_t> processed{ 0 };
   std::vector<std::size_t> committed;
-  auto sender = dacoexec::execution::ordered_parallel_on(
-    error_scheduler{ pool.get_scheduler() },
-    integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
-    [&processed](std::size_t value) -> std::size_t {
-      processed.fetch_add(1);
-      return value;
-    },
-    batch_size);
-  // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-  REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "scheduler failed");
+  REQUIRE_THROWS_WITH(stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(
+                        error_scheduler{ pool.get_scheduler() },
+                        integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
+                        [&processed](std::size_t value) -> std::size_t {
+                          processed.fetch_add(1);
+                          return value;
+                        },
+                        batch_size)),
+    "scheduler failed");
   REQUIRE(acquired.load() == batch_size);
   REQUIRE(processed.load() == 0);
   REQUIRE(committed.empty());
@@ -696,14 +676,12 @@ TEST_CASE("Concurrent short completions survive destructive terminal receivers",
       auto promise = std::make_shared<std::promise<int>>();
       auto future = promise->get_future();
       erased_operation storage(nullptr, []([[maybe_unused]] void *pointer) -> void {});
-      auto sender = dacoexec::execution::ordered_parallel_on(
-        pool.get_scheduler(),
-        integer_source{ .count_ = completion_stress_items, .committed_ = &committed, .acquired_ = &acquired },
-        [](std::size_t value) -> std::size_t { return value; },
-        batch_size);
-      // Senders are consumed as rvalues even when this specialization is trivially copyable.
-      // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-      start_destructive(std::move(sender),
+      start_destructive(
+        dacoexec::execution::ordered_parallel_on(
+          pool.get_scheduler(),
+          integer_source{ .count_ = completion_stress_items, .committed_ = &committed, .acquired_ = &acquired },
+          [](std::size_t value) -> std::size_t { return value; },
+          batch_size),
         { .operation_ = &storage, .promise_ = promise, .completions_ = &completions, .token_ = stop.get_token() },
         storage);
       REQUIRE(future.get() == value_completion);
@@ -725,17 +703,14 @@ TEST_CASE("Inline terminal completions can destroy their owning operation", "[ex
     auto future = promise->get_future();
     erased_operation storage(nullptr, []([[maybe_unused]] void *pointer) -> void {});
     if (outcome == stopped_completion) { stop.request_stop(); }
-    auto sender = dacoexec::execution::ordered_parallel_on(
-      stdexec::inline_scheduler{},
-      integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
-      [outcome](std::size_t value) -> std::size_t {
-        if (outcome == error_completion) { throw std::runtime_error("destructive error"); }
-        return value;
-      },
-      batch_size);
-    // Senders are consumed as rvalues even when this specialization is trivially copyable.
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    start_destructive(std::move(sender),
+    start_destructive(dacoexec::execution::ordered_parallel_on(
+                        stdexec::inline_scheduler{},
+                        integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
+                        [outcome](std::size_t value) -> std::size_t {
+                          if (outcome == error_completion) { throw std::runtime_error("destructive error"); }
+                          return value;
+                        },
+                        batch_size),
       { .operation_ = &storage, .promise_ = promise, .completions_ = &completions, .token_ = stop.get_token() },
       storage);
     REQUIRE(future.get() == outcome);
@@ -764,13 +739,10 @@ TEST_CASE("Recorded failures win when external cancellation races active workers
     auto promise = std::make_shared<std::promise<int>>();
     auto future = promise->get_future();
     erased_operation storage(nullptr, []([[maybe_unused]] void *pointer) -> void {});
-    auto sender = dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
-      integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
-      process,
-      batch_size);
-    // Senders are consumed as rvalues even when this specialization is trivially copyable.
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    start_destructive(std::move(sender),
+    start_destructive(dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
+                        integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
+                        process,
+                        batch_size),
       { .operation_ = &storage, .promise_ = promise, .completions_ = &completions, .token_ = stop.get_token() },
       storage);
     bool const all_started = entered.wait();
@@ -794,13 +766,10 @@ TEST_CASE("Queued stopped children can destroy their owning operation", "[execut
   timed_gate release(1);
   std::atomic<bool> timed_out{ false };
   auto blocker = std::async(std::launch::async, [&]() -> void {
-    auto work = stdexec::schedule(pool.get_scheduler()) | stdexec::then([&]() -> void {
+    static_cast<void>(stdexec::sync_wait(stdexec::schedule(pool.get_scheduler()) | stdexec::then([&]() -> void {
       entered.arrive();
       if (!release.wait()) { timed_out.store(true); }
-    });
-    // Senders are consumed as rvalues even when this specialization is trivially copyable.
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-    static_cast<void>(stdexec::sync_wait(std::move(work)));
+    })));
   });
   bool const blocked = entered.wait();
   std::atomic<std::size_t> acquired{ 0 };
@@ -810,14 +779,11 @@ TEST_CASE("Queued stopped children can destroy their owning operation", "[execut
   auto promise = std::make_shared<std::promise<int>>();
   auto future = promise->get_future();
   erased_operation storage(nullptr, []([[maybe_unused]] void *pointer) -> void {});
-  auto sender = dacoexec::execution::ordered_parallel_on(
-    pool.get_scheduler(),
-    integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
-    [](std::size_t value) -> std::size_t { return value; },
-    batch_size);
-  // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-  start_destructive(std::move(sender),
+  start_destructive(dacoexec::execution::ordered_parallel_on(
+                      pool.get_scheduler(),
+                      integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
+                      [](std::size_t value) -> std::size_t { return value; },
+                      batch_size),
     { .operation_ = &storage, .promise_ = promise, .completions_ = &completions, .token_ = stop.get_token() },
     storage);
   stop.request_stop();
@@ -839,16 +805,12 @@ TEST_CASE("Child operations preserve forwarding receiver environment queries", "
   stdexec::inplace_stop_source const stop;
   std::promise<int> promise;
   auto future = promise.get_future();
-  auto sender = dacoexec::execution::ordered_parallel_on(
-    environment_scheduler{ &observed },
-    integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
-    [](std::size_t value) -> std::size_t { return value; },
-    batch_size);
   auto operation =
-    // Senders are consumed as rvalues even when this specialization is trivially copyable.
-    stdexec::connect(
-      // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-      std::move(sender),
+    stdexec::connect(dacoexec::execution::ordered_parallel_on(
+                       environment_scheduler{ &observed },
+                       integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
+                       [](std::size_t value) -> std::size_t { return value; },
+                       batch_size),
       marker_receiver{ completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() } });
   stdexec::start(operation);
   REQUIRE(future.get() == 0);
@@ -896,14 +858,12 @@ TEST_CASE("Finish failure delivers one error to a destructive receiver", "[execu
   auto promise = std::make_shared<std::promise<int>>();
   auto future = promise->get_future();
   erased_operation storage(nullptr, []([[maybe_unused]] void *pointer) -> void {});
-  auto sender = dacoexec::execution::ordered_parallel_on(
-    stdexec::inline_scheduler{},
-    failing_finish_source{ integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired } },
-    [](std::size_t value) -> std::size_t { return value; },
-    batch_size);
-  // Sender connection consumes an rvalue even for trivially copyable specializations.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
-  start_destructive(std::move(sender),
+  start_destructive(
+    dacoexec::execution::ordered_parallel_on(
+      stdexec::inline_scheduler{},
+      failing_finish_source{ integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired } },
+      [](std::size_t value) -> std::size_t { return value; },
+      batch_size),
     { .operation_ = &storage, .promise_ = promise, .completions_ = &completions, .token_ = stop.get_token() },
     storage);
   REQUIRE(future.wait_for(synchronization_timeout) == std::future_status::ready);
