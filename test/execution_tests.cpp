@@ -140,8 +140,10 @@ struct marker_query
   [[nodiscard]] static constexpr auto query([[maybe_unused]] stdexec::forwarding_query_t query) noexcept -> bool
   { return true; }
 };
-struct marker_receiver : completion_receiver
+struct marker_receiver
 {
+  using receiver_concept = stdexec::receiver_tag;
+  completion_receiver completion_;
   struct environment
   {
     stdexec::inplace_stop_token token_;
@@ -151,9 +153,10 @@ struct marker_receiver : completion_receiver
     [[nodiscard]] static auto query([[maybe_unused]] marker_query query) noexcept -> std::size_t
     { return environment_marker; }
   };
-  // This test deliberately replaces the inherited sender protocol customization.
-  // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method)
-  [[nodiscard]] auto get_env() const noexcept -> environment { return { token_ }; }
+  [[nodiscard]] auto get_env() const noexcept -> environment { return { completion_.token_ }; }
+  template<class T> auto set_value(T &&value) noexcept -> void { completion_.set_value(std::forward<T>(value)); }
+  auto set_error(std::exception_ptr error) const noexcept -> void { completion_.set_error(std::move(error)); }
+  auto set_stopped() const noexcept -> void { completion_.set_stopped(); }
 };
 struct marker_observer
 {
@@ -552,16 +555,20 @@ TEST_CASE("Parallel compression consumes an actual single-pass stream range", "[
 TEST_CASE("Cancellation between batches prevents further acquisition", "[execution]")
 {
   stdexec::inplace_stop_source stop;
-  struct stopping_source : integer_source
+  struct stopping_source
   {
+    using input_type = integer_source::input_type;
+    using result_type = integer_source::result_type;
+    integer_source source_;
     stdexec::inplace_stop_source *stop_;
-    // This test deliberately replaces the inherited sender protocol customization.
-    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method)
-    auto commit(std::size_t value) -> void
+    auto initialize() -> void { source_.initialize(); }
+    [[nodiscard]] auto next() -> std::optional<input_type> { return source_.next(); }
+    auto commit(std::size_t value) const -> void
     {
-      integer_source::commit(value);
-      if (committed_->size() == batch_size) { stop_->request_stop(); }
+      source_.commit(value);
+      if (source_.committed_->size() == batch_size) { stop_->request_stop(); }
     }
+    [[nodiscard]] auto finish() const -> result_type { return source_.finish(); }
   };
   std::atomic<std::size_t> acquired{ 0 };
   std::vector<std::size_t> committed;
@@ -571,7 +578,8 @@ TEST_CASE("Cancellation between batches prevents further acquisition", "[executi
     dacoexec::execution::ordered_parallel_on(
       stdexec::inline_scheduler{},
       stopping_source{
-        integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired }, &stop },
+        .source_ = integer_source{ .count_ = batch_size + 1, .committed_ = &committed, .acquired_ = &acquired },
+        .stop_ = &stop },
       [](std::size_t value) -> std::size_t { return value; },
       batch_size),
     completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
@@ -811,7 +819,7 @@ TEST_CASE("Child operations preserve forwarding receiver environment queries", "
                        integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
                        [](std::size_t value) -> std::size_t { return value; },
                        batch_size),
-      marker_receiver{ completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() } });
+      marker_receiver{ .completion_ = completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() } });
   stdexec::start(operation);
   REQUIRE(future.get() == 0);
   REQUIRE(observed.load() == environment_marker);
@@ -845,10 +853,14 @@ TEST_CASE("Independent pipelines share a scheduler without shared codec state", 
 
 TEST_CASE("Finish failure delivers one error to a destructive receiver", "[execution][hardening]")
 {
-  struct failing_finish_source : integer_source
+  struct failing_finish_source
   {
-    // Deliberately inject a failure at this source protocol boundary.
-    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method)
+    using input_type = integer_source::input_type;
+    using result_type = integer_source::result_type;
+    integer_source source_;
+    auto initialize() -> void { source_.initialize(); }
+    [[nodiscard]] auto next() -> std::optional<input_type> { return source_.next(); }
+    auto commit(std::size_t value) const -> void { source_.commit(value); }
     [[nodiscard]] static auto finish() -> std::size_t { throw std::runtime_error("finish failed"); }
   };
   std::atomic<std::size_t> acquired{ 0 };
@@ -861,7 +873,8 @@ TEST_CASE("Finish failure delivers one error to a destructive receiver", "[execu
   start_destructive(
     dacoexec::execution::ordered_parallel_on(
       stdexec::inline_scheduler{},
-      failing_finish_source{ integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired } },
+      failing_finish_source{
+        .source_ = integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired } },
       [](std::size_t value) -> std::size_t { return value; },
       batch_size),
     { .operation_ = &storage, .promise_ = promise, .completions_ = &completions, .token_ = stop.get_token() },
