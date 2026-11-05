@@ -49,9 +49,7 @@ namespace detail {
     {
       std::uint16_t used = 1;
       for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
-        // The byte index covers exactly the canonical alphabet.
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        auto const word = book[static_cast<std::uint8_t>(symbol)];
+        auto const word = book.at(static_cast<std::uint8_t>(symbol));
         std::uint16_t node = 0;
         for (unsigned remaining = word.length_; remaining != 0; --remaining) {
           auto const bit = (word.bits_ >> (remaining - 1U)) & 1U;

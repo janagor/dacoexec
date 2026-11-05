@@ -10,10 +10,7 @@ namespace test_detail {
 // The public index type covers exactly the codebook's complete byte alphabet.
 [[nodiscard]] constexpr auto canonical_word(dacoexec::huffman::canonical_codebook const &book, std::uint8_t symbol)
   -> dacoexec::huffman::codeword
-{
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  return book[symbol];
-}
+{ return book.at(symbol); }
 
 }// namespace test_detail
 

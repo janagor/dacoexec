@@ -73,8 +73,7 @@ class codewords_view : public std::ranges::view_interface<codewords_view<V>>
         // as the declared byte type, not as the proxy type itself.
         using source_value = std::ranges::range_value_t<V>;
         std::byte const value = dacoexec::detail::to_byte(static_cast<source_value>(*position));
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        current_ = codebook_[std::to_integer<std::uint8_t>(value)];
+        current_ = codebook_.at(std::to_integer<std::uint8_t>(value));
         if (current_.length_ == 0) { throw std::invalid_argument("Symbol absent from Huffman codebook"); }
       } catch (...) {
         finished_ = true;

@@ -61,12 +61,12 @@ public:
   /**
    * Returns the symbol's codeword, with length zero when the symbol is absent.
    */
-  [[nodiscard]] constexpr auto operator[](std::uint8_t symbol) const noexcept -> codeword
-  {
-    // A uint8_t always indexes the complete byte alphabet without a bounds check.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    return words_[symbol];
-  }
+  [[nodiscard]] constexpr auto operator[](std::uint8_t symbol) const noexcept -> codeword { return at(symbol); }
+
+  /**
+   * Returns the symbol's codeword. Every uint8_t indexes the complete byte alphabet.
+   */
+  [[nodiscard]] constexpr auto at(std::uint8_t symbol) const noexcept -> codeword { return words_.at(symbol); }
 
   [[nodiscard]] constexpr auto lengths() const noexcept -> code_length_table const & { return lengths_; }
 
