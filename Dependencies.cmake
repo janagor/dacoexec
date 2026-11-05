@@ -113,6 +113,27 @@ function(dacoexec_setup_dependencies)
       "CLIUtils/CLI11")
   endif()
 
+  if(dacoexec_BUILD_BENCHMARKS)
+    if(NOT dacoexec_BUILD_EXECUTION)
+      message(FATAL_ERROR "Codec benchmarks require dacoexec_BUILD_EXECUTION=ON for parallel measurements")
+    endif()
+    _dacoexec_require_package(
+      NAME
+      benchmark
+      TARGET
+      benchmark::benchmark
+      VERSION
+      1.9.5
+      GIT_TAG
+      v1.9.5
+      GITHUB_REPOSITORY
+      "google/benchmark"
+      OPTIONS
+      "BENCHMARK_ENABLE_TESTING OFF"
+      "BENCHMARK_ENABLE_INSTALL OFF"
+      "BENCHMARK_ENABLE_WERROR OFF")
+  endif()
+
   if(dacoexec_tests_enabled)
     _dacoexec_require_package(
       NAME

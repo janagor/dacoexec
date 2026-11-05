@@ -51,11 +51,6 @@ if(dacoexec_BUILD_FUZZ_TESTS)
       "dacoexec_BUILD_FUZZ_TESTS is not implemented yet. The inherited sample harness is not a dacoexec codec test.")
 endif()
 
-if(dacoexec_BUILD_BENCHMARKS)
-  message(
-    FATAL_ERROR "dacoexec_BUILD_BENCHMARKS is not implemented yet. Codec benchmarks are added in a later revision.")
-endif()
-
 # IPO and directory-wide hardening must run for a standalone build, and only
 # then. Fetched dependencies are configured after this call.
 if(PROJECT_IS_TOP_LEVEL)
@@ -148,6 +143,10 @@ if(dacoexec_tests_enabled)
     message(STATUS "Building tests")
     add_subdirectory(test)
   endif()
+endif()
+
+if(dacoexec_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
 endif()
 
 if(MSVC AND PROJECT_IS_TOP_LEVEL)

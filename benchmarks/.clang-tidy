@@ -1,0 +1,4 @@
+---
+InheritParentConfig: true
+# Keep complete validation scenarios and benchmark workloads together.
+Checks: '-readability-function-cognitive-complexity'

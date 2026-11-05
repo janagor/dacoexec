@@ -65,7 +65,7 @@ macro(dacoexec_setup_options)
   option(dacoexec_BUILD_EXECUTION "Build optional stdexec parallel execution support" OFF)
   option(dacoexec_BUILD_CLI "Build the command-line interface" OFF)
   option(dacoexec_BUILD_FUZZ_TESTS "Build codec fuzz tests (not implemented yet)" OFF)
-  option(dacoexec_BUILD_BENCHMARKS "Build benchmarks (not implemented yet)" OFF)
+  option(dacoexec_BUILD_BENCHMARKS "Build codec benchmarks" OFF)
   option(dacoexec_INSTALL "Install the public header-only library" ${dacoexec_standalone_default})
   option(dacoexec_ENABLE_FORMATTING "Enable cmake-format and clang-format targets" OFF)
 

@@ -1,0 +1,47 @@
+name: Huffman performance and memory
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 4 * * 0'
+permissions:
+  contents: read
+jobs:
+  benchmarks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm-22.1.8
+          cmake: true
+          ninja: true
+      - name: Configure Release measurements
+        run: cmake --preset unixlike-clang-bench -Ddacoexec_BUILD_TESTS=ON -Ddacoexec_TEST_LARGE_STREAMS=ON
+      - name: Build measurement targets
+        run: >-
+          cmake --build out/build/unixlike-clang-bench --target
+          dacoexec_benchmarks dacoexec_stream_memory dacoexec_streaming_memory_tests
+      - name: Verify benchmark comparison failure handling
+        run: python3 -B test/benchmark_compare_tests.py
+      - name: Benchmark in-memory codec and ordered execution
+        run: |
+          mkdir -p results
+          out/build/unixlike-clang-bench/benchmarks/dacoexec_benchmarks \
+            --benchmark_repetitions=3 --benchmark_min_time=0.1s \
+            --benchmark_out=results/benchmarks.json --benchmark_out_format=json
+          python3 benchmarks/compare.py results/benchmarks.json > results/comparison.json
+      - name: Measure bounded parallel working memory
+        run: python3 benchmarks/measure.py --build-dir out/build/unixlike-clang-bench --output results --large
+      - name: Check existing sequential large-stream invariants
+        run: >-
+          ctest --test-dir out/build/unixlike-clang-bench
+          -R '^streaming\.(memory|large)$' --output-on-failure
+      - name: Preserve raw measurements and environment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: huffman-performance-${{ github.sha }}
+          path: |
+            results
+            out/build/unixlike-clang-bench/Testing/Temporary
