@@ -636,8 +636,6 @@ TEST_CASE("bits yields the MSB-first pattern of each byte", "[bits]")
   REQUIRE(reference_bits(bytes) == expected);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("bits preserves high bits of every byte character type", "[bits]")
 {
   auto check = [](auto value) -> void {
@@ -680,8 +678,6 @@ TEST_CASE("bits accepts spans, arrays, and owning temporaries", "[bits]")
   REQUIRE(collect_bits(make_bytes(5) | dacoexec::views::bits()) == reference_bits(expected));
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("constructing a bit view reads nothing and caches one byte", "[bits]")
 {
   auto stats = std::make_shared<source_stats>();
@@ -778,8 +774,6 @@ TEST_CASE("an empty move-only source produces no bits", "[bits]")
   REQUIRE(stats->increments_ == 0);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("upstream bit-source failure propagates and stays failed", "[bits]")
 {
   std::vector<std::byte> const input{ std::byte{ 0xB2 }, std::byte{ 0x80 } };
@@ -838,8 +832,6 @@ TEST_CASE("upstream bit-source failure propagates and stays failed", "[bits]")
   }
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("a throwing source begin leaves the bit view unusable", "[bits]")
 {
   auto stats = std::make_shared<source_stats>();
@@ -860,8 +852,6 @@ TEST_CASE("a throwing source begin leaves the bit view unusable", "[bits]")
   REQUIRE(stats->begin_calls_ == 1);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("a streamed bit view reads one byte at a time", "[bits]")
 {
   constexpr std::size_t small = 32;
@@ -900,8 +890,6 @@ TEST_CASE("a streamed bit view reads one byte at a time", "[bits]")
   REQUIRE(large_stats->begin_calls_ == 1);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("buffered bytes cross window boundaries into bits and back", "[bits][buffered]")
 {
   std::vector<std::byte> const input = make_bytes(8);
@@ -946,8 +934,6 @@ TEST_CASE("buffered bytes cross window boundaries into bits and back", "[bits][b
   REQUIRE(one_stats->dereferences_ == input.size());
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("buffered bytes yield the source across partial windows", "[buffered]")
 {
   std::vector<std::byte> const input = make_bytes(8);
@@ -983,8 +969,6 @@ TEST_CASE("buffered bytes yield the source across partial windows", "[buffered]"
     collected == std::vector<std::byte>{ std::byte{ 0x00 }, std::byte{ 0x80 }, std::byte{ 0xFF }, std::byte{ 0xB2 } });
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("a buffered byte window stays lazy and resumes after a move", "[buffered]")
 {
   std::vector<std::byte> const input = make_bytes(5);
@@ -1024,8 +1008,6 @@ TEST_CASE("a buffered byte window stays lazy and resumes after a move", "[buffer
   REQUIRE(extra == 0);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("a buffered read failure discards the unfinished window", "[buffered]")
 {
   std::vector<std::byte> const input = make_bytes(8);
@@ -1137,8 +1119,6 @@ TEST_CASE("bit_writer golden vectors", "[bit_writer]")
     1);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("write_bit matches the codeword order", "[bit_writer]")
 {
   std::vector<std::byte> out;
@@ -1174,8 +1154,6 @@ TEST_CASE("a zero-width write does not change alignment", "[bit_writer]")
   check_codewords(words, std::array<unsigned char, 1>{ joined_patterns_byte }, 0);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("invalid codewords are rejected without writing", "[bit_writer]")
 {
   std::vector<std::byte> out;
@@ -1436,8 +1414,6 @@ TEST_CASE("random codewords match an independent bit packer", "[bit_writer]")
   }
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("different splits of one bit sequence serialize the same bytes", "[bit_writer]")
 {
   std::vector<std::byte> const input{

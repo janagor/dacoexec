@@ -90,7 +90,6 @@ TEST_CASE("Block codec round trips boundary sizes and binary input", "[huffman][
 }
 
 // Catch assertions expand into branches; keep the related selection checks together.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("Block selection is conservative and deterministic", "[huffman][codec]")
 {
   constexpr auto singleton_savings_bits = dacoexec::detail::bits_per_byte - 1U;
@@ -199,7 +198,6 @@ TEST_CASE("Block metadata and output limits are validated", "[huffman][codec]")
 TEST_CASE("Fixed seed random and skewed blocks round trip", "[huffman][codec]")
 {
   // Fixed seed intentionally makes round-trip failures reproducible.
-  // NOLINTNEXTLINE(bugprone-random-generator-seed,cert-msc32-c,cert-msc51-cpp)
   std::mt19937 generator(random_seed);
   constexpr unsigned cases = 64;
   for (unsigned iteration = 0; iteration < cases; ++iteration) {

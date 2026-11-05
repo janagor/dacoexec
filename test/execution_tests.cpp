@@ -219,7 +219,6 @@ TEST_CASE("Parallel DHF1 matches sequential output and round trips", "[execution
 {
   constexpr std::array tail_sizes{ std::size_t{ 0 }, std::size_t{ 1 } };
   // Fixed seed makes failures reproducible.
-  // NOLINTNEXTLINE(bugprone-random-generator-seed,cert-msc32-c,cert-msc51-cpp)
   std::mt19937 random(random_seed);
   for (auto const workers : worker_counts) {
     exec::static_thread_pool pool{ workers };

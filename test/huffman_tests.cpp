@@ -300,8 +300,6 @@ auto check_frequency_order(dacoexec::huffman::frequency_table const &frequencies
   }
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto check_code_lengths(dacoexec::huffman::frequency_table const &frequencies) -> void
 {
   auto const original = frequencies;
@@ -415,14 +413,12 @@ struct huffman_byte_proxy
 };
 
 template<template<class> class QualByte, template<class> class QualProxy>
-// NOLINTNEXTLINE(misc-include-cleaner) -- Template-template parameters are declared immediately above.
 struct std::basic_common_reference<std::byte, huffman_byte_proxy, QualByte, QualProxy>
 {
   using type = std::byte;
 };
 
 template<template<class> class QualProxy, template<class> class QualByte>
-// NOLINTNEXTLINE(misc-include-cleaner) -- Template-template parameters are declared immediately above.
 struct std::basic_common_reference<huffman_byte_proxy, std::byte, QualProxy, QualByte>
 {
   using type = std::byte;
@@ -861,8 +857,6 @@ TEST_CASE("seeded histograms satisfy the length invariants", "[huffman]")
   }
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("canonical codebooks reconstruct deterministic fixtures", "[huffman][canonical]")
 {
   constexpr std::array samples{ std::string_view{},
@@ -981,8 +975,6 @@ TEST_CASE("canonical assignment reaches the full 32-bit boundary", "[huffman][ca
             std::byte{ 0xFF } });
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", "[huffman][canonical]")
 {
   constexpr std::size_t case_count = 64;

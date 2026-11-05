@@ -56,7 +56,6 @@ inline auto make(std::size_t size, dataset kind) -> std::vector<std::byte>
   constexpr std::size_t alternating_symbols = 2;
   constexpr std::string_view text = "the quick brown fox jumps over the lazy dog. the data is ordered.\n";
   // Reproducible fixtures intentionally use a fixed seed.
-  // NOLINTNEXTLINE(bugprone-random-generator-seed,cert-msc32-c,cert-msc51-cpp)
   std::mt19937 random{ seed };
   std::vector<std::byte> result(size);
   for (std::size_t index = 0; index < size; ++index) {

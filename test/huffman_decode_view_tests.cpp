@@ -51,7 +51,6 @@ struct source_error : std::runtime_error
 }// namespace
 
 // Catch assertions expand into branches in this iterator lifecycle scenario.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("Lazy decoder stages one symbol and transfers iteration state", "[huffman][decode]")
 {
   unsigned reads = 0;

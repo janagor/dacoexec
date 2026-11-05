@@ -332,8 +332,6 @@ TEST_CASE("blocks partitions bytes and numbers blocks from zero", "[blocks]")
   check_partition(multi_block_input_size, 3, ten);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("blocks accepts standard ranges, call syntax, and owning rvalues", "[blocks]")
 {
   std::vector<std::byte> const expected = make_bytes(5);
@@ -449,8 +447,6 @@ TEST_CASE("constructing a block view reads nothing and each step reads one block
   REQUIRE(stats->dereferences_ == block_size * 3);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("moved blocks outlive the source and the view", "[blocks]")
 {
   std::vector<dacoexec::byte_block> collected;
@@ -532,8 +528,6 @@ TEST_CASE("moving an unstarted view keeps the unread source", "[blocks]")
   REQUIRE(flattened == make_bytes(5));
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("moving a started view keeps the staged block and the unread tail", "[blocks]")
 {
   std::vector<std::byte> const expected = make_bytes(10);
@@ -574,8 +568,6 @@ TEST_CASE("moving a started view keeps the staged block and the unread tail", "[
   REQUIRE(reconstructed == expected);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("zero block size is rejected and a short input does not reserve the whole block", "[blocks]")
 {
   auto stats = std::make_shared<source_stats>();
@@ -606,8 +598,6 @@ TEST_CASE("zero block size is rejected and a short input does not reserve the wh
   REQUIRE(wide.bytes_ == wide_input);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("upstream failure discards a partial block and stays failed", "[blocks]")
 {
   constexpr std::size_t block_size = 4;
@@ -690,8 +680,6 @@ TEST_CASE("exact multiples end cleanly without an empty block", "[blocks]")
   REQUIRE(stats->increments_ == count);
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("streaming keeps one block of storage and does not read ahead", "[blocks]")
 {
   constexpr std::size_t block_size = 4096;
@@ -783,8 +771,6 @@ TEST_CASE("codewords stages once and preserves single-pass state across moves", 
   REQUIRE(stats->dereferences_ == input.size());
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("codewords closures own independent codebooks and accept proxy bytes", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
@@ -817,8 +803,6 @@ TEST_CASE("codewords closures own independent codebooks and accept proxy bytes",
   REQUIRE(*destination.begin() == test_detail::canonical_word(book, 1));
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("codewords failures are terminal without emitting absent symbols", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
@@ -856,8 +840,6 @@ TEST_CASE("codewords failures are terminal without emitting absent symbols", "[h
   REQUIRE(empty.begin() == empty.end());
 }
 
-// Catch2 assertions expand into control flow counted by this check.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bits", "[huffman][codewords]")
 {
   std::vector<char> const input{ 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'D' };

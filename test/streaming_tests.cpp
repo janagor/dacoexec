@@ -74,7 +74,6 @@ auto manual_archive(huffman::frame_header header,
 }
 }// namespace
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 fixed bytes and IEEE CRC32", "[streaming]")
 {
   auto const empty = compress({});
@@ -114,7 +113,6 @@ TEST_CASE("DHF1 fixed bytes and IEEE CRC32", "[streaming]")
   REQUIRE(dacoexec::detail::crc32(digits) == 0xCBF43926U);
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 deterministic mixed block round trips", "[streaming]")
 {
   for (auto size : { std::size_t{ 0 }, std::size_t{ 1 }, test_block_size, test_block_size + 1, test_block_size * 3 }) {
@@ -135,7 +133,6 @@ TEST_CASE("DHF1 deterministic mixed block round trips", "[streaming]")
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 independently rejects malformed structure", "[streaming]")
 {
   auto const valid = compress(bytes{ std::byte{ 'x' } });
@@ -174,7 +171,6 @@ TEST_CASE("DHF1 independently rejects malformed structure", "[streaming]")
   REQUIRE_THROWS(decompress(zero));
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 Huffman validation and inferred padding", "[streaming]")
 {
   bytes const input(test_block_size + 1, std::byte{ 'a' });
@@ -219,7 +215,6 @@ TEST_CASE("DHF1 Huffman validation and inferred padding", "[streaming]")
       lengths)));
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 lazy state, move ownership, and permanent failure", "[streaming]")
 {
   auto archive = compress(bytes(test_block_size * 2, std::byte{ 0 }));
@@ -247,7 +242,6 @@ TEST_CASE("DHF1 lazy state, move ownership, and permanent failure", "[streaming]
   REQUIRE(broken.begin() == broken.end());
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 stops on sink failures and writes incrementally", "[streaming]")
 {
   std::size_t consumed = 0;
@@ -275,7 +269,6 @@ TEST_CASE("DHF1 stops on sink failures and writes incrementally", "[streaming]")
   REQUIRE_THROWS_AS(huffman::detail::checked_add(total, 1), std::overflow_error);
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 independently authored binary fixtures", "[streaming]")
 {
   for (auto const *name : { "dhf1-empty", "dhf1-one-byte" }) {
@@ -292,7 +285,6 @@ TEST_CASE("DHF1 independently authored binary fixtures", "[streaming]")
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 accepts move-only nonsized single-pass sources", "[streaming]")
 {
   class source_type : public std::ranges::view_interface<source_type>
@@ -327,7 +319,6 @@ TEST_CASE("DHF1 accepts move-only nonsized single-pass sources", "[streaming]")
   REQUIRE(output == bytes(original.size(), std::byte{ 'x' }));
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 discards a failed later frame without writing it", "[streaming]")
 {
   auto archive = compress(bytes(test_block_size * 2, std::byte{ 'x' }));
@@ -353,7 +344,6 @@ TEST_CASE("DHF1 discards a failed later frame without writing it", "[streaming]"
   REQUIRE(position == partial.end());
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 ostream sink reports stream errors", "[streaming]")
 {
   std::ostringstream stream;
@@ -363,7 +353,6 @@ TEST_CASE("DHF1 ostream sink reports stream errors", "[streaming]")
   REQUIRE_THROWS_AS(sink.write(data), dacoexec::stream_error);
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 enforces configured limits before publishing frames", "[streaming]")
 {
   auto const archive = compress(bytes(test_block_size, std::byte{ 0 }));
@@ -384,7 +373,6 @@ TEST_CASE("DHF1 enforces configured limits before publishing frames", "[streamin
   REQUIRE(output == bytes(test_block_size, std::byte{ 0 }));
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 explicitly rejects unsupported kinds and codebooks", "[streaming]")
 {
   auto unknown = compress(bytes{ std::byte{ 'x' } });
@@ -421,7 +409,6 @@ TEST_CASE("DHF1 explicitly rejects unsupported kinds and codebooks", "[streaming
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("DHF1 parsed DATA sequences survive view moves and decoding", "[streaming]")
 {
   constexpr std::size_t frame_count = 3;

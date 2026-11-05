@@ -1,4 +1,9 @@
 ---
 InheritParentConfig: true
 # Keep complete validation scenarios and benchmark workloads together.
-Checks: '-readability-function-cognitive-complexity'
+# Fixed seeds keep tests and benchmark datasets reproducible.
+Checks: '-readability-function-cognitive-complexity,
+         -bugprone-random-generator-seed,
+         -cert-msc32-c,
+         -cert-msc51-cpp
+'
