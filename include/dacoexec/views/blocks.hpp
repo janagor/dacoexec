@@ -219,8 +219,11 @@ public:
      * A second dereference without ++ observes the moved-from block.
      * Dereferencing an end iterator is outside the input-iterator contract.
      */
-    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    [[nodiscard]] auto operator*() const -> byte_block && { return std::move(state_->current_.value()); }
+    [[nodiscard]] auto operator*() const -> byte_block &&
+    {
+      if (!state_->current_) { throw std::bad_optional_access{}; }
+      return std::move(*state_->current_);
+    }
 
     auto operator++() -> iterator &
     {
@@ -234,9 +237,7 @@ public:
       [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.state_ == nullptr || !cursor.state_->current_.has_value(); }
 
-    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> byte_block &&
-    { return std::move(cursor.state_->current_.value()); }
+    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> byte_block && { return *cursor; }
 
   private:
     friend class blocks_view;

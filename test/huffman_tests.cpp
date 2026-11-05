@@ -358,20 +358,23 @@ auto check_code_lengths(dacoexec::huffman::frequency_table const &frequencies) -
   REQUIRE(weighted_path_length(frequencies, lengths) == reference_weighted_path_length(frequencies));
 }
 
-// Distinct parameter roles in test helpers.
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-[[nodiscard]] auto random_histogram(splitmix64 &rng, std::size_t active, std::uint64_t frequency_limit)
-  -> dacoexec::huffman::frequency_table
+struct histogram_limits
+{
+  std::size_t active_symbols_;
+  std::uint64_t max_frequency_;
+};
+
+[[nodiscard]] auto random_histogram(splitmix64 &rng, histogram_limits limits) -> dacoexec::huffman::frequency_table
 {
   dacoexec::huffman::frequency_table frequencies{};
   std::array<std::size_t, dacoexec::huffman::alphabet_size> symbols{};
   for (std::size_t index = 0; index < symbols.size(); ++index) { symbols.at(index) = index; }
-  std::size_t const count = std::min(active, dacoexec::huffman::alphabet_size);
+  std::size_t const count = std::min(limits.active_symbols_, dacoexec::huffman::alphabet_size);
   for (std::size_t index = 0; index < count; ++index) {
     std::size_t const span = dacoexec::huffman::alphabet_size - index;
     std::size_t const chosen = index + (rng.next() % span);
     std::swap(symbols.at(index), symbols.at(chosen));
-    frequencies.at(symbols.at(index)) = 1 + (rng.next() % frequency_limit);
+    frequencies.at(symbols.at(index)) = 1 + (rng.next() % limits.max_frequency_);
   }
   return frequencies;
 }
@@ -440,8 +443,6 @@ public:
 
     auto operator++() -> iterator &
     {
-      // Advance the source iterator within its sentinel.
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
       ++pointer_;
       return *this;
     }
@@ -455,15 +456,15 @@ public:
   private:
     friend class huffman_proxy_bytes;
 
-    iterator(std::byte const *pointer, std::byte const *last) : pointer_(pointer), last_(last) {}
+    iterator(std::vector<std::byte>::const_iterator pointer, std::vector<std::byte>::const_iterator last)
+      : pointer_(pointer), last_(last)
+    {}
 
-    std::byte const *pointer_ = nullptr;
-    std::byte const *last_ = nullptr;
+    std::vector<std::byte>::const_iterator pointer_;
+    std::vector<std::byte>::const_iterator last_;
   };
 
-  // Advance the source iterator within its sentinel.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  [[nodiscard]] auto begin() -> iterator { return iterator{ data_.data(), data_.data() + data_.size() }; }
+  [[nodiscard]] auto begin() -> iterator { return iterator{ data_.cbegin(), data_.cend() }; }
 
   [[nodiscard]] static auto end() noexcept -> std::default_sentinel_t { return std::default_sentinel; }
 
@@ -847,12 +848,12 @@ TEST_CASE("seeded histograms satisfy the length invariants", "[huffman]")
   splitmix64 rng{ histogram_seed };
   for (int index = 0; index < small_histogram_cases; ++index) {
     INFO("small histogram " << index);
-    auto const frequencies = random_histogram(rng, rng.next() % 17U, 8);
+    auto const frequencies = random_histogram(rng, { .active_symbols_ = rng.next() % 17U, .max_frequency_ = 8 });
     check_code_lengths(frequencies);
   }
   for (int index = 0; index < wide_histogram_cases; ++index) {
     INFO("wide histogram " << index);
-    auto const frequencies = random_histogram(rng, rng.next() % 257U, 5);
+    auto const frequencies = random_histogram(rng, { .active_symbols_ = rng.next() % 257U, .max_frequency_ = 5 });
     check_code_lengths(frequencies);
   }
 }
@@ -981,8 +982,8 @@ TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", 
   constexpr std::uint64_t frequency_limit = 8;
   splitmix64 rng{ histogram_seed };
   for (std::size_t index = 0; index < case_count; ++index) {
-    auto const frequencies =
-      random_histogram(rng, rng.next() % (dacoexec::huffman::alphabet_size + 1U), frequency_limit);
+    auto const frequencies = random_histogram(rng,
+      { .active_symbols_ = rng.next() % (dacoexec::huffman::alphabet_size + 1U), .max_frequency_ = frequency_limit });
     auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
     auto const candidate = dacoexec::huffman::try_make_canonical_codebook(lengths);
     if (!candidate.has_value()) {

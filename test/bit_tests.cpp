@@ -353,11 +353,16 @@ private:
   std::uint32_t state_;
 };
 
-// Distinct parameter roles in test helpers.
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-[[nodiscard]] auto random_bytes(std::uint32_t seed, std::size_t count) -> std::vector<std::byte>
+struct random_byte_fixture
 {
-  split_mix rng{ seed };
+  std::uint32_t seed_;
+  std::size_t count_;
+};
+
+[[nodiscard]] auto random_bytes(random_byte_fixture fixture) -> std::vector<std::byte>
+{
+  split_mix rng{ fixture.seed_ };
+  auto const count = fixture.count_;
   std::vector<std::byte> bytes(count);
   for (std::size_t index = 0; index < count; ++index) {
     bytes.at(index) = static_cast<std::byte>(static_cast<unsigned char>(rng.next()));
@@ -577,8 +582,6 @@ public:
 
     auto operator++() -> iterator &
     {
-      // Advance the source iterator within its sentinel.
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
       ++pointer_;
       return *this;
     }
@@ -592,15 +595,15 @@ public:
   private:
     friend class proxy_byte_view;
 
-    iterator(std::byte const *pointer, std::byte const *last) : pointer_(pointer), last_(last) {}
+    iterator(std::vector<std::byte>::const_iterator pointer, std::vector<std::byte>::const_iterator last)
+      : pointer_(pointer), last_(last)
+    {}
 
-    std::byte const *pointer_ = nullptr;
-    std::byte const *last_ = nullptr;
+    std::vector<std::byte>::const_iterator pointer_;
+    std::vector<std::byte>::const_iterator last_;
   };
 
-  // Advance the source iterator within its sentinel.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  [[nodiscard]] auto begin() -> iterator { return iterator{ data_.data(), data_.data() + data_.size() }; }
+  [[nodiscard]] auto begin() -> iterator { return iterator{ data_.cbegin(), data_.cend() }; }
 
   [[nodiscard]] static auto end() noexcept -> std::default_sentinel_t { return std::default_sentinel; }
 
@@ -1379,12 +1382,12 @@ TEST_CASE("pack of unpacked bytes is the original byte sequence", "[bit_writer]"
 
   check({});
   for (std::size_t count = 0; count <= small_case_limit; ++count) { check(make_bytes(count)); }
-  check(random_bytes(byte_fixture_seed, below_half_alphabet));
-  check(random_bytes(1U, half_alphabet));
-  check(random_bytes(alternate_fixture_seed, below_full_alphabet));
-  check(random_bytes(full_alphabet_seed, full_alphabet));
-  check(random_bytes(last_bit_index, large_fixture_size));
-  check(random_bytes(large_fixture_seed, block_fixture_size));
+  check(random_bytes({ .seed_ = byte_fixture_seed, .count_ = below_half_alphabet }));
+  check(random_bytes({ .seed_ = 1U, .count_ = half_alphabet }));
+  check(random_bytes({ .seed_ = alternate_fixture_seed, .count_ = below_full_alphabet }));
+  check(random_bytes({ .seed_ = full_alphabet_seed, .count_ = full_alphabet }));
+  check(random_bytes({ .seed_ = last_bit_index, .count_ = large_fixture_size }));
+  check(random_bytes({ .seed_ = large_fixture_seed, .count_ = block_fixture_size }));
 }
 
 TEST_CASE("random codewords match an independent bit packer", "[bit_writer]")

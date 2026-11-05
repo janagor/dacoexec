@@ -198,23 +198,28 @@ static_assert(dacoexec::detail::next_block_capacity((std::numeric_limits<std::si
   return out;
 }
 
-// Distinct parameter roles in test helpers.
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-auto check_partition(std::size_t count, std::size_t block_size, std::span<std::size_t const> expected_sizes) -> void
+struct partition_case
 {
-  std::vector<std::byte> const expected = make_bytes(count);
+  std::size_t input_size_;
+  std::size_t block_size_;
+  std::span<std::size_t const> expected_sizes_;
+};
+
+auto check_partition(partition_case const &test_case) -> void
+{
+  std::vector<std::byte> const expected = make_bytes(test_case.input_size_);
   std::vector<std::byte> input = expected;
   std::vector<std::size_t> sizes;
   std::vector<std::byte> flattened;
   std::uint64_t sequence = 0;
-  for (auto block : input | dacoexec::views::blocks(block_size)) {
+  for (auto block : input | dacoexec::views::blocks(test_case.block_size_)) {
     REQUIRE(block.sequence_ == sequence);
     ++sequence;
     sizes.push_back(block.bytes_.size());
     flattened.insert(flattened.end(), block.bytes_.begin(), block.bytes_.end());
   }
-  REQUIRE(sizes.size() == expected_sizes.size());
-  REQUIRE(std::ranges::equal(sizes, expected_sizes));
+  REQUIRE(sizes.size() == test_case.expected_sizes_.size());
+  REQUIRE(std::ranges::equal(sizes, test_case.expected_sizes_));
   REQUIRE(flattened == expected);
 }
 
@@ -259,8 +264,6 @@ public:
 
     auto operator++() -> iterator &
     {
-      // Advance the source iterator within its sentinel.
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
       ++ptr_;
       return *this;
     }
@@ -274,15 +277,15 @@ public:
   private:
     friend class proxy_bytes;
 
-    iterator(std::byte const *ptr, std::byte const *last) : ptr_(ptr), last_(last) {}
+    iterator(std::vector<std::byte>::const_iterator ptr, std::vector<std::byte>::const_iterator last)
+      : ptr_(ptr), last_(last)
+    {}
 
-    std::byte const *ptr_ = nullptr;
-    std::byte const *last_ = nullptr;
+    std::vector<std::byte>::const_iterator ptr_;
+    std::vector<std::byte>::const_iterator last_;
   };
 
-  // Advance the source iterator within its sentinel.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  [[nodiscard]] auto begin() -> iterator { return iterator{ data_.data(), data_.data() + data_.size() }; }
+  [[nodiscard]] auto begin() -> iterator { return iterator{ data_.cbegin(), data_.cend() }; }
 
   [[nodiscard]] static auto end() noexcept -> std::default_sentinel_t { return std::default_sentinel; }
 
@@ -322,14 +325,14 @@ TEST_CASE("blocks partitions bytes and numbers blocks from zero", "[blocks]")
   std::array<std::size_t, 1> const only_one{ { 1 } };
   std::array<std::size_t, 1> const exact{ { 4 } };
 
-  check_partition(0, 4, {});
-  check_partition(1, 4, only_one);
-  check_partition(4, 4, exact);
-  check_partition(short_input_size, 4, five);
-  check_partition(two_block_input_size, 4, eight);
-  check_partition(three_block_input_size, 4, nine);
-  check_partition(single_byte_block_count, 1, one);
-  check_partition(multi_block_input_size, 3, ten);
+  check_partition({ .input_size_ = 0, .block_size_ = 4, .expected_sizes_ = {} });
+  check_partition({ .input_size_ = 1, .block_size_ = 4, .expected_sizes_ = only_one });
+  check_partition({ .input_size_ = 4, .block_size_ = 4, .expected_sizes_ = exact });
+  check_partition({ .input_size_ = short_input_size, .block_size_ = 4, .expected_sizes_ = five });
+  check_partition({ .input_size_ = two_block_input_size, .block_size_ = 4, .expected_sizes_ = eight });
+  check_partition({ .input_size_ = three_block_input_size, .block_size_ = 4, .expected_sizes_ = nine });
+  check_partition({ .input_size_ = single_byte_block_count, .block_size_ = 1, .expected_sizes_ = one });
+  check_partition({ .input_size_ = multi_block_input_size, .block_size_ = 3, .expected_sizes_ = ten });
 }
 
 TEST_CASE("blocks accepts standard ranges, call syntax, and owning rvalues", "[blocks]")
