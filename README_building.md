@@ -239,3 +239,15 @@ cd ../
 ```
 
 
+
+## Huffman hardening and performance
+
+Optional `unixlike-clang-fuzz`, `unixlike-clang-bench` and
+`unixlike-clang-tsan` presets use separate directories and Clang 22/C++20.
+Fuzzing and benchmarks stay OFF by default, including subproject use.
+See [fuzzing](fuzz_test/README.md) for limits, corpus replay and minimization,
+and [benchmarks](benchmarks/README.md) for datasets, JSON, RSS and methodology.
+TSan tests can be selected with `ctest --test-dir out/build/unixlike-clang-tsan
+-L execution --repeat until-fail:5 --output-on-failure` after building that preset.
+Keep TSan separate from ASan/UBSan. Existing public-header and installed-consumer
+checks remain part of the normal test build.

@@ -196,3 +196,10 @@ Nix shells for those GCC and Clang versions are documented in [README_building.m
 	Follow instructions here:
 	https://github.com/include-what-you-use/include-what-you-use#how-to-install
 	</details>
+
+Google Benchmark is a private development dependency, resolved only with
+`dacoexec_BUILD_BENCHMARKS=ON`. An existing `benchmark::benchmark` target wins,
+then an installed package (at least 1.9.5), then the v1.9.5 CPM fallback with
+testing and installation disabled. The benchmark preset also enables the optional
+execution dependency. Fuzzing uses compiler-provided libFuzzer/ASan/UBSan runtimes
+and does not require stdexec or Google Benchmark.

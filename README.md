@@ -392,3 +392,8 @@ target_link_libraries(app PRIVATE dacoexec::execution)
 This requires an installed stdexec package discoverable through
 `CMAKE_PREFIX_PATH` or `stdexec_DIR`. Installed consumers never download it.
 A plain `find_package(dacoexec CONFIG REQUIRED)` loads only the core target.
+
+Optional [Huffman fuzzing](fuzz_test/README.md) and
+[performance and memory measurements](benchmarks/README.md) validate the codec
+through its public APIs. Development presets keep their dependencies private;
+see [building](README_building.md) for setup.
