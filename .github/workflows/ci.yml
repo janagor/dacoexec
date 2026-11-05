@@ -106,7 +106,7 @@ jobs:
             subproject: OFF
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install apt packages
         if: matrix.apt_packages != ''
@@ -252,7 +252,7 @@ jobs:
         build_type: [Debug, Release]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install MSVC ${{ env.MSVC_TOOLSET_VERSION }}
         shell: pwsh
@@ -309,7 +309,7 @@ jobs:
     name: Windows clang-cl 21 Debug
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Cache
         uses: ./.github/actions/setup_cache
@@ -357,7 +357,7 @@ jobs:
     name: macOS Apple Clang Release
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Require Xcode 16 or newer
         run: |
@@ -410,7 +410,7 @@ jobs:
     name: Clang 22 ASan UBSan
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Cpp
         uses: aminya/setup-cpp@v1
@@ -448,7 +448,7 @@ jobs:
     name: clang-tidy 22
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Cpp
         uses: aminya/setup-cpp@v1
@@ -479,7 +479,7 @@ jobs:
     name: clang-format and cmake-format
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup clang-format
         uses: aminya/setup-cpp@v1
@@ -508,7 +508,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: aminya/setup-cpp@v1
         with:
           compiler: gcc-16
@@ -535,7 +535,7 @@ jobs:
     name: Clang 22 ThreadSanitizer execution
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: aminya/setup-cpp@v1
         with:
           compiler: llvm-22.1.8
