@@ -173,8 +173,7 @@ public:
   // writer is not constructed, and the source is retired because its iterator
   // may already have changed sinks.
   // Throwing iterator moves are part of the contract.
-  // NOLINTNEXTLINE(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,hicpp-noexcept-move,performance-noexcept-move-constructor)
-  bit_writer(bit_writer &&other)
+  bit_writer(bit_writer &&other) noexcept(false)
     requires(!std::is_nothrow_move_constructible_v<Out>)
   try : output_(std::move(other.output_)) {
     transfer_from(other);
@@ -205,8 +204,7 @@ public:
   // throws after retargeting the sink, both writers are retired so the
   // destination's old pending bits cannot be emitted to the new sink.
   // Throwing iterator moves are part of the contract.
-  // NOLINTNEXTLINE(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,hicpp-noexcept-move,performance-noexcept-move-constructor)
-  auto operator=(bit_writer &&other) -> bit_writer &
+  auto operator=(bit_writer &&other) noexcept(false) -> bit_writer &
     requires(!std::is_nothrow_move_assignable_v<Out>)
   {
     if (this != &other) {

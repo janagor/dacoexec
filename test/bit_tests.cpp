@@ -487,8 +487,7 @@ public:
   auto operator=(retarget_iterator const &) -> retarget_iterator & = default;
 
   // Throwing iterator moves are part of the contract.
-  // NOLINTNEXTLINE(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,hicpp-noexcept-move,performance-noexcept-move-constructor)
-  retarget_iterator(retarget_iterator &&other) : control_(std::move(other.control_))
+  retarget_iterator(retarget_iterator &&other) noexcept(false) : control_(std::move(other.control_))
   {
     if (control_ != nullptr && control_->throw_on_move_construct_) {
       throw std::runtime_error("move construction failed");
@@ -496,8 +495,7 @@ public:
   }
 
   // Throwing iterator moves are part of the contract.
-  // NOLINTNEXTLINE(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,hicpp-noexcept-move,performance-noexcept-move-constructor)
-  auto operator=(retarget_iterator &&other) -> retarget_iterator &
+  auto operator=(retarget_iterator &&other) noexcept(false) -> retarget_iterator &
   {
     if (control_ != nullptr && other.control_ != nullptr) { control_->sink_ = other.control_->sink_; }
     if (other.control_ != nullptr && other.control_->throw_on_move_assign_) {
