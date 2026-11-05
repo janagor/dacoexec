@@ -393,8 +393,8 @@ TEST_CASE("Cancellation drains active workers without committing their batch", "
   std::promise<int> promise;
   auto future = promise.get_future();
   // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
   auto operation =
+    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
     stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
   stdexec::start(operation);
   entered.wait();
@@ -477,8 +477,8 @@ TEST_CASE("Submission failures retain and drain previously started operations", 
   std::promise<int> promise;
   auto future = promise.get_future();
   // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
   auto operation =
+    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
     stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
   stdexec::start(operation);
   entered.wait();
@@ -586,8 +586,8 @@ TEST_CASE("Cancellation between batches prevents further acquisition", "[executi
   std::promise<int> promise;
   auto future = promise.get_future();
   // Senders are consumed as rvalues even when this specialization is trivially copyable.
-  // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
   auto operation =
+    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
     stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
   stdexec::start(operation);
   REQUIRE(future.get() == 1);
@@ -847,9 +847,10 @@ TEST_CASE("Child operations preserve forwarding receiver environment queries", "
     batch_size);
   auto operation =
     // Senders are consumed as rvalues even when this specialization is trivially copyable.
-    // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
     stdexec::connect(
-      std::move(sender), marker_receiver{ completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() } });
+      // NOLINTNEXTLINE(hicpp-move-const-arg,performance-move-const-arg)
+      std::move(sender),
+      marker_receiver{ completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() } });
   stdexec::start(operation);
   REQUIRE(future.get() == 0);
   REQUIRE(observed.load() == environment_marker);
