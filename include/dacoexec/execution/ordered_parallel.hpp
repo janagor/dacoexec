@@ -6,6 +6,7 @@
 
 #include <stdexec/execution.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <exception>
@@ -63,8 +64,8 @@ namespace detail {
     template<class Receiver> struct operation
     {
       using operation_state_concept = stdexec::operation_state_tag;
-      using input_type = typename Source::input_type;
-      using result_type = typename Source::result_type;
+      using input_type = Source::input_type;
+      using result_type = Source::result_type;
       using stop_token = stdexec::stop_token_of_t<stdexec::env_of_t<Receiver>>;
 
       struct worker_receiver
@@ -81,23 +82,23 @@ namespace detail {
         {
           auto *owner = owner_;
           try {
-            owner->slots_[index_].value_.emplace(std::forward<Value>(value));
+            owner->slots_.at(index_).value_.emplace(std::forward<Value>(value));
           } catch (...) {
-            owner->slots_[index_].error_ = std::current_exception();
+            owner->slots_.at(index_).error_ = std::current_exception();
           }
-          if (owner->slots_[index_].error_) { owner->failed_.store(true, std::memory_order_release); }
+          if (owner->slots_.at(index_).error_) { owner->failed_.store(true, std::memory_order_release); }
           owner->settled();
         }
         template<class Error> auto set_error(Error &&error) noexcept -> void
         {
           auto *owner = owner_;
           if constexpr (std::is_same_v<std::remove_cvref_t<Error>, std::exception_ptr>) {
-            owner->slots_[index_].error_ = std::move(error);
+            owner->slots_.at(index_).error_ = std::forward<Error>(error);
           } else {
             try {
-              owner->slots_[index_].error_ = std::make_exception_ptr(std::forward<Error>(error));
+              owner->slots_.at(index_).error_ = std::make_exception_ptr(std::forward<Error>(error));
             } catch (...) {
-              owner->slots_[index_].error_ = std::current_exception();
+              owner->slots_.at(index_).error_ = std::current_exception();
             }
           }
           owner->failed_.store(true, std::memory_order_release);
@@ -108,7 +109,7 @@ namespace detail {
         auto set_stopped() noexcept -> void
         {
           auto *owner = owner_;
-          owner->slots_[index_].stopped_ = true;
+          owner->slots_.at(index_).stopped_ = true;
           owner->failed_.store(true, std::memory_order_release);
           owner->settled();
         }
@@ -161,9 +162,31 @@ namespace detail {
       auto drive() noexcept -> void
       {
         if (driving_.fetch_add(1, std::memory_order_acq_rel) != 0) { return; }
-        do {
+        while (true) {
           if (advance()) { return; }// completion may destroy *this
-        } while (driving_.fetch_sub(1, std::memory_order_acq_rel) != 1);
+          if (driving_.fetch_sub(1, std::memory_order_acq_rel) == 1) { return; }
+        }
+      }
+
+      auto commit_batch() -> void
+      {
+        // Slot order is acquisition order. A failed or stopped batch is never committed.
+        auto const failed =
+          std::ranges::find_if(slots_, [](auto const &slot) -> bool { return static_cast<bool>(slot.error_); });
+        if (failed != slots_.end()) {
+          error_ = failed->error_;
+          return;
+        }
+        if (error_ || stop_requested()) { return; }
+        if (std::ranges::any_of(slots_, [](auto const &slot) -> bool { return slot.stopped_; })) {
+          stopped_ = true;
+          return;
+        }
+        for (auto &slot : slots_) {
+          if (stop_requested()) { return; }
+          if (!slot.value_) { throw std::logic_error("Completed worker has no result"); }
+          source_.commit(std::move(*slot.value_));
+        }
       }
 
       auto advance() noexcept -> bool
@@ -171,28 +194,7 @@ namespace detail {
         try {
           if (batch_active_) {
             if (remaining_.load(std::memory_order_acquire) != 0) { return false; }
-            // Slot order is acquisition order; input sequence numbers are
-            // retained by moving inputs intact into their processing function.
-            for (auto const &slot : slots_) {
-              if (slot.error_) {
-                error_ = slot.error_;
-                break;
-              }
-            }
-            if (!error_ && !stop_requested()) {
-              for (auto &slot : slots_) {
-                if (slot.stopped_) {
-                  stopped_ = true;
-                  break;
-                }
-              }
-              if (!stop_requested()) {
-                for (auto &slot : slots_) {
-                  if (stop_requested()) { break; }
-                  source_.commit(std::move(slot.value_.value()));
-                }
-              }
-            }
+            commit_batch();
             children_.clear();
             slots_.clear();
             batch_active_ = false;
@@ -219,14 +221,14 @@ namespace detail {
             if (stop_requested() || failed_.load(std::memory_order_acquire)) { break; }
             try {
               auto work =
-                stdexec::then(stdexec::schedule(scheduler_), work_function{ &process_, std::move(inputs[index]) });
+                stdexec::then(stdexec::schedule(scheduler_), work_function{ &process_, std::move(inputs.at(index)) });
               auto child = std::unique_ptr<child_operation>(
                 new child_operation(stdexec::connect(std::move(work), worker_receiver{ this, index })));
               children_.push_back(std::move(child));
               remaining_.fetch_add(1, std::memory_order_relaxed);
               stdexec::start(*children_.back());
             } catch (...) {
-              slots_[index].error_ = std::current_exception();
+              slots_.at(index).error_ = std::current_exception();
               break;
             }
           }
@@ -248,11 +250,18 @@ namespace detail {
         } else if (stop_requested()) {
           stdexec::set_stopped(std::move(receiver_));
         } else {
-          try {
-            auto value = source_.finish();
-            stdexec::set_value(std::move(receiver_), std::move(value));
-          } catch (...) {
-            stdexec::set_error(std::move(receiver_), std::current_exception());
+          auto value = [this]() -> std::optional<value_type> {
+            try {
+              return source_.finish();
+            } catch (...) {
+              error_ = std::current_exception();
+              return std::nullopt;
+            }
+          }();
+          if (value) {
+            stdexec::set_value(std::move(receiver_), std::move(*value));
+          } else {
+            stdexec::set_error(std::move(receiver_), std::move(error_));
           }
         }
         return true;

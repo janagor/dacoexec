@@ -51,12 +51,14 @@ namespace detail {
     }
     auto next() -> std::optional<byte_block>
     {
+      if (!blocks_) { throw std::logic_error("Parallel source is not initialized"); }
       if (!cursor_) {
         cursor_.emplace(blocks_->begin());
       } else if (advance_) {
         ++*cursor_;
       }
       advance_ = false;
+      if (!cursor_) { throw std::logic_error("Parallel source cursor is not initialized"); }
       if (*cursor_ == blocks_->end()) { return std::nullopt; }
       advance_ = true;
       return std::optional<byte_block>{ std::in_place, std::move(**cursor_) };

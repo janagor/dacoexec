@@ -180,6 +180,31 @@
         "CMAKE_CXX_COMPILER_RANLIB": "llvm-ranlib",
         "dacoexec_USER_LINKER_OPTION": "LLD"
       }
+    },
+    {
+      "name": "unixlike-clang-tsan",
+      "inherits": "unixlike-clang-release",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": null,
+        "CMAKE_BUILD_TYPE": "Debug",
+        "dacoexec_REQUIRE_CXX_COMPILER_VERSION": "22",
+        "dacoexec_BUILD_TESTS": "ON",
+        "dacoexec_BUILD_EXECUTION": "ON",
+        "dacoexec_BUILD_FUZZ_TESTS": "OFF",
+        "dacoexec_BUILD_BENCHMARKS": "OFF",
+        "dacoexec_ENABLE_IPO": "OFF",
+        "dacoexec_ENABLE_COVERAGE": "OFF",
+        "dacoexec_ENABLE_CLANG_TIDY": "OFF",
+        "dacoexec_ENABLE_CPPCHECK": "OFF",
+        "dacoexec_ENABLE_FORMATTING": "OFF",
+        "dacoexec_ENABLE_GLOBAL_HARDENING": "OFF",
+        "dacoexec_ENABLE_HARDENING": "OFF",
+        "dacoexec_ENABLE_SANITIZER_ADDRESS": "OFF",
+        "dacoexec_ENABLE_SANITIZER_UNDEFINED": "OFF",
+        "dacoexec_ENABLE_SANITIZER_THREAD": "ON",
+        "dacoexec_ENABLE_SANITIZER_MEMORY": "OFF",
+        "dacoexec_ENABLE_SANITIZER_LEAK": "OFF"
+      }
     }
   ],
   "testPresets": [

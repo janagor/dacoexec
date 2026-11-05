@@ -550,9 +550,11 @@ jobs:
           -Ddacoexec_REQUIRE_CXX_COMPILER_VERSION=22
           -Ddacoexec_BUILD_EXECUTION=ON -Ddacoexec_BUILD_TESTS=ON
           -Ddacoexec_ENABLE_SANITIZER_THREAD=ON
+          -Ddacoexec_ENABLE_SANITIZER_ADDRESS=OFF
+          -Ddacoexec_ENABLE_SANITIZER_UNDEFINED=OFF
           -Ddacoexec_TEST_INSTALL_CONSUMER=OFF
           -Ddacoexec_TEST_SUBPROJECT_CONSUMER=OFF
       - name: Build execution tests
         run: cmake --build build --target dacoexec_execution_tests
       - name: Test execution races
-        run: ./build/test/dacoexec_execution_tests '[execution]'
+        run: ctest --test-dir build -L execution --repeat until-fail:5 --output-on-failure

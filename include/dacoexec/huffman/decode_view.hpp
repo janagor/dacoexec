@@ -291,8 +291,9 @@ namespace views {
     class decode_closure
     {
     public:
-      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
       explicit decode_closure(canonical_codebook codebook,
+        // Bit and symbol counts follow the public decoder argument order.
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
         std::uint64_t bits,
         std::uint64_t symbols,
         bool infer_padding)

@@ -102,3 +102,15 @@ macro(dacoexec_enable_include_what_you_use)
     message(WARNING "include-what-you-use requested but executable not found")
   endif()
 endmacro()
+
+# Clang 22's stack-escape checker misidentifies stdexec's guaranteed-elision
+# operation-state returns as references to stack temporaries. Limit this one
+# checker exclusion to targets that instantiate the ordered execution pipeline;
+# keep all other checks and sanitizer instrumentation enabled.
+function(dacoexec_suppress_stdexec_stack_escape target)
+  get_target_property(tidy_command ${target} CXX_CLANG_TIDY)
+  if(tidy_command)
+    list(APPEND tidy_command --checks=-clang-analyzer-core.StackAddressEscape)
+    set_property(TARGET ${target} PROPERTY CXX_CLANG_TIDY "${tidy_command}")
+  endif()
+endfunction()

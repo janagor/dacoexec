@@ -1,3 +1,4 @@
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <dacoexec/detail/byte.hpp>
 #include <dacoexec/detail/crc32.hpp>
@@ -457,5 +458,29 @@ TEST_CASE("DHF1 parsed DATA sequences survive view moves and decoding", "[stream
     auto const sequence = frame->block_.sequence_;
     auto decoded = huffman::decompress_block(std::move(frame->block_), test_block_size, true);
     REQUIRE(decoded.sequence_ == sequence);
+  }
+}
+
+TEST_CASE("DHF1 propagates source failure at every archive boundary", "[streaming][hardening]")
+{
+  struct source_failure : std::runtime_error
+  {
+    source_failure() : std::runtime_error("injected source failure") {}
+  };
+  constexpr std::size_t input_size = test_block_size + 1;
+  auto const archive = compress(bytes(input_size, std::byte{ 'a' }));
+  for (std::size_t boundary = 0; boundary < archive.size(); ++boundary) {
+    CAPTURE(boundary);
+    std::size_t reads = 0;
+    auto source =
+      std::views::iota(std::size_t{ 0 }, archive.size()) | std::views::transform([&](std::size_t index) -> std::byte {
+        if (index == boundary) { throw source_failure{}; }
+        ++reads;
+        return archive.at(index);
+      });
+    bytes output;
+    dacoexec::io::iterator_sink sink{ std::back_inserter(output) };
+    REQUIRE_THROWS_AS(huffman::decompress_stream(source, sink), source_failure);
+    REQUIRE(reads == boundary);
   }
 }

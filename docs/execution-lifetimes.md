@@ -67,3 +67,37 @@ TSan job. These tests and jobs have not been run during this source review:
 compilation, formatting, and lint checks were explicitly prohibited by the user.
 The static trace supports retaining the architecture, but sanitizer and CI
 success remain merge prerequisites.
+
+## Static-analysis scope
+
+Clang 22 reports `core.StackAddressEscape` in stdexec's operation-state return
+machinery when the ordered pipeline is instantiated. These immovable results
+are constructed directly in their destination through guaranteed copy elision;
+the call-site suppression attribute does not suppress diagnostics originating
+inside stdexec. The CMake helper `dacoexec_suppress_stdexec_stack_escape` disables
+only this checker on the execution-test and benchmark executables. It does not
+disable the checker for other test targets, nor any other analysis or runtime
+instrumentation. Lifetime and race validation still require the destructive
+receiver tests and separate ASan/UBSan and TSan runs.
+
+The test and benchmark directories inherit the root clang-tidy configuration,
+with cognitive-complexity checks disabled locally so complete validation
+scenarios and measured workloads can remain together.
+
+## PR 9 production changes
+
+No runtime execution defect has been demonstrated during this source-only work.
+The `commit_batch()` extraction is retained specifically because the supplied
+validation log rejected `advance()` at cognitive complexity 45 (limit 25). It
+separates ordered commit/error policy from dispatch without changing the batch
+or wire-format contract. Existing reversed-completion, failed-batch, cancellation
+and retained-result tests cover those boundaries.
+
+Completion preparation is kept separate from delivery because cppcheck reported
+`accessMoved` on the error callback following the moved value receiver. Only
+`source_.finish()` and preparation of its result belong inside that exception
+handler; terminal callbacks may destroy the operation and must never be
+followed by another completion attempt. The focused test “Finish failure delivers
+one error to a destructive receiver” exercises this catch path, verifies one
+terminal completion, and checks that destruction is safe. It remains unexecuted
+until an authorized C++ build is available.

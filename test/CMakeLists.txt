@@ -16,7 +16,7 @@ endif()
 get_target_property(dacoexec_link_libs dacoexec INTERFACE_LINK_LIBRARIES)
 if(dacoexec_link_libs)
   foreach(lib IN LISTS dacoexec_link_libs)
-    if(lib MATCHES "Catch2|CLI11|stdexec|fmt::|spdlog|ftxui|dacoexec_options|dacoexec_warnings")
+    if(lib MATCHES "Catch2|CLI11|stdexec|benchmark|fuzzer|fmt::|spdlog|ftxui|dacoexec_options|dacoexec_warnings")
       message(FATAL_ERROR "Public target links ${lib}")
     endif()
   endforeach()
@@ -202,6 +202,7 @@ if(dacoexec_BUILD_EXECUTION)
   endif()
 
   add_executable(dacoexec_execution_tests execution_tests.cpp)
+  dacoexec_suppress_stdexec_stack_escape(dacoexec_execution_tests)
   target_link_libraries(
     dacoexec_execution_tests
     PRIVATE dacoexec::execution
@@ -217,7 +218,11 @@ if(dacoexec_BUILD_EXECUTION)
   dacoexec_configure_linker(dacoexec_execution_tests)
   catch_discover_tests(
     dacoexec_execution_tests
+    TEST_PREFIX
+    execution.
     PROPERTIES
+    LABELS
+    execution
     TIMEOUT
     120)
 

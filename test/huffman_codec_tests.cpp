@@ -186,9 +186,11 @@ TEST_CASE("Block metadata and output limits are validated", "[huffman][codec]")
   SECTION("raw padding") { block.padding_bits_ = 1; }
   SECTION("raw lengths") { block.lengths_.front() = 1; }
   // Deliberately exercise rejection of an unrecognized fixed-underlying-type value.
-  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
   SECTION("unknown encoding")
-  { block.encoding_ = static_cast<block_encoding>(std::numeric_limits<std::uint8_t>::max()); }
+  {
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    block.encoding_ = static_cast<block_encoding>(std::numeric_limits<std::uint8_t>::max());
+  }
   SECTION("huge output") { block.uncompressed_size_ = std::numeric_limits<std::uint64_t>::max(); }
   SECTION("empty Huffman") { block.encoding_ = block_encoding::canonical_huffman; }
   CHECK_THROWS_AS(decompress_block(std::move(block), large_block), decode_error);
