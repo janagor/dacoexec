@@ -15,6 +15,7 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -62,16 +63,15 @@ namespace detail {
   [[nodiscard]] inline auto encoded_bit_count(frequency_table const &frequencies, code_length_table const &lengths)
     -> std::optional<std::uint64_t>
   {
-    if (std::ranges::any_of(lengths, [](auto length) -> bool { return length > max_canonical_bits; })) {
-      return std::nullopt;
-    }
     std::uint64_t total = 0;
-    for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+    for (auto const symbol : std::views::iota(std::size_t{ 0 }, alphabet_size)) {
       auto const frequency = frequencies.at(symbol);
       auto const length = lengths.at(symbol);
-      if (length != 0 && frequency > (std::numeric_limits<std::uint64_t>::max() - total) / length) {
-        return std::nullopt;
-      }
+      if (length > max_canonical_bits) { return std::nullopt; }
+      if (length == 0) { continue; }
+
+      auto const remaining_bits = std::numeric_limits<std::uint64_t>::max() - total;
+      if (frequency > remaining_bits / length) { return std::nullopt; }
       total += frequency * length;
     }
     return total;
