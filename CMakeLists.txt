@@ -45,10 +45,14 @@ include(ProjectOptions.cmake)
 
 dacoexec_setup_options()
 
-if(dacoexec_BUILD_FUZZ_TESTS)
-  message(
-    FATAL_ERROR
-      "dacoexec_BUILD_FUZZ_TESTS is not implemented yet. The inherited sample harness is not a dacoexec codec test.")
+if(dacoexec_BUILD_FUZZ_TESTS
+   AND (dacoexec_ENABLE_SANITIZER_THREAD
+        OR dacoexec_ENABLE_SANITIZER_MEMORY
+        OR dacoexec_ENABLE_GLOBAL_HARDENING
+        OR dacoexec_ENABLE_COVERAGE
+        OR dacoexec_ENABLE_IPO
+       ))
+  message(FATAL_ERROR "Fuzzing requires a separate build without TSan, MSan, global hardening, coverage or IPO")
 endif()
 
 # IPO and directory-wide hardening must run for a standalone build, and only
@@ -143,6 +147,11 @@ if(dacoexec_tests_enabled)
     message(STATUS "Building tests")
     add_subdirectory(test)
   endif()
+endif()
+
+if(dacoexec_BUILD_FUZZ_TESTS)
+  enable_testing()
+  add_subdirectory(fuzz_test)
 endif()
 
 if(dacoexec_BUILD_BENCHMARKS)

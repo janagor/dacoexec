@@ -1,0 +1,37 @@
+name: Huffman fuzzing
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 0'
+permissions:
+  contents: read
+jobs:
+  fuzz:
+    name: Clang 22 libFuzzer ASan UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm-22.1.8
+          cmake: true
+          ninja: true
+      - name: Configure
+        run: >-
+          cmake --preset unixlike-clang-fuzz
+          -Ddacoexec_FUZZ_SECONDS=${{ github.event_name == 'pull_request' && '30' || '300' }}
+      - name: Build fuzz targets
+        run: cmake --build out/build/unixlike-clang-fuzz
+      - name: Fuzz malformed inputs and round-trip properties
+        run: ctest --test-dir out/build/unixlike-clang-fuzz -L fuzz --output-on-failure -V
+      - name: Save corpus, failures and execution statistics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-${{ github.sha }}
+          path: |
+            out/build/unixlike-clang-fuzz/fuzz_test/artifacts
+            out/build/unixlike-clang-fuzz/fuzz_test/corpus
+            out/build/unixlike-clang-fuzz/Testing/Temporary
