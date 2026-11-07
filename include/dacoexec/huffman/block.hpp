@@ -94,6 +94,48 @@ namespace detail {
       throw decode_error("Unsupported block encoding");
     }
   }
+
+  [[nodiscard]] inline auto make_decode_codebook(code_length_table const &lengths) -> canonical_codebook
+  {
+    try {
+      return make_canonical_codebook(lengths);
+    } catch (std::invalid_argument const &error) {
+      throw decode_error(error.what());
+    } catch (std::length_error const &error) {
+      throw decode_error(error.what());
+    }
+  }
+
+  [[nodiscard]] inline auto meaningful_bit_count(encoded_block const &block) -> std::uint64_t
+  {
+    constexpr auto byte_bits = dacoexec::detail::bits_per_byte;
+    if (block.payload_.size() > std::numeric_limits<std::uint64_t>::max() / byte_bits) {
+      throw decode_error("Huffman payload bit count overflow");
+    }
+    std::uint64_t const payload_bytes = block.payload_.size();
+    auto const valid_bits = (payload_bytes * byte_bits) - block.padding_bits_;
+    // Every symbol consumes at least one meaningful bit. Reject impossible
+    // declarations before reserving output even when the caller allows them.
+    if (block.uncompressed_size_ > valid_bits) {
+      throw decode_error("Huffman payload cannot produce declared output size");
+    }
+    return valid_bits;
+  }
+
+  [[nodiscard]] inline auto decode_payload(encoded_block const &block,
+    canonical_codebook const &book,
+    std::uint64_t valid_bits,
+    bool infer_padding) -> std::vector<std::byte>
+  {
+    std::vector<std::byte> output;
+    if (block.uncompressed_size_ > output.max_size()) { throw decode_error("Huffman output exceeds vector capacity"); }
+    output.reserve(static_cast<std::size_t>(block.uncompressed_size_));
+    for (auto const symbol :
+      block.payload_ | views::decode(book, valid_bits, block.uncompressed_size_, infer_padding)) {
+      output.push_back(symbol);
+    }
+    return output;
+  }
 }// namespace detail
 
 /**
@@ -171,32 +213,9 @@ namespace detail {
     throw decode_error("Inferred padding requires a zero padding count");
   }
   if (block.encoding_ == block_encoding::raw) { return { block.sequence_, std::move(block.payload_) }; }
-  auto const book = [&block]() -> canonical_codebook {
-    try {
-      return make_canonical_codebook(block.lengths_);
-    } catch (std::invalid_argument const &error) {
-      throw decode_error(error.what());
-    } catch (std::length_error const &error) {
-      throw decode_error(error.what());
-    }
-  }();
-  constexpr auto byte_bits = dacoexec::detail::bits_per_byte;
-  if (block.payload_.size() > std::numeric_limits<std::uint64_t>::max() / byte_bits) {
-    throw decode_error("Huffman payload bit count overflow");
-  }
-  auto const valid_bits = (static_cast<std::uint64_t>(block.payload_.size()) * byte_bits) - block.padding_bits_;
-  // Every symbol consumes at least one meaningful bit. Reject impossible
-  // declarations before reserving output even when the caller allows them.
-  if (block.uncompressed_size_ > valid_bits) {
-    throw decode_error("Huffman payload cannot produce declared output size");
-  }
-  std::vector<std::byte> output;
-  if (block.uncompressed_size_ > output.max_size()) { throw decode_error("Huffman output exceeds vector capacity"); }
-  output.reserve(static_cast<std::size_t>(block.uncompressed_size_));
-  for (auto const symbol : block.payload_ | views::decode(book, valid_bits, block.uncompressed_size_, infer_padding)) {
-    output.push_back(symbol);
-  }
-  return { block.sequence_, std::move(output) };
+  auto const book = detail::make_decode_codebook(block.lengths_);
+  auto const valid_bits = detail::meaningful_bit_count(block);
+  return { block.sequence_, detail::decode_payload(block, book, valid_bits, infer_padding) };
 }
 
 }// namespace dacoexec::huffman
