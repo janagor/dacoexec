@@ -90,6 +90,45 @@ class frames_view : public std::ranges::view_interface<frames_view<V>>
       }
     }
 
+    auto finish_archive() -> void
+    {
+      if (!input_.has_value()) { throw format_error("DHF1 input cursor is not initialized"); }
+      if (input_.value() != std::ranges::end(base_)) { throw format_error("Trailing bytes after END"); }
+      finished_ = true;
+    }
+
+    auto read_huffman_lengths(huffman::encoded_block &block) -> void
+    {
+      block.encoding_ = huffman::block_encoding::canonical_huffman;
+      for (auto &length : block.lengths_) { length = std::to_integer<std::uint8_t>(read_byte()); }
+      try {
+        if (std::ranges::all_of(block.lengths_, [](auto length) -> bool { return length == 0; })
+            || !huffman::try_make_canonical_codebook(block.lengths_)) {
+          throw format_error("Invalid canonical lengths");
+        }
+      } catch (std::invalid_argument const &error) {
+        throw format_error(error.what());
+      }
+    }
+
+    auto read_data_block(huffman::encoded_frame &frame) -> void
+    {
+      if (sequence_limit_reached_) {
+        throw std::overflow_error("dacoexec::views::frames sequence number space is exhausted");
+      }
+      auto &block = frame.block_;
+      block.uncompressed_size_ = frame.header_.uncompressed_size_;
+      if (frame.header_.kind_ == huffman::frame_kind::huffman) { read_huffman_lengths(block); }
+      block.payload_.resize(frame.header_.payload_size_);
+      for (auto &byte : block.payload_) { byte = read_byte(); }
+      block.sequence_ = next_sequence_;
+      if (next_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
+        sequence_limit_reached_ = true;
+      } else {
+        ++next_sequence_;
+      }
+    }
+
     auto load_next_frame() -> void
     {
       current_.reset();
@@ -97,38 +136,11 @@ class frames_view : public std::ranges::view_interface<frames_view<V>>
       try {
         huffman::encoded_frame frame;
         frame.header_ = huffman::read_frame_header(read_array<huffman::frame_header_size>(), frame_limit_);
-        auto const &header = frame.header_;
-        if (header.kind_ == huffman::frame_kind::end) {
-          if (!input_.has_value()) { throw format_error("DHF1 input cursor is not initialized"); }
-          if (input_.value() != std::ranges::end(base_)) { throw format_error("Trailing bytes after END"); }
-          finished_ = true;
+        if (frame.header_.kind_ == huffman::frame_kind::end) {
+          finish_archive();
           return;
         }
-        if (sequence_limit_reached_) {
-          throw std::overflow_error("dacoexec::views::frames sequence number space is exhausted");
-        }
-        auto &block = frame.block_;
-        block.uncompressed_size_ = header.uncompressed_size_;
-        if (header.kind_ == huffman::frame_kind::huffman) {
-          block.encoding_ = huffman::block_encoding::canonical_huffman;
-          for (auto &length : block.lengths_) { length = std::to_integer<std::uint8_t>(read_byte()); }
-          try {
-            if (std::ranges::all_of(block.lengths_, [](auto length) -> bool { return length == 0; })
-                || !huffman::try_make_canonical_codebook(block.lengths_)) {
-              throw format_error("Invalid canonical lengths");
-            }
-          } catch (std::invalid_argument const &error) {
-            throw format_error(error.what());
-          }
-        }
-        block.payload_.resize(header.payload_size_);
-        for (auto &byte : block.payload_) { byte = read_byte(); }
-        block.sequence_ = next_sequence_;
-        if (next_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
-          sequence_limit_reached_ = true;
-        } else {
-          ++next_sequence_;
-        }
+        read_data_block(frame);
         current_.emplace(std::move(frame));
       } catch (...) {
         finished_ = true;
