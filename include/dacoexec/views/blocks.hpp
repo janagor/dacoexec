@@ -125,6 +125,18 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
         throw std::overflow_error("dacoexec::views::blocks sequence number space is exhausted");
       }
 
+      auto bytes = read_block(cursor, last);
+      if (bytes.empty()) {
+        finished_ = true;
+        return;
+      }
+
+      current_.emplace(take_sequence(), std::move(bytes));
+    }
+
+    auto read_block(std::ranges::iterator_t<V> &cursor, std::ranges::sentinel_t<V> const &last)
+      -> std::vector<std::byte>
+    {
       std::vector<std::byte> bytes;
       try {
         while (bytes.size() < block_size_) {
@@ -146,18 +158,18 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
         throw;
       }
 
-      if (bytes.empty()) {
-        finished_ = true;
-        return;
-      }
+      return bytes;
+    }
 
+    auto take_sequence() noexcept -> std::uint64_t
+    {
       std::uint64_t const sequence = next_sequence_;
       if (next_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
         sequence_limit_reached_ = true;
       } else {
         ++next_sequence_;
       }
-      current_.emplace(sequence, std::move(bytes));
+      return sequence;
     }
 
     // base is declared before input so the source cursor is destroyed first.
