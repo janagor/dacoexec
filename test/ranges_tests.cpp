@@ -856,7 +856,7 @@ TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bi
       std::vector<std::byte> output;
       dacoexec::bit_writer writer{ std::back_inserter(output) };
       for (auto const word : block.bytes_ | dacoexec::huffman::views::codewords(candidate)) {
-        writer.write_bits(word.bits_, word.length_);
+        writer.write_bits({ .value_ = word.bits_, .bit_count_ = word.length_ });
       }
       REQUIRE(writer.finish() == expected_padding);
       REQUIRE(output == expected);

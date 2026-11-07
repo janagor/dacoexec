@@ -60,8 +60,8 @@ int main()
 
   std::vector<std::byte> codeword;
   dacoexec::bit_writer codes{ std::back_inserter(codeword) };
-  codes.write_bits(0b101U, 3U);
-  codes.write_bits(0b11001U, 5U);
+  codes.write_bits({ .value_ = 0b101U, .bit_count_ = 3U });
+  codes.write_bits({ .value_ = 0b11001U, .bit_count_ = 5U });
   if (codes.finish() != 0 || codeword.size() != 1 || codeword[0] != std::byte{ 0xB9 }) { return 3; }
 
   std::array<bool, 4> const flags{ true, false, true, true };
@@ -87,7 +87,7 @@ int main()
   std::vector<std::byte> encoded;
   dacoexec::bit_writer canonical_writer{ std::back_inserter(encoded) };
   for (auto const word : sample | dacoexec::huffman::views::codewords(book)) {
-    canonical_writer.write_bits(word.bits_, word.length_);
+    canonical_writer.write_bits({ .value_ = word.bits_, .bit_count_ = word.length_ });
   }
   constexpr unsigned golden_padding = 1;
   std::vector<std::byte> const golden_bytes{ std::byte{ 0x05 }, std::byte{ 0x6E } };

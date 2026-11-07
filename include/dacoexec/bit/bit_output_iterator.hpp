@@ -14,6 +14,17 @@
 #include <utility>
 
 namespace dacoexec {
+
+/**
+ * Low bits of a value and their width for MSB-first packing.
+ * Widths above 32 and values with set bits outside the width are rejected by bit_writer.
+ */
+struct bit_sequence
+{
+  std::uint32_t value_ = 0;
+  unsigned bit_count_ = 0;
+};
+
 namespace detail {
 
   // Largest codeword accepted by bit_writer. A 32-bit mask is built with a
@@ -32,9 +43,9 @@ namespace detail {
 
   // `bit_count` must be 0..32 for ok. Wider counts are rejected. A value is
   // too wide when any bit above that width is set. Zero width allows only zero.
-  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  [[nodiscard]] constexpr auto check_codeword(std::uint32_t value, unsigned bit_count) noexcept -> codeword_status
+  [[nodiscard]] constexpr auto check_codeword(bit_sequence bits) noexcept -> codeword_status
   {
+    auto const [value, bit_count] = bits;
     if (bit_count > max_codeword_bits) { return codeword_status::count_too_large; }
     std::uint32_t const mask = low_bit_mask(bit_count);
     if ((value & ~mask) != 0U) { return codeword_status::value_too_wide; }
@@ -228,22 +239,22 @@ public:
    * @throws std::logic_error If finalized, failed, or moved from.
    * Output-iterator exceptions propagate and make the writer unusable.
    */
-  auto write_bit(bool bit) -> void { write_bits(bit ? std::uint32_t{ 1 } : std::uint32_t{ 0 }, 1U); }
+  auto write_bit(bool bit) -> void
+  { write_bits({ .value_ = bit ? std::uint32_t{ 1 } : std::uint32_t{ 0 }, .bit_count_ = 1U }); }
 
   /**
    * Writes the low bit_count bits of value, highest bit first.
    *
-   * @param value Codeword with no set bits above its declared width.
-   * @param bit_count Width from zero through 32; zero requires value == 0.
+   * @param bits Value and width from zero through 32; zero width requires value zero.
    * @throws std::invalid_argument If the width or value is invalid.
    * @throws std::logic_error If unusable or finalized, checked before arguments.
    * Output exceptions propagate, retire the writer, and leave accepted bytes intact.
    */
-  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  auto write_bits(std::uint32_t value, unsigned bit_count) -> void
+  auto write_bits(bit_sequence bits) -> void
   {
     ensure_writable();
-    detail::codeword_status const status = detail::check_codeword(value, bit_count);
+    auto const [value, bit_count] = bits;
+    detail::codeword_status const status = detail::check_codeword(bits);
     if (status == detail::codeword_status::count_too_large) {
       throw std::invalid_argument("dacoexec::bit_writer bit count must be at most 32");
     }
@@ -258,7 +269,7 @@ public:
       unsigned const chunk = remaining < space ? remaining : space;
       unsigned const shift = remaining - chunk;
       std::uint32_t const extracted = (value >> shift) & detail::low_bit_mask(chunk);
-      accept_chunk(extracted, chunk);
+      accept_chunk({ .value_ = extracted, .bit_count_ = chunk });
       remaining -= chunk;
     }
   }
@@ -304,9 +315,9 @@ private:
     if (finalized_) { throw std::logic_error("dacoexec::bit_writer write after finalization"); }
   }
 
-  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  auto accept_chunk(std::uint32_t extracted, unsigned chunk) -> void
+  auto accept_chunk(bit_sequence bits) -> void
   {
+    auto const [extracted, chunk] = bits;
     unsigned const space = detail::bits_per_byte - pending_bits_;
     unsigned const insert_shift = space - chunk;
     std::uint32_t const placed = extracted << insert_shift;

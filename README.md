@@ -82,7 +82,7 @@ Iteration is single-pass. Construction reads nothing. `begin()` caches the first
 
 An exception from the source propagates unchanged. The view does not turn that failure into an end-of-stream, and later iteration does not resume.
 
-`dacoexec::bit_writer` packs those bits into any output iterator of `std::byte`. `write_bit` writes one bit. `write_bits(value, n)` writes the least significant `n` bits of `value`, most significant of those bits first. `n` is 0 through 32. A zero-length write of value 0 does nothing. A count above 32, or a value with bits set above that width, throws `std::invalid_argument`. A finalized or failed writer throws `std::logic_error` before those argument checks.
+`dacoexec::bit_writer` packs those bits into any output iterator of `std::byte`. `write_bit` writes one bit. `write_bits({ .value_ = value, .bit_count_ = n })` writes the least significant `n` bits of `value`, most significant of those bits first. `n` is 0 through 32. A zero-length write of value 0 does nothing. A count above 32, or a value with bits set above that width, throws `std::invalid_argument`. A finalized or failed writer throws `std::logic_error` before those argument checks.
 
 The writer keeps a single partial byte. Filled bits sit in the high positions, and a full byte is emitted immediately. `finish()` writes a trailing partial byte padded with zero bits on the right and returns how many padding bits were added (0 through 7). Calling `finish()` again returns the same count and writes nothing. The destructor does not pad or flush. Writing after `finish()`, or after the output iterator throws, throws `std::logic_error`. An output failure propagates as the original exception. Bytes the sink already accepted stay written, and the failed byte is not retried.
 
@@ -92,8 +92,8 @@ Moving a writer transfers its partial byte and its output iterator. Move assignm
 std::vector<std::byte> encoded;
 dacoexec::bit_writer writer{std::back_inserter(encoded)};
 
-writer.write_bits(0b101u, 3);
-writer.write_bits(0b11001u, 5);
+writer.write_bits({ .value_ = 0b101u, .bit_count_ = 3 });
+writer.write_bits({ .value_ = 0b11001u, .bit_count_ = 5 });
 auto const padding = writer.finish();// encoded == {0xB9}, padding == 0
 ```
 
@@ -231,7 +231,7 @@ auto encoded_symbols = block.bytes_ | dacoexec::huffman::views::codewords(codebo
 std::vector<std::byte> output;
 dacoexec::bit_writer writer{ std::back_inserter(output) };
 for (auto word : encoded_symbols) {
-  writer.write_bits(word.bits_, word.length_);
+  writer.write_bits({ .value_ = word.bits_, .bit_count_ = word.length_ });
 }
 auto padding = writer.finish();
 ```

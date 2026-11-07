@@ -96,15 +96,23 @@ static_assert(dacoexec::detail::low_bit_mask(expected_byte_bits) == byte_mask);
 static_assert(dacoexec::detail::low_bit_mask(short_word_width) == short_word_mask);
 static_assert(dacoexec::detail::low_bit_mask(word_width) == word_mask);
 
-static_assert(dacoexec::detail::check_codeword(0U, 0U) == dacoexec::detail::codeword_status::ok);
-static_assert(dacoexec::detail::check_codeword(1U, 0U) == dacoexec::detail::codeword_status::value_too_wide);
-static_assert(
-  dacoexec::detail::check_codeword(0U, unsupported_word_width) == dacoexec::detail::codeword_status::count_too_large);
-static_assert(dacoexec::detail::check_codeword(word_mask, word_width) == dacoexec::detail::codeword_status::ok);
-static_assert(dacoexec::detail::check_codeword(overwide_byte, expected_byte_bits)
+static_assert(dacoexec::detail::check_codeword(dacoexec::bit_sequence{ .value_ = 0U, .bit_count_ = 0U })
+              == dacoexec::detail::codeword_status::ok);
+static_assert(dacoexec::detail::check_codeword(dacoexec::bit_sequence{ .value_ = 1U, .bit_count_ = 0U })
               == dacoexec::detail::codeword_status::value_too_wide);
-static_assert(dacoexec::detail::check_codeword(byte_mask, expected_byte_bits) == dacoexec::detail::codeword_status::ok);
-static_assert(dacoexec::detail::check_codeword(1U, word_width) == dacoexec::detail::codeword_status::ok);
+static_assert(
+  dacoexec::detail::check_codeword(dacoexec::bit_sequence{ .value_ = 0U, .bit_count_ = unsupported_word_width })
+  == dacoexec::detail::codeword_status::count_too_large);
+static_assert(dacoexec::detail::check_codeword(dacoexec::bit_sequence{ .value_ = word_mask, .bit_count_ = word_width })
+              == dacoexec::detail::codeword_status::ok);
+static_assert(
+  dacoexec::detail::check_codeword(dacoexec::bit_sequence{ .value_ = overwide_byte, .bit_count_ = expected_byte_bits })
+  == dacoexec::detail::codeword_status::value_too_wide);
+static_assert(
+  dacoexec::detail::check_codeword(dacoexec::bit_sequence{ .value_ = byte_mask, .bit_count_ = expected_byte_bits })
+  == dacoexec::detail::codeword_status::ok);
+static_assert(dacoexec::detail::check_codeword(dacoexec::bit_sequence{ .value_ = 1U, .bit_count_ = word_width })
+              == dacoexec::detail::codeword_status::ok);
 
 using bit_range = decltype(std::declval<std::vector<std::byte> &>() | dacoexec::views::bits());
 

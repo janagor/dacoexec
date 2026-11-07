@@ -961,7 +961,7 @@ TEST_CASE("canonical assignment reaches the full 32-bit boundary", "[huffman][ca
   dacoexec::bit_writer writer{ std::back_inserter(output) };
   for (auto const symbol : { dacoexec::huffman::max_canonical_bits - 1U, dacoexec::huffman::max_canonical_bits }) {
     auto const word = test_detail::canonical_word(book, static_cast<std::uint8_t>(symbol));
-    writer.write_bits(word.bits_, word.length_);
+    writer.write_bits({ .value_ = word.bits_, .bit_count_ = word.length_ });
   }
   constexpr unsigned no_padding = 0;
   REQUIRE(writer.finish() == no_padding);

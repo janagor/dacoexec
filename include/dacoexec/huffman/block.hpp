@@ -130,7 +130,9 @@ namespace detail {
       auto const book = make_canonical_codebook(lengths);
       result.payload_.reserve(static_cast<std::size_t>(packed_size));
       dacoexec::bit_writer writer{ std::back_inserter(result.payload_) };
-      for (auto const word : block.bytes_ | views::codewords(book)) { writer.write_bits(word.bits_, word.length_); }
+      for (auto const word : block.bytes_ | views::codewords(book)) {
+        writer.write_bits({ .value_ = word.bits_, .bit_count_ = word.length_ });
+      }
       result.padding_bits_ = writer.finish();
       result.lengths_ = lengths;
       result.encoding_ = block_encoding::canonical_huffman;
