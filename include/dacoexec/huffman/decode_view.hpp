@@ -34,6 +34,7 @@ public:
 };
 
 namespace detail {
+
   struct decode_limits
   {
     std::uint64_t valid_bits_;
@@ -353,6 +354,7 @@ namespace views {
   }
 
 }// namespace views
+
 }// namespace dacoexec::huffman
 
 #endif// DACOEXEC_HUFFMAN_DECODE_VIEW_HPP

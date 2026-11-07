@@ -14,6 +14,7 @@
 #include <utility>
 
 namespace dacoexec::huffman {
+
 /**
  * Block size and batch bound for encode_parallel_on().
  */
@@ -49,6 +50,7 @@ namespace detail {
       blocks_.emplace(std::move(source_), options_.block_size_);
       write_archive_header(*sink_);
     }
+
     auto next() -> std::optional<byte_block>
     {
       if (!blocks_) { throw std::logic_error("Parallel source is not initialized"); }
@@ -63,6 +65,7 @@ namespace detail {
       advance_ = true;
       return std::optional<byte_block>{ std::in_place, std::move(**cursor_) };
     }
+
     auto commit(encoded_frame frame) -> void
     {
       checked_add(statistics_.input_bytes_, frame.header_.uncompressed_size_);
@@ -72,12 +75,14 @@ namespace detail {
       checked_add(statistics_.frames_, 1);
       write_frame(*sink_, frame);
     }
+
     auto finish() -> stream_statistics
     {
       write_frame_header(*sink_, {});
       return statistics_;
     }
   };
+
   struct frame_encoder
   {
     auto operator()(byte_block block) const -> encoded_frame { return encode_frame(std::move(block)); }
@@ -114,5 +119,7 @@ template<stdexec::scheduler Scheduler, std::ranges::viewable_range R, io::byte_o
     detail::frame_encoder{},
     options.max_in_flight_);
 }
+
 }// namespace dacoexec::huffman
+
 #endif// DACOEXEC_HUFFMAN_EXECUTION_HPP
