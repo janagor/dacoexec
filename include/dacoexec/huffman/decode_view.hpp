@@ -34,6 +34,13 @@ public:
 };
 
 namespace detail {
+  struct decode_limits
+  {
+    std::uint64_t valid_bits_;
+    std::uint64_t expected_symbols_;
+    bool infer_padding_;
+  };
+
   inline constexpr auto decode_node_capacity = alphabet_size * 2U;
   inline constexpr auto missing_decode_node = std::numeric_limits<std::uint16_t>::max();
 
@@ -96,10 +103,9 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
 {
   struct state
   {
-    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    explicit state(V source, canonical_codebook codebook, std::uint64_t bits, std::uint64_t symbols, bool infer_padding)
-      : base_(std::move(source)), lookup_(codebook), valid_bits_(bits), expected_symbols_(symbols),
-        infer_padding_(infer_padding)
+    explicit state(V source, canonical_codebook codebook, detail::decode_limits const &limits)
+      : base_(std::move(source)), lookup_(codebook), valid_bits_(limits.valid_bits_),
+        expected_symbols_(limits.expected_symbols_), infer_padding_(limits.infer_padding_)
     {}
 
     auto ensure_initialized() -> void
@@ -212,7 +218,9 @@ public:
     std::uint64_t bits,
     std::uint64_t symbols,
     bool infer_padding = false)
-    : state_(std::make_unique<state>(std::move(base), codebook, bits, symbols, infer_padding))
+    : state_(std::make_unique<state>(std::move(base),
+        codebook,
+        detail::decode_limits{ .valid_bits_ = bits, .expected_symbols_ = symbols, .infer_padding_ = infer_padding }))
   {}
 
   decode_view(decode_view const &) = delete;
@@ -289,21 +297,19 @@ namespace views {
     class decode_closure
     {
     public:
-      explicit decode_closure(canonical_codebook codebook,
-        // Bit and symbol counts follow the public decoder argument order.
-        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-        std::uint64_t bits,
-        std::uint64_t symbols,
-        bool infer_padding)
-        : codebook_(codebook), bits_(bits), symbols_(symbols), infer_padding_(infer_padding)
+      explicit decode_closure(canonical_codebook codebook, huffman::detail::decode_limits const &limits)
+        : codebook_(codebook), limits_(limits)
       {}
 
       template<std::ranges::viewable_range R>
         requires byte_input_range<std::views::all_t<R>>
       [[nodiscard]] auto operator()(R &&range) const -> decode_view<std::views::all_t<R>>
       {
-        return decode_view<std::views::all_t<R>>(
-          std::views::all(std::forward<R>(range)), codebook_, bits_, symbols_, infer_padding_);
+        return decode_view<std::views::all_t<R>>(std::views::all(std::forward<R>(range)),
+          codebook_,
+          limits_.valid_bits_,
+          limits_.expected_symbols_,
+          limits_.infer_padding_);
       }
 
       template<std::ranges::viewable_range R>
@@ -313,9 +319,7 @@ namespace views {
 
     private:
       canonical_codebook codebook_;
-      std::uint64_t bits_ = 0;
-      std::uint64_t symbols_ = 0;
-      bool infer_padding_ = false;
+      huffman::detail::decode_limits limits_;
     };
 
   }// namespace detail
@@ -342,7 +346,11 @@ namespace views {
     std::uint64_t valid_bit_count,
     std::uint64_t expected_symbol_count,
     bool infer_padding = false) -> detail::decode_closure
-  { return detail::decode_closure{ codebook, valid_bit_count, expected_symbol_count, infer_padding }; }
+  {
+    return detail::decode_closure{ codebook,
+      huffman::detail::decode_limits{
+        .valid_bits_ = valid_bit_count, .expected_symbols_ = expected_symbol_count, .infer_padding_ = infer_padding } };
+  }
 
 }// namespace views
 }// namespace dacoexec::huffman
