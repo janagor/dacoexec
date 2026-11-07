@@ -257,18 +257,22 @@ struct packed_bytes
   std::uint8_t padding_ = 0;
 };
 
+struct codeword
+{
+  std::uint32_t value_ = 0;
+  unsigned width_ = 0;
+};
+
 class reference_writer
 {
 public:
   auto write_bit(bool bit) -> void { bits_.push_back(bit ? std::uint8_t{ 1 } : std::uint8_t{ 0 }); }
 
-  // Distinct parameter roles in test helpers.
-  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  auto write_bits(std::uint32_t value, unsigned bit_count) -> void
+  auto write_bits(codeword const &word) -> void
   {
-    for (unsigned remaining = bit_count; remaining > 0U; --remaining) {
+    for (unsigned remaining = word.width_; remaining > 0U; --remaining) {
       unsigned const shift = remaining - 1U;
-      bool const bit = ((value >> shift) & 1U) != 0U;
+      bool const bit = ((word.value_ >> shift) & 1U) != 0U;
       write_bit(bit);
     }
   }
@@ -296,12 +300,6 @@ private:
   std::vector<std::uint8_t> bits_;
 };
 
-struct codeword
-{
-  std::uint32_t value_ = 0;
-  unsigned width_ = 0;
-};
-
 [[nodiscard]] auto write_codewords(std::span<codeword const> words) -> packed_bytes
 {
   std::vector<std::byte> bytes;
@@ -316,7 +314,7 @@ struct codeword
 [[nodiscard]] auto reference_codewords(std::span<codeword const> words) -> packed_bytes
 {
   reference_writer writer;
-  for (codeword const &word : words) { writer.write_bits(word.value_, word.width_); }
+  for (codeword const &word : words) { writer.write_bits(word); }
   return writer.finish();
 }
 
