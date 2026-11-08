@@ -64,7 +64,9 @@ public:
   using value_type = T;
 
   constexpr dynamic_node_allocator() = default;
+
   constexpr explicit dynamic_node_allocator(Allocator const &allocator) : allocator_(allocator) {}
+
   dynamic_node_allocator(dynamic_node_allocator const &) = delete;
   dynamic_node_allocator(dynamic_node_allocator &&) = delete;
   auto operator=(dynamic_node_allocator const &) -> dynamic_node_allocator & = delete;
