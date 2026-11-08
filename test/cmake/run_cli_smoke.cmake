@@ -102,3 +102,40 @@ file(GLOB leftovers "${WORK_DIR}/*.tmp.*")
 if(leftovers)
   message(FATAL_ERROR "Temporary outputs leaked: ${leftovers}")
 endif()
+
+set(ans_archive "${WORK_DIR}/output.dan")
+set(ans_restored "${WORK_DIR}/ans-restored.bin")
+run_success(
+  compress
+  --algorithm
+  rans
+  --force
+  "${input}"
+  "${ans_archive}")
+run_success(
+  decompress
+  --force
+  "${ans_archive}"
+  "${ans_restored}")
+file(SHA256 "${input}" ans_expected)
+file(SHA256 "${ans_restored}" ans_actual)
+if(NOT
+   ans_expected
+   STREQUAL
+   ans_actual)
+  message(FATAL_ERROR "ANS CLI round trip differs")
+endif()
+run_failure(
+  decompress
+  --force
+  --max-output-size
+  0
+  "${ans_archive}"
+  "${ans_restored}")
+file(SHA256 "${ans_restored}" ans_preserved)
+if(NOT
+   ans_expected
+   STREQUAL
+   ans_preserved)
+  message(FATAL_ERROR "Failed ANS operation replaced existing output")
+endif()

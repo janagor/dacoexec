@@ -470,3 +470,86 @@ Optional [Huffman fuzzing](fuzz_test/README.md) and
 [performance and memory measurements](benchmarks/README.md) validate the codec
 through its public APIs. Development presets keep their dependencies private;
 see [building](README_building.md) for setup.
+
+### ANS entropy coding
+
+`dacoexec::ans` provides immutable normalized integer models, binary-alphabet
+rANS, and general byte-alphabet rANS. Binary coding is a two-symbol specialization
+of the same arithmetic engine. Distinct ABS formulas and tANS are deferred.
+
+```cpp
+namespace ans = dacoexec::ans;
+auto model = ans::make_binary_model(6, 2);
+std::vector<bool> bits{ false, false, true, false };
+auto packed = ans::binary::encode_block(bits, model);
+auto decoded = ans::binary::decode_block(packed, model, bits.size());
+```
+
+For byte ranges, use `ans::count_frequencies`, `ans::make_model`, and
+`ans::rans::encode_block` / `decode_block`. Empty input can be encoded with an
+existing model; building a model from all-zero counts throws. Precision is
+configurable from 1 through 16 bits (default 12), with at least one slot per
+observed symbol. Normalization reserves those slots then distributes remaining
+slots proportionally using integer arithmetic and largest remainders, breaking
+ties by symbol index. Counts and their sum are checked for overflow.
+
+The byte codec traverses bidirectional input backward directly, and buffers
+single-pass or forward-only input for reverse traversal. Its 32-bit state starts at
+`1 << 23`, emits low bytes during renormalization, and serializes the final
+state as four little-endian bytes followed by emitted bytes in reverse order.
+Decoding requires an expected symbol count and optionally an output limit;
+it rejects truncated input, invalid states, trailing bytes, and a terminal
+state different from the initial encoder state. A correct external model and
+symbol count are required; bare payloads do not include integrity protection.
+
+Block pipelines make ownership and buffering explicit:
+
+```cpp
+auto model = ans::make_model(ans::count_frequencies(data));
+auto encoded_blocks = data | dacoexec::views::blocks(ans::default_block_size)
+  | dacoexec::views::encode::rans(model);
+auto decoded_blocks = std::move(encoded_blocks)
+  | dacoexec::views::decode::rans(ans::default_block_size);
+```
+
+These single-pass adaptors stage one owned result on `begin()` and each
+increment. Dereference returns a stable `const &` until increment or explicit
+ownership transfer; repeated
+reads do not recompute coding or consume the staged result. Use
+`for (auto const &block : decoded_blocks)` to borrow decoded blocks, or
+`std::ranges::iter_move(cursor)` to explicitly transfer ownership. Iterator
+copies share the pass, and moving the view preserves existing cursors. Source
+or codec exceptions permanently end the pass.
+
+`ans::compress_block` builds a per-block model and falls back to RAW unless
+payload plus model is strictly smaller. Sparse model metadata occupies three
+header bytes plus three bytes per present symbol: six bytes for a single-symbol
+model and 771 for all 256 symbols. `ans::decompress_block` requires an output limit.
+
+`views::ans_frames()` follows the same borrowed-dereference contract: read a
+frame with `auto const &frame = *cursor`, and transfer ownership with
+`std::ranges::iter_move(cursor)`. Increment invalidates the borrowed frame.
+
+`ans::compress_stream` and `ans::decompress_stream` use a separate DAN1 format.
+DHF1 is unchanged. DAN1 starts with `DAN1` and four zero bytes. Each frame has a
+one-byte tag and three little-endian uint32 fields: decoded size, payload size,
+and uncompressed IEEE CRC32. RAW (0) contains bytes; rANS (1) contains one
+precision byte, a little-endian uint16 entry count, and entries in strictly
+increasing symbol order. Each entry contains one symbol byte and a little-endian
+uint16 storing its positive frequency minus one (representing 1 through 65,536).
+Absent symbols have frequency zero. Entry counts outside 1 through 256,
+duplicate/unordered symbols, and invalid frequency sums are rejected. Payload
+bytes follow the model, which is excluded from payload size. END (255) has zero
+fields and must end the input.
+Data sizes are positive and limited to 16 MiB. Decompression validates a complete
+frame and its checksum before writing it; previously written frames remain if a
+later frame fails. Per-frame and total output limits are configurable.
+
+```sh
+dacoexec compress --algorithm rans input.bin output.dan
+dacoexec decompress output.dan restored.bin
+```
+
+Include `<dacoexec/ans/execution.hpp>` for optional stdexec-backed
+`ans::encode_parallel_on`; it uses bounded batches and writes frames in source
+order, producing the same bytes as sequential compression.

@@ -33,7 +33,12 @@ endif()
 set(dacoexec_FUZZ_SECONDS
     30
     CACHE STRING "Per-target CTest fuzz budget in seconds")
-foreach(harness IN ITEMS huffman_decoder frame_parser round_trip)
+foreach(
+  harness IN
+  ITEMS huffman_decoder
+        frame_parser
+        round_trip
+        ans_decoder)
   set(target dacoexec_fuzz_${harness})
   add_executable(${target} ${harness}.cpp)
   dacoexec_configure_linker(${target})

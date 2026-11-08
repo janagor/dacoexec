@@ -61,3 +61,7 @@ Replay the minimized case before and after the fix, commit it under the relevant
 corpus, and add a focused Catch2 regression for meaningful semantic defects.
 Merge corpora with libFuzzer `-merge=1 destination sources...`; do not commit
 unreviewed generated corpora. All three binaries accept individual files for replay.
+
+`ans_decoder` exercises bounded DAN1 decompression and binary rANS state decoding.
+Its corpus includes empty, RAW, and single-symbol compressed archives. Output is
+limited to 64 KiB so malformed declarations cannot request unbounded allocations.

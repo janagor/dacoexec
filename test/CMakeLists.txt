@@ -40,6 +40,7 @@ add_test(NAME cmake.sanitizers.non_apple_includes_leak
 add_executable(
   dacoexec_tests
   tests.cpp
+  ans_tests.cpp
   ranges_tests.cpp
   bit_tests.cpp
   integer_coding_tests.cpp
