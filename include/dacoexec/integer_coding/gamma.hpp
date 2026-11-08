@@ -1,16 +1,16 @@
 //! \file
 //! Elias Gamma coding of positive uint64_t values.
 
-#ifndef DACOEXEC_NUMERIC_GAMMA_HPP
-#define DACOEXEC_NUMERIC_GAMMA_HPP
+#ifndef DACOEXEC_INTEGER_CODING_GAMMA_HPP
+#define DACOEXEC_INTEGER_CODING_GAMMA_HPP
 
 #include <bit>
 #include <cstdint>
 #include <dacoexec/bit/bit_reader.hpp>
-#include <dacoexec/numeric/common.hpp>
+#include <dacoexec/integer_coding/common.hpp>
 #include <stdexcept>
 
-namespace dacoexec::numeric {
+namespace dacoexec::integer_coding {
 
 template<bit_output Writer> constexpr auto write_gamma(Writer &out, std::uint64_t value) -> void
 {
@@ -26,11 +26,11 @@ constexpr auto read_gamma(bit_reader &reader) -> std::uint64_t
   unsigned zeros = 0;
   while (!reader.read_bit()) {
     ++zeros;
-    if (zeros >= integer_bits) { throw std::overflow_error("dacoexec::numeric gamma overflow"); }
+    if (zeros >= integer_bits) { throw std::overflow_error("dacoexec::integer_coding gamma overflow"); }
   }
   return (std::uint64_t{ 1 } << zeros) | reader.read_bits(zeros);
 }
 
-}// namespace dacoexec::numeric
+}// namespace dacoexec::integer_coding
 
-#endif// DACOEXEC_NUMERIC_GAMMA_HPP
+#endif// DACOEXEC_INTEGER_CODING_GAMMA_HPP

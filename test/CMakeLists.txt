@@ -42,8 +42,8 @@ add_executable(
   tests.cpp
   ranges_tests.cpp
   bit_tests.cpp
-  numeric_tests.cpp
-  numeric_sequence_tests.cpp
+  integer_coding_tests.cpp
+  integer_coding_sequence_tests.cpp
   huffman_tests.cpp
   huffman_codec_tests.cpp
   huffman_decode_view_tests.cpp

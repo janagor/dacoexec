@@ -1,11 +1,11 @@
 #include <dacoexec/bit/bit_output_iterator.hpp>
 #include <dacoexec/bit/bit_reader.hpp>
 #include <dacoexec/detail/byte.hpp>
-#include <dacoexec/numeric/common.hpp>
-#include <dacoexec/numeric/delta.hpp>
-#include <dacoexec/numeric/gamma.hpp>
-#include <dacoexec/numeric/golomb.hpp>
-#include <dacoexec/numeric/rice.hpp>
+#include <dacoexec/integer_coding/common.hpp>
+#include <dacoexec/integer_coding/delta.hpp>
+#include <dacoexec/integer_coding/gamma.hpp>
+#include <dacoexec/integer_coding/golomb.hpp>
+#include <dacoexec/integer_coding/rice.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -32,7 +32,7 @@ constexpr auto golomb_divisor = 3U;
 constexpr auto random_seed = 0xC0FFEEU;
 constexpr auto random_count = 256U;
 constexpr auto small_value_limit = 1024U;
-constexpr auto largest_shift = dacoexec::numeric::integer_bits - 1U;
+constexpr auto largest_shift = dacoexec::integer_coding::integer_bits - 1U;
 
 struct encoded_value
 {
@@ -50,19 +50,25 @@ template<class Encode> auto encode_value(Encode encode, std::uint64_t value) -> 
   return result;
 }
 
-auto const gamma_write = [](auto &out, std::uint64_t value) -> void { dacoexec::numeric::write_gamma(out, value); };
-auto const gamma_read = [](auto &reader) -> std::uint64_t { return dacoexec::numeric::read_gamma(reader); };
-auto const delta_write = [](auto &out, std::uint64_t value) -> void { dacoexec::numeric::write_delta(out, value); };
-auto const delta_read = [](auto &reader) -> std::uint64_t { return dacoexec::numeric::read_delta(reader); };
-auto const rice_write = [](auto &out, std::uint64_t value) -> void {
-  dacoexec::numeric::write_rice(out, value, rice_shift);
+auto const gamma_write = [](auto &out, std::uint64_t value) -> void {
+  dacoexec::integer_coding::write_gamma(out, value);
 };
-auto const rice_read = [](auto &reader) -> std::uint64_t { return dacoexec::numeric::read_rice(reader, rice_shift); };
+auto const gamma_read = [](auto &reader) -> std::uint64_t { return dacoexec::integer_coding::read_gamma(reader); };
+auto const delta_write = [](auto &out, std::uint64_t value) -> void {
+  dacoexec::integer_coding::write_delta(out, value);
+};
+auto const delta_read = [](auto &reader) -> std::uint64_t { return dacoexec::integer_coding::read_delta(reader); };
+auto const rice_write = [](auto &out, std::uint64_t value) -> void {
+  dacoexec::integer_coding::write_rice(out, value, rice_shift);
+};
+auto const rice_read = [](auto &reader) -> std::uint64_t {
+  return dacoexec::integer_coding::read_rice(reader, rice_shift);
+};
 auto const golomb_write = [](auto &out, std::uint64_t value) -> void {
-  dacoexec::numeric::write_golomb(out, value, golomb_divisor);
+  dacoexec::integer_coding::write_golomb(out, value, golomb_divisor);
 };
 auto const golomb_read = [](auto &reader) -> std::uint64_t {
-  return dacoexec::numeric::read_golomb(reader, golomb_divisor);
+  return dacoexec::integer_coding::read_golomb(reader, golomb_divisor);
 };
 
 template<class Encode, class Decode>
@@ -87,7 +93,7 @@ auto check_value(Encode encode, Decode decode, std::uint64_t value, std::string_
 // without changing the existing runtime bit_writer contract.
 struct fixed_writer
 {
-  std::array<std::byte, dacoexec::numeric::integer_bits> bytes_{};
+  std::array<std::byte, dacoexec::integer_coding::integer_bits> bytes_{};
   std::size_t bits_ = 0;
 
   constexpr auto write_bit(bool bit) -> void
@@ -110,23 +116,25 @@ struct fixed_writer
 constexpr auto constexpr_round_trip() -> bool
 {
   fixed_writer writer;
-  dacoexec::numeric::write_gamma(writer, maximum);
-  dacoexec::numeric::write_delta(writer, maximum);
-  dacoexec::numeric::write_rice(writer, maximum, largest_shift);
-  dacoexec::numeric::write_golomb(writer, sample_value, golomb_divisor);
+  dacoexec::integer_coding::write_gamma(writer, maximum);
+  dacoexec::integer_coding::write_delta(writer, maximum);
+  dacoexec::integer_coding::write_rice(writer, maximum, largest_shift);
+  dacoexec::integer_coding::write_golomb(writer, sample_value, golomb_divisor);
   dacoexec::bit_reader reader{ writer.bytes_, writer.bits_ };
-  return dacoexec::numeric::read_gamma(reader) == maximum && dacoexec::numeric::read_delta(reader) == maximum
-         && dacoexec::numeric::read_rice(reader, largest_shift) == maximum
-         && dacoexec::numeric::read_golomb(reader, golomb_divisor) == sample_value && reader.remaining_bits() == 0U;
+  return dacoexec::integer_coding::read_gamma(reader) == maximum
+         && dacoexec::integer_coding::read_delta(reader) == maximum
+         && dacoexec::integer_coding::read_rice(reader, largest_shift) == maximum
+         && dacoexec::integer_coding::read_golomb(reader, golomb_divisor) == sample_value
+         && reader.remaining_bits() == 0U;
 }
 
 static_assert(constexpr_round_trip());
-static_assert(dacoexec::numeric::gamma_bit_length(sample_value) == std::string_view{ "0001101" }.size());
-static_assert(dacoexec::numeric::delta_bit_length(sample_value) == std::string_view{ "00100101" }.size());
+static_assert(dacoexec::integer_coding::gamma_bit_length(sample_value) == std::string_view{ "0001101" }.size());
+static_assert(dacoexec::integer_coding::delta_bit_length(sample_value) == std::string_view{ "00100101" }.size());
 
 }// namespace
 
-TEST_CASE("numeric golden codewords and every truncated prefix", "[numeric]")
+TEST_CASE("integer coding golden codewords and every truncated prefix", "[integer_coding]")
 {
   check_value(gamma_write, gamma_read, 1U, "1");
   check_value(gamma_write, gamma_read, sample_value, "0001101");
@@ -139,9 +147,9 @@ TEST_CASE("numeric golden codewords and every truncated prefix", "[numeric]")
   check_value(golomb_write, golomb_read, sample_value, "1111010");
 }
 
-TEST_CASE("numeric integer boundaries and randomized values", "[numeric]")
+TEST_CASE("integer coding integer boundaries and randomized values", "[integer_coding]")
 {
-  for (unsigned shift = 0; shift < dacoexec::numeric::integer_bits; ++shift) {
+  for (unsigned shift = 0; shift < dacoexec::integer_coding::integer_bits; ++shift) {
     auto const power = std::uint64_t{ 1 } << shift;
     for (auto const value : std::array{ power, power - 1U, maximum }) {
       if (value != 0U) {
@@ -150,8 +158,9 @@ TEST_CASE("numeric integer boundaries and randomized values", "[numeric]")
       }
     }
   }
-  check_value([](auto &out, std::uint64_t value) -> void { dacoexec::numeric::write_rice(out, value, largest_shift); },
-    [](auto &reader) -> std::uint64_t { return dacoexec::numeric::read_rice(reader, largest_shift); },
+  check_value(
+    [](auto &out, std::uint64_t value) -> void { dacoexec::integer_coding::write_rice(out, value, largest_shift); },
+    [](auto &reader) -> std::uint64_t { return dacoexec::integer_coding::read_rice(reader, largest_shift); },
     maximum);
   std::mt19937_64 random{ random_seed };
   for (unsigned index = 0; index < random_count; ++index) {
@@ -165,15 +174,16 @@ TEST_CASE("numeric integer boundaries and randomized values", "[numeric]")
   }
 }
 
-TEST_CASE("Rice and Golomb agree for power of two divisors", "[numeric]")
+TEST_CASE("Rice and Golomb agree for power of two divisors", "[integer_coding]")
 {
   for (unsigned shift = 0; shift < byte_bits; ++shift) {
     for (std::uint64_t value = 0; value < small_value_limit; ++value) {
       auto const rice = encode_value(
-        [shift](auto &out, std::uint64_t input) -> void { dacoexec::numeric::write_rice(out, input, shift); }, value);
+        [shift](auto &out, std::uint64_t input) -> void { dacoexec::integer_coding::write_rice(out, input, shift); },
+        value);
       auto const golomb = encode_value(
         [shift](auto &out, std::uint64_t input) -> void {
-          dacoexec::numeric::write_golomb(out, input, std::uint32_t{ 1 } << shift);
+          dacoexec::integer_coding::write_golomb(out, input, std::uint32_t{ 1 } << shift);
         },
         value);
       REQUIRE(rice.bits_ == golomb.bits_);
@@ -182,42 +192,46 @@ TEST_CASE("Rice and Golomb agree for power of two divisors", "[numeric]")
   }
   for (auto const divisor : std::array{ 1U, golomb_divisor, std::numeric_limits<std::uint32_t>::max() }) {
     auto const encode = [divisor](auto &out, std::uint64_t value) -> void {
-      dacoexec::numeric::write_golomb(out, value, divisor);
+      dacoexec::integer_coding::write_golomb(out, value, divisor);
     };
-    auto const decode = [divisor](
-                          auto &reader) -> std::uint64_t { return dacoexec::numeric::read_golomb(reader, divisor); };
+    auto const decode = [divisor](auto &reader) -> std::uint64_t {
+      return dacoexec::integer_coding::read_golomb(reader, divisor);
+    };
     check_value(encode, decode, divisor - 1U);
     if (divisor != 1U) { check_value(encode, decode, divisor); }
   }
 }
 
-TEST_CASE("numeric invalid domains and bounded malicious prefixes", "[numeric]")
+TEST_CASE("integer coding invalid domains and bounded malicious prefixes", "[integer_coding]")
 {
   std::vector<std::byte> output;
   dacoexec::bit_writer writer{ std::back_inserter(output) };
-  REQUIRE_THROWS_AS(dacoexec::numeric::write_gamma(writer, 0U), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::numeric::write_delta(writer, 0U), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::numeric::write_golomb(writer, 0U, 0U), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::numeric::write_rice(writer, 0U, dacoexec::numeric::integer_bits), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::write_gamma(writer, 0U), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::write_delta(writer, 0U), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::write_golomb(writer, 0U, 0U), std::invalid_argument);
+  REQUIRE_THROWS_AS(
+    dacoexec::integer_coding::write_rice(writer, 0U, dacoexec::integer_coding::integer_bits), std::invalid_argument);
   REQUIRE(writer.finish() == 0U);
   REQUIRE(output.empty());
 
   std::array<std::byte, 1> const ones{ std::byte{ 0xFF } };
   dacoexec::bit_reader limited{ ones, byte_bits };
-  REQUIRE_THROWS_AS(dacoexec::numeric::read_rice(limited, 0U, { .max_unary_bits_ = rice_shift }), std::length_error);
+  REQUIRE_THROWS_AS(
+    dacoexec::integer_coding::read_rice(limited, 0U, { .max_unary_bits_ = rice_shift }), std::length_error);
   dacoexec::bit_reader overflow{ ones, byte_bits };
-  REQUIRE_THROWS_AS(dacoexec::numeric::read_rice(overflow, largest_shift), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::read_rice(overflow, largest_shift), std::overflow_error);
   dacoexec::bit_reader invalid{ ones, byte_bits };
-  REQUIRE_THROWS_AS(dacoexec::numeric::read_rice(invalid, dacoexec::numeric::integer_bits), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::numeric::read_golomb(invalid, 0U), std::invalid_argument);
+  REQUIRE_THROWS_AS(
+    dacoexec::integer_coding::read_rice(invalid, dacoexec::integer_coding::integer_bits), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::read_golomb(invalid, 0U), std::invalid_argument);
   REQUIRE(invalid.remaining_bits() == byte_bits);
 
   std::array<std::byte, sizeof(std::uint64_t)> const zeros{};
-  dacoexec::bit_reader gamma_overflow{ zeros, dacoexec::numeric::integer_bits };
-  REQUIRE_THROWS_AS(dacoexec::numeric::read_gamma(gamma_overflow), std::overflow_error);
-  auto const wide_length = encode_value(gamma_write, dacoexec::numeric::integer_bits + 1U);
+  dacoexec::bit_reader gamma_overflow{ zeros, dacoexec::integer_coding::integer_bits };
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::read_gamma(gamma_overflow), std::overflow_error);
+  auto const wide_length = encode_value(gamma_write, dacoexec::integer_coding::integer_bits + 1U);
   dacoexec::bit_reader delta_overflow{ wide_length.bytes_, wide_length.bits_ };
-  REQUIRE_THROWS_AS(dacoexec::numeric::read_delta(delta_overflow), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::read_delta(delta_overflow), std::overflow_error);
 }
 
 TEST_CASE("bit reader preserves exact boundaries and failed reads", "[bit_reader]")
@@ -228,7 +242,7 @@ TEST_CASE("bit reader preserves exact boundaries and failed reads", "[bit_reader
   dacoexec::bit_reader reader{ bytes, valid_bits };
   REQUIRE(reader.read_bits(0U) == 0U);
   REQUIRE_THROWS_AS(reader.read_bits(valid_bits + 1U), std::out_of_range);
-  REQUIRE_THROWS_AS(reader.read_bits(dacoexec::numeric::integer_bits + 1U), std::invalid_argument);
+  REQUIRE_THROWS_AS(reader.read_bits(dacoexec::integer_coding::integer_bits + 1U), std::invalid_argument);
   REQUIRE(reader.remaining_bits() == valid_bits);
   REQUIRE(reader.read_bits(valid_bits) == expected_value);
   REQUIRE_THROWS_AS(reader.read_bit(), std::out_of_range);
@@ -238,21 +252,23 @@ TEST_CASE("bit reader preserves exact boundaries and failed reads", "[bit_reader
   REQUIRE_THROWS_AS(empty.read_bit(), std::out_of_range);
   std::array<std::byte, sizeof(std::uint64_t)> full{};
   full.fill(all_bits_byte);
-  dacoexec::bit_reader wide{ full, dacoexec::numeric::integer_bits };
-  REQUIRE(wide.read_bits(dacoexec::numeric::integer_bits) == maximum);
+  dacoexec::bit_reader wide{ full, dacoexec::integer_coding::integer_bits };
+  REQUIRE(wide.read_bits(dacoexec::integer_coding::integer_bits) == maximum);
 }
 
-TEST_CASE("unary limits are inclusive and default decoding is unrestricted", "[numeric]")
+TEST_CASE("unary limits are inclusive and default decoding is unrestricted", "[integer_coding]")
 {
   constexpr auto former_default_limit = std::uint64_t{ 1'048'576 };
   for (auto const limit : std::array{ std::uint64_t{ 0 }, std::uint64_t{ 1 }, former_default_limit }) {
     for (auto const quotient : std::array{ limit, limit + 1U }) {
-      auto const encode = [](auto &out, std::uint64_t value) -> void { dacoexec::numeric::write_rice(out, value, 0U); };
+      auto const encode = [](auto &out, std::uint64_t value) -> void {
+        dacoexec::integer_coding::write_rice(out, value, 0U);
+      };
       auto const packed = encode_value(encode, quotient);
       for (bool const golomb : std::array{ false, true }) {
-        auto const decode = [golomb](auto &reader, dacoexec::numeric::decode_limits limits) -> std::uint64_t {
-          return golomb ? dacoexec::numeric::read_golomb(reader, 1U, limits)
-                        : dacoexec::numeric::read_rice(reader, 0U, limits);
+        auto const decode = [golomb](auto &reader, dacoexec::integer_coding::decode_limits limits) -> std::uint64_t {
+          return golomb ? dacoexec::integer_coding::read_golomb(reader, 1U, limits)
+                        : dacoexec::integer_coding::read_rice(reader, 0U, limits);
         };
         dacoexec::bit_reader bounded{ packed.bytes_, packed.bits_ };
         if (quotient == limit) {
@@ -269,22 +285,24 @@ TEST_CASE("unary limits are inclusive and default decoding is unrestricted", "[n
   }
 }
 
-TEST_CASE("Rice and Golomb sizes use checked arithmetic", "[numeric]")
+TEST_CASE("Rice and Golomb sizes use checked arithmetic", "[integer_coding]")
 {
-  static_assert(dacoexec::numeric::rice_bit_length(maximum - 1U, 0U) == maximum);
-  static_assert(dacoexec::numeric::golomb_bit_length(maximum - 1U, 1U) == maximum);
-  static_assert(dacoexec::numeric::rice_bit_length(maximum, largest_shift) == largest_shift + 2U);
-  REQUIRE_THROWS_AS(dacoexec::numeric::rice_bit_length(maximum, 0U), std::overflow_error);
-  REQUIRE_THROWS_AS(dacoexec::numeric::golomb_bit_length(maximum, 1U), std::overflow_error);
-  REQUIRE_THROWS_AS(dacoexec::numeric::rice_bit_length(0U, dacoexec::numeric::integer_bits), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::numeric::golomb_bit_length(0U, 0U), std::invalid_argument);
+  static_assert(dacoexec::integer_coding::rice_bit_length(maximum - 1U, 0U) == maximum);
+  static_assert(dacoexec::integer_coding::golomb_bit_length(maximum - 1U, 1U) == maximum);
+  static_assert(dacoexec::integer_coding::rice_bit_length(maximum, largest_shift) == largest_shift + 2U);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::rice_bit_length(maximum, 0U), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::golomb_bit_length(maximum, 1U), std::overflow_error);
+  REQUIRE_THROWS_AS(
+    dacoexec::integer_coding::rice_bit_length(0U, dacoexec::integer_coding::integer_bits), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::golomb_bit_length(0U, 0U), std::invalid_argument);
   for (std::uint64_t value = 0; value < small_value_limit; ++value) {
-    REQUIRE(dacoexec::numeric::rice_bit_length(value, rice_shift) == encode_value(rice_write, value).bits_);
-    REQUIRE(dacoexec::numeric::golomb_bit_length(value, golomb_divisor) == encode_value(golomb_write, value).bits_);
+    REQUIRE(dacoexec::integer_coding::rice_bit_length(value, rice_shift) == encode_value(rice_write, value).bits_);
+    REQUIRE(
+      dacoexec::integer_coding::golomb_bit_length(value, golomb_divisor) == encode_value(golomb_write, value).bits_);
   }
 }
 
-TEST_CASE("mixed numeric sequences share one bitstream", "[numeric]")
+TEST_CASE("mixed integer coding sequences share one bitstream", "[integer_coding]")
 {
   std::vector<std::byte> bytes;
   dacoexec::bit_writer writer{ std::back_inserter(bytes) };
@@ -292,31 +310,33 @@ TEST_CASE("mixed numeric sequences share one bitstream", "[numeric]")
   std::array<std::uint64_t, random_count> values{};
   for (auto &value : values) {
     value = random() % small_value_limit;
-    dacoexec::numeric::write_gamma(writer, value + 1U);
-    dacoexec::numeric::write_rice(writer, value, rice_shift);
-    dacoexec::numeric::write_delta(writer, value + 1U);
-    dacoexec::numeric::write_golomb(writer, value, golomb_divisor);
+    dacoexec::integer_coding::write_gamma(writer, value + 1U);
+    dacoexec::integer_coding::write_rice(writer, value, rice_shift);
+    dacoexec::integer_coding::write_delta(writer, value + 1U);
+    dacoexec::integer_coding::write_golomb(writer, value, golomb_divisor);
   }
   auto const padding = writer.finish();
   dacoexec::bit_reader reader{ bytes, (bytes.size() * byte_bits) - padding };
   for (auto const value : values) {
-    REQUIRE(dacoexec::numeric::read_gamma(reader) == value + 1U);
-    REQUIRE(dacoexec::numeric::read_rice(reader, rice_shift) == value);
-    REQUIRE(dacoexec::numeric::read_delta(reader) == value + 1U);
-    REQUIRE(dacoexec::numeric::read_golomb(reader, golomb_divisor) == value);
+    REQUIRE(dacoexec::integer_coding::read_gamma(reader) == value + 1U);
+    REQUIRE(dacoexec::integer_coding::read_rice(reader, rice_shift) == value);
+    REQUIRE(dacoexec::integer_coding::read_delta(reader) == value + 1U);
+    REQUIRE(dacoexec::integer_coding::read_golomb(reader, golomb_divisor) == value);
   }
   REQUIRE(reader.remaining_bits() == 0U);
 }
 
-TEST_CASE("non-power-of-two Golomb golden remainders", "[numeric]")
+TEST_CASE("non-power-of-two Golomb golden remainders", "[integer_coding]")
 {
   // For divisor=5, b=3 and cutoff=3: remainders 0,2 use two bits;
   // remainders 3,4 use three bits. Quotient one adds the prefix 10.
   constexpr auto divisor = 5U;
   auto const encode = [](auto &out, std::uint64_t value) -> void {
-    dacoexec::numeric::write_golomb(out, value, divisor);
+    dacoexec::integer_coding::write_golomb(out, value, divisor);
   };
-  auto const decode = [](auto &reader) -> std::uint64_t { return dacoexec::numeric::read_golomb(reader, divisor); };
+  auto const decode = [](auto &reader) -> std::uint64_t {
+    return dacoexec::integer_coding::read_golomb(reader, divisor);
+  };
   check_value(encode, decode, 0U, "000");
   check_value(encode, decode, 2U, "010");
   check_value(encode, decode, 3U, "0110");
@@ -325,7 +345,7 @@ TEST_CASE("non-power-of-two Golomb golden remainders", "[numeric]")
   check_value(encode, decode, divisor + 3U, "10110");
 }
 
-TEST_CASE("Golomb decoder arithmetic rejects values beyond uint64_t", "[numeric]")
+TEST_CASE("Golomb decoder arithmetic rejects values beyond uint64_t", "[integer_coding]")
 {
   // Even the largest uint32_t divisor needs billions of unary bits near
   // UINT64_MAX. Exercise the decoder's reconstruction separately from input.
@@ -333,18 +353,19 @@ TEST_CASE("Golomb decoder arithmetic rejects values beyond uint64_t", "[numeric]
   constexpr auto quotient = maximum / divisor;
   constexpr auto remainder = maximum % divisor;
   static_assert(remainder + 1U < divisor);
-  REQUIRE(
-    dacoexec::numeric::detail::golomb_value({ .quotient_ = quotient, .remainder_ = remainder }, divisor) == maximum);
+  REQUIRE(dacoexec::integer_coding::detail::golomb_value({ .quotient_ = quotient, .remainder_ = remainder }, divisor)
+          == maximum);
   REQUIRE_THROWS_AS(
-    dacoexec::numeric::detail::golomb_value({ .quotient_ = quotient, .remainder_ = remainder + 1U }, divisor),
+    dacoexec::integer_coding::detail::golomb_value({ .quotient_ = quotient, .remainder_ = remainder + 1U }, divisor),
     std::overflow_error);
-  REQUIRE_THROWS_AS(dacoexec::numeric::detail::golomb_value({ .quotient_ = quotient + 1U, .remainder_ = 0U }, divisor),
+  REQUIRE_THROWS_AS(
+    dacoexec::integer_coding::detail::golomb_value({ .quotient_ = quotient + 1U, .remainder_ = 0U }, divisor),
     std::overflow_error);
 
   // Exercise the unary quotient overflow branch with a small bound.
   std::array<std::byte, 1> const prefix{ std::byte{ 0b11000000 } };
   dacoexec::bit_reader reader{ prefix, byte_bits };
-  REQUIRE_THROWS_AS(dacoexec::numeric::detail::read_unary(reader, {}, 1U), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::integer_coding::detail::read_unary(reader, {}, 1U), std::overflow_error);
 }
 
 namespace {
@@ -356,7 +377,7 @@ struct failing_byte_sink
 
   auto push_back(std::byte value) -> void
   {
-    if (!bytes_.empty()) { throw std::runtime_error("numeric test sink failure"); }
+    if (!bytes_.empty()) { throw std::runtime_error("integer coding test sink failure"); }
     bytes_.push_back(value);
   }
 };
@@ -365,7 +386,7 @@ template<class Encode> auto check_sink_failure(Encode encode, std::uint64_t valu
 {
   failing_byte_sink sink;
   dacoexec::bit_writer writer{ std::back_inserter(sink) };
-  REQUIRE_THROWS_WITH(encode(writer, value), "numeric test sink failure");
+  REQUIRE_THROWS_WITH(encode(writer, value), "integer coding test sink failure");
   REQUIRE(sink.bytes_.size() == 1U);
   REQUIRE_THROWS_AS(writer.finish(), std::logic_error);
   REQUIRE_THROWS_AS(encode(writer, value), std::logic_error);
@@ -374,7 +395,7 @@ template<class Encode> auto check_sink_failure(Encode encode, std::uint64_t valu
 
 }// namespace
 
-TEST_CASE("numeric encoders propagate output sink failures", "[numeric]")
+TEST_CASE("integer coding encoders propagate output sink failures", "[integer_coding]")
 {
   check_sink_failure(gamma_write, maximum);
   check_sink_failure(delta_write, maximum);

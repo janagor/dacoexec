@@ -1,17 +1,17 @@
 //! \file
 //! Elias Delta coding of positive uint64_t values.
 
-#ifndef DACOEXEC_NUMERIC_DELTA_HPP
-#define DACOEXEC_NUMERIC_DELTA_HPP
+#ifndef DACOEXEC_INTEGER_CODING_DELTA_HPP
+#define DACOEXEC_INTEGER_CODING_DELTA_HPP
 
 #include <bit>
 #include <cstdint>
 #include <dacoexec/bit/bit_reader.hpp>
-#include <dacoexec/numeric/common.hpp>
-#include <dacoexec/numeric/gamma.hpp>
+#include <dacoexec/integer_coding/common.hpp>
+#include <dacoexec/integer_coding/gamma.hpp>
 #include <stdexcept>
 
-namespace dacoexec::numeric {
+namespace dacoexec::integer_coding {
 
 template<bit_output Writer> constexpr auto write_delta(Writer &out, std::uint64_t value) -> void
 {
@@ -24,11 +24,11 @@ template<bit_output Writer> constexpr auto write_delta(Writer &out, std::uint64_
 constexpr auto read_delta(bit_reader &reader) -> std::uint64_t
 {
   auto const width = read_gamma(reader);
-  if (width > integer_bits) { throw std::overflow_error("dacoexec::numeric delta overflow"); }
+  if (width > integer_bits) { throw std::overflow_error("dacoexec::integer_coding delta overflow"); }
   auto const suffix = static_cast<unsigned>(width - 1U);
   return (std::uint64_t{ 1 } << suffix) | reader.read_bits(suffix);
 }
 
-}// namespace dacoexec::numeric
+}// namespace dacoexec::integer_coding
 
-#endif// DACOEXEC_NUMERIC_DELTA_HPP
+#endif// DACOEXEC_INTEGER_CODING_DELTA_HPP

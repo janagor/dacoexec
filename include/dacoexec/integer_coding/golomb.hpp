@@ -1,17 +1,17 @@
 //! \file
 //! Golomb coding with truncated binary remainders and a positive divisor.
 
-#ifndef DACOEXEC_NUMERIC_GOLOMB_HPP
-#define DACOEXEC_NUMERIC_GOLOMB_HPP
+#ifndef DACOEXEC_INTEGER_CODING_GOLOMB_HPP
+#define DACOEXEC_INTEGER_CODING_GOLOMB_HPP
 
 #include <bit>
 #include <cstdint>
 #include <dacoexec/bit/bit_reader.hpp>
-#include <dacoexec/numeric/common.hpp>
+#include <dacoexec/integer_coding/common.hpp>
 #include <limits>
 #include <stdexcept>
 
-namespace dacoexec::numeric {
+namespace dacoexec::integer_coding {
 
 /** Returns the encoded size; throws overflow_error if it cannot fit uint64_t. */
 [[nodiscard]] constexpr auto golomb_bit_length(std::uint64_t value, std::uint32_t divisor) -> std::uint64_t
@@ -23,7 +23,7 @@ namespace dacoexec::numeric {
   auto const suffix_bits = std::uint64_t{ remainder_bits } + 1U;
   auto const quotient = value / divisor;
   if (quotient > std::numeric_limits<std::uint64_t>::max() - suffix_bits) {
-    throw std::overflow_error("dacoexec::numeric Golomb size overflow");
+    throw std::overflow_error("dacoexec::integer_coding Golomb size overflow");
   }
   return quotient + suffix_bits;
 }
@@ -41,9 +41,9 @@ namespace detail {
   {
     auto const [quotient, remainder] = parts;
     auto const maximum = std::numeric_limits<std::uint64_t>::max();
-    if (quotient > maximum / divisor) { throw std::overflow_error("dacoexec::numeric Golomb overflow"); }
+    if (quotient > maximum / divisor) { throw std::overflow_error("dacoexec::integer_coding Golomb overflow"); }
     auto const base = quotient * divisor;
-    if (remainder > maximum - base) { throw std::overflow_error("dacoexec::numeric Golomb overflow"); }
+    if (remainder > maximum - base) { throw std::overflow_error("dacoexec::integer_coding Golomb overflow"); }
     return base + remainder;
   }
 
@@ -78,6 +78,6 @@ constexpr auto read_golomb(bit_reader &reader, std::uint32_t divisor, decode_lim
   return detail::golomb_value({ .quotient_ = quotient, .remainder_ = remainder }, divisor);
 }
 
-}// namespace dacoexec::numeric
+}// namespace dacoexec::integer_coding
 
-#endif// DACOEXEC_NUMERIC_GOLOMB_HPP
+#endif// DACOEXEC_INTEGER_CODING_GOLOMB_HPP

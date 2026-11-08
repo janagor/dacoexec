@@ -1,34 +1,33 @@
 //! \file
-//! Single-pass numeric sequence operations with caller-owned bit I/O and storage.
+//! Single-pass integer coding sequence operations with caller-owned bit I/O and storage.
 
-#ifndef DACOEXEC_NUMERIC_SEQUENCE_HPP
-#define DACOEXEC_NUMERIC_SEQUENCE_HPP
+#ifndef DACOEXEC_INTEGER_CODING_SEQUENCE_HPP
+#define DACOEXEC_INTEGER_CODING_SEQUENCE_HPP
 
-#include <dacoexec/numeric/delta.hpp>
-#include <dacoexec/numeric/golomb.hpp>
-#include <dacoexec/numeric/rice.hpp>
+#include <dacoexec/integer_coding/delta.hpp>
+#include <dacoexec/integer_coding/golomb.hpp>
+#include <dacoexec/integer_coding/rice.hpp>
 
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/bit/bit_reader.hpp>
+#include <dacoexec/integer_coding/common.hpp>
+#include <dacoexec/integer_coding/gamma.hpp>
 #include <functional>
 #include <iterator>
 #include <limits>
 #include <ranges>
 #include <type_traits>
 #include <utility>
-#include <dacoexec/bit/bit_reader.hpp>
-#include <dacoexec/numeric/common.hpp>
-#include <dacoexec/numeric/gamma.hpp>
 
-namespace dacoexec::numeric {
+namespace dacoexec::integer_coding {
 
 /** Unsigned integer input, excluding bool, with values representable by uint64_t. */
 template<class R>
-concept unsigned_integer_range = std::ranges::input_range<R>
-  && std::unsigned_integral<std::ranges::range_value_t<R>>
-  && (!std::same_as<std::ranges::range_value_t<R>, bool>)
-  && (std::numeric_limits<std::ranges::range_value_t<R>>::digits <= integer_bits);
+concept unsigned_integer_range = std::ranges::input_range<R> && std::unsigned_integral<std::ranges::range_value_t<R>>
+                                 && (!std::same_as<std::ranges::range_value_t<R>, bool>)
+                                 && (std::numeric_limits<std::ranges::range_value_t<R>>::digits <= integer_bits);
 
 /**
  * Consumes input once without copying or buffering the range. Does not finish out.
@@ -57,7 +56,7 @@ constexpr auto write_sequence(Writer &out, R &&input, Encode encode) -> void
  */
 template<std::output_iterator<std::uint64_t> Out, class Decode>
   requires std::invocable<Decode &, bit_reader &>
-    && std::same_as<std::invoke_result_t<Decode &, bit_reader &>, std::uint64_t>
+           && std::same_as<std::invoke_result_t<Decode &, bit_reader &>, std::uint64_t>
 constexpr auto read_sequence(bit_reader &reader, std::size_t count, Out out, Decode decode) -> Out
 {
   for (std::size_t index = 0; index < count; ++index) {
@@ -72,34 +71,30 @@ constexpr auto read_sequence(bit_reader &reader, std::size_t count, Out out, Dec
 template<bit_output Writer, unsigned_integer_range R>
 constexpr auto write_gamma_sequence(Writer &out, R &&input) -> void
 {
-  write_sequence(out, std::forward<R>(input), [](auto &writer, std::uint64_t value) -> void {
-    write_gamma(writer, value);
-  });
+  write_sequence(
+    out, std::forward<R>(input), [](auto &writer, std::uint64_t value) -> void { write_gamma(writer, value); });
 }
 
 template<std::output_iterator<std::uint64_t> Out>
 constexpr auto read_gamma_sequence(bit_reader &reader, std::size_t count, Out out) -> Out
 {
-  return read_sequence(reader, count, std::move(out), [](bit_reader &input_reader) -> std::uint64_t {
-    return read_gamma(input_reader);
-  });
+  return read_sequence(
+    reader, count, std::move(out), [](bit_reader &input_reader) -> std::uint64_t { return read_gamma(input_reader); });
 }
 
 /** Writes positive integers using Delta coding without finalizing out. */
 template<bit_output Writer, unsigned_integer_range R>
 constexpr auto write_delta_sequence(Writer &out, R &&input) -> void
 {
-  write_sequence(out, std::forward<R>(input), [](auto &writer, std::uint64_t value) -> void {
-    write_delta(writer, value);
-  });
+  write_sequence(
+    out, std::forward<R>(input), [](auto &writer, std::uint64_t value) -> void { write_delta(writer, value); });
 }
 
 template<std::output_iterator<std::uint64_t> Out>
 constexpr auto read_delta_sequence(bit_reader &reader, std::size_t count, Out out) -> Out
 {
-  return read_sequence(reader, count, std::move(out), [](bit_reader &input_reader) -> std::uint64_t {
-    return read_delta(input_reader);
-  });
+  return read_sequence(
+    reader, count, std::move(out), [](bit_reader &input_reader) -> std::uint64_t { return read_delta(input_reader); });
 }
 
 /** Writes a golomb sequence; parameters are validated even for empty input. */
@@ -113,7 +108,9 @@ constexpr auto write_golomb_sequence(Writer &out, R &&input, std::uint32_t divis
 }
 
 template<std::output_iterator<std::uint64_t> Out>
-constexpr auto read_golomb_sequence(bit_reader &reader, std::size_t count, Out out, std::uint32_t divisor, decode_limits limits = {}) -> Out
+constexpr auto
+  read_golomb_sequence(bit_reader &reader, std::size_t count, Out out, std::uint32_t divisor, decode_limits limits = {})
+    -> Out
 {
   detail::validate_golomb(divisor);
   return read_sequence(reader, count, std::move(out), [divisor, limits](bit_reader &input_reader) -> std::uint64_t {
@@ -132,7 +129,8 @@ constexpr auto write_rice_sequence(Writer &out, R &&input, unsigned shift) -> vo
 }
 
 template<std::output_iterator<std::uint64_t> Out>
-constexpr auto read_rice_sequence(bit_reader &reader, std::size_t count, Out out, unsigned shift, decode_limits limits = {}) -> Out
+constexpr auto
+  read_rice_sequence(bit_reader &reader, std::size_t count, Out out, unsigned shift, decode_limits limits = {}) -> Out
 {
   detail::validate_rice(shift);
   return read_sequence(reader, count, std::move(out), [shift, limits](bit_reader &input_reader) -> std::uint64_t {
@@ -140,6 +138,6 @@ constexpr auto read_rice_sequence(bit_reader &reader, std::size_t count, Out out
   });
 }
 
-}// namespace dacoexec::numeric
+}// namespace dacoexec::integer_coding
 
-#endif// DACOEXEC_NUMERIC_SEQUENCE_HPP
+#endif// DACOEXEC_INTEGER_CODING_SEQUENCE_HPP

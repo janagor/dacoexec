@@ -1,16 +1,16 @@
 //! \file
 //! Rice coding of nonnegative integers with q ones followed by zero.
 
-#ifndef DACOEXEC_NUMERIC_RICE_HPP
-#define DACOEXEC_NUMERIC_RICE_HPP
+#ifndef DACOEXEC_INTEGER_CODING_RICE_HPP
+#define DACOEXEC_INTEGER_CODING_RICE_HPP
 
 #include <cstdint>
 #include <dacoexec/bit/bit_reader.hpp>
-#include <dacoexec/numeric/common.hpp>
+#include <dacoexec/integer_coding/common.hpp>
 #include <limits>
 #include <stdexcept>
 
-namespace dacoexec::numeric {
+namespace dacoexec::integer_coding {
 
 /** Returns the encoded size; throws overflow_error if it cannot fit uint64_t. */
 [[nodiscard]] constexpr auto rice_bit_length(std::uint64_t value, unsigned shift) -> std::uint64_t
@@ -19,7 +19,7 @@ namespace dacoexec::numeric {
   auto const quotient = value >> shift;
   auto const suffix_bits = std::uint64_t{ shift } + 1U;
   if (quotient > std::numeric_limits<std::uint64_t>::max() - suffix_bits) {
-    throw std::overflow_error("dacoexec::numeric Rice size overflow");
+    throw std::overflow_error("dacoexec::integer_coding Rice size overflow");
   }
   return quotient + suffix_bits;
 }
@@ -40,6 +40,6 @@ constexpr auto read_rice(bit_reader &reader, unsigned shift, decode_limits limit
   return (quotient << shift) | reader.read_bits(shift);
 }
 
-}// namespace dacoexec::numeric
+}// namespace dacoexec::integer_coding
 
-#endif// DACOEXEC_NUMERIC_RICE_HPP
+#endif// DACOEXEC_INTEGER_CODING_RICE_HPP
