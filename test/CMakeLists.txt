@@ -44,6 +44,7 @@ add_executable(
   bit_tests.cpp
   integer_coding_tests.cpp
   integer_coding_sequence_tests.cpp
+  integer_coding_view_tests.cpp
   huffman_tests.cpp
   huffman_codec_tests.cpp
   huffman_decode_view_tests.cpp
