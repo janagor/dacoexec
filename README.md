@@ -21,6 +21,32 @@ target_link_libraries(consumer PRIVATE dacoexec::dacoexec)
 
 Linking the target requires C++20. Consumers may compile as C++20 or any later standard.
 
+## Numeric coding
+
+The dependency-free `numeric/gamma.hpp`, `numeric/delta.hpp`, `numeric/golomb.hpp`, and `numeric/rice.hpp` headers expose integer coding primitives. They are also included by the umbrella header. Gamma and Delta accept positive `std::uint64_t` values; Golomb and Rice accept the full nonnegative domain. Golomb requires a positive `std::uint32_t` divisor, and Rice requires a shift below 64. Invalid arguments throw `std::invalid_argument` before emitting bits.
+
+```cpp
+std::vector<std::byte> encoded;
+dacoexec::bit_writer writer{ std::back_inserter(encoded) };
+constexpr auto sample_value = std::uint64_t{ 13 };
+dacoexec::numeric::write_gamma(writer, sample_value);
+auto const padding = writer.finish();
+constexpr auto bits_per_byte = 8U;
+auto const valid_bits = encoded.size() * bits_per_byte - padding;
+dacoexec::bit_reader reader{ std::span<std::byte const>{ encoded }, valid_bits };
+auto const decoded = dacoexec::numeric::read_gamma(reader);
+```
+
+`bit_reader` borrows its storage and reads MSB first. Its constructor requires an explicit valid bit count and rejects limits beyond the supplied span. `read_bits(n)` returns a `std::uint64_t` for widths zero through 64. Exhausted reads throw `std::out_of_range`; an invalid width throws `std::invalid_argument`. Failed `read_bits` calls leave the cursor unchanged. `remaining_bits()` reports the unconsumed valid bits. Padding and trailing bytes are excluded by the declared limit; validating their contents is the caller's responsibility.
+
+Golomb and Rice encode the quotient as ones followed by a terminating zero. Primitive decoding is unrestricted by default, matching the encoders’ full integer domain. For untrusted input, pass an explicit `numeric::decode_limits{ .max_unary_bits_ = limit }` to either reader to bound work per integer. The limit excludes the terminating zero and is inclusive; zero permits only quotient zero. Exceeding that limit throws `std::length_error`; integers outside the 64-bit domain throw `std::overflow_error`. Decoding failures can consume a prefix of the input. Small divisors or Rice shifts can produce very large outputs, so callers should choose parameters appropriate to their data.
+
+`gamma_bit_length`, `delta_bit_length`, `rice_bit_length`, and `golomb_bit_length` report codeword sizes without allocations. Rice and Golomb size helpers throw `std::overflow_error` if the mathematical bit count exceeds `UINT64_MAX`, and reject invalid parameters. Callers can compare the size with their output budget before writing. Encoders do not impose that budget themselves. The numeric primitives and reader support constant evaluation with a suitable writer; the existing `bit_writer` remains a runtime writer. These primitives carry no integer count or framing. Callers must retain decoding parameters, the valid bit count, and the number of integers. DHF1 and the CLI are unchanged.
+
+`numeric/sequence.hpp` adds `write_gamma_sequence(writer, input)` and `read_gamma_sequence(reader, count, output_iterator)`, with corresponding Delta, Golomb, and Rice functions. Golomb and Rice take their parameter after the input range or output iterator; readers also accept optional decoding limits. Input ranges contain unsigned integers (excluding bool), are consumed once, and may be move-only or single-pass. Writers do not finalize the bitstream. Readers decode exactly the requested count, return the advanced output iterator, and leave subsequent bits available. Output storage must have sufficient capacity and preserve `uint64_t` values. Exceptions propagate without rolling back earlier input or output.
+
+For custom compositions, `write_sequence(writer, input, encoder)` calls `encoder(writer, value)` for each integer, and `read_sequence(reader, count, output, decoder)` calls `decoder(reader)` for each result. `numeric/mapping.hpp` provides `zigzag_encode(int64_t)` and `zigzag_decode(uint64_t)` separately from coding. To use Gamma or Delta, map the unsigned result with `to_positive` and undo it with `from_positive`; `to_positive(UINT64_MAX)` throws rather than overflowing. Consequently, this composition excludes `INT64_MIN`, whose ZigZag value is `UINT64_MAX`. Golomb and Rice accept that ZigZag value directly.
+
 ## Blocks
 
 `dacoexec::views::blocks` is a lazy C++20 range adaptor. It partitions a byte input range into move-only blocks of at most N bytes. Each block owns its payload and a zero-based sequence number, so the block can outlive the source and be moved into later work.
