@@ -27,6 +27,7 @@ template<class S>
 concept byte_output_sink = requires(S &sink, std::span<std::byte const> bytes) {
   { sink.write(bytes) } -> std::same_as<void>;
 };
+
 /**
  * Non-owning adapter for a std::ostream, which must outlive the adapter.
  *
@@ -39,6 +40,7 @@ public:
    * Binds the destination stream without taking ownership.
    */
   explicit ostream_sink(std::ostream &stream) : stream_(stream) {}
+
   /**
    * Writes bytes in bounded chunks and checks the stream after each chunk.
    *
@@ -64,6 +66,7 @@ public:
 private:
   std::reference_wrapper<std::ostream> stream_;
 };
+
 /**
  * Owns an output-iterator cursor and assigns std::byte values through it.
  *
@@ -81,6 +84,7 @@ public:
    * Takes the output cursor by value and moves it into the adapter.
    */
   explicit iterator_sink(I output) : output_(std::move(output)) {}
+
   /**
    * Assigns each byte and advances the stored cursor. Iterator exceptions propagate.
    */

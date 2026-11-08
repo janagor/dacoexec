@@ -29,11 +29,14 @@ constexpr std::size_t dataset_parameter = 1;
 constexpr std::size_t workers_parameter = 2;
 constexpr std::size_t in_flight_parameter = 3;
 constexpr std::size_t scheduled_parameter = 4;
+
 struct counting_sink
 {
   std::size_t size_ = 0;
+
   auto write(std::span<std::byte const> input) -> void { size_ += input.size(); }
 };
+
 auto metrics(benchmark::State &state, std::size_t input, std::size_t output) -> void
 {
   state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(input));
@@ -42,8 +45,10 @@ auto metrics(benchmark::State &state, std::size_t input, std::size_t output) -> 
   state.counters["seed"] = fixtures::seed;
   state.SetLabel(std::string(fixtures::names.at(static_cast<std::size_t>(state.range(dataset_parameter)))));
 }
+
 auto fixture(benchmark::State const &state, std::size_t size) -> bytes
 { return fixtures::make(size, static_cast<fixtures::dataset>(state.range(dataset_parameter))); }
+
 auto bm_huffman_compress_block(benchmark::State &state) -> void
 {
   auto const input = fixture(state, static_cast<std::size_t>(state.range(block_parameter)));
@@ -66,6 +71,7 @@ auto bm_huffman_compress_block(benchmark::State &state) -> void
     reference.payload_.size()
       + (reference.encoding_ == huffman::block_encoding::canonical_huffman ? huffman::alphabet_size : 0U));
 }
+
 auto bm_huffman_decompress_block(benchmark::State &state) -> void
 {
   auto const input = fixture(state, static_cast<std::size_t>(state.range(block_parameter)));
@@ -88,6 +94,7 @@ auto bm_huffman_decompress_block(benchmark::State &state) -> void
     encoded.payload_.size()
       + (encoded.encoding_ == huffman::block_encoding::canonical_huffman ? huffman::alphabet_size : 0U));
 }
+
 auto bm_huffman_compress_stream(benchmark::State &state) -> void
 {
   auto const input = fixture(state, fixtures::stream_size);
@@ -102,6 +109,7 @@ auto bm_huffman_compress_stream(benchmark::State &state) -> void
   }
   metrics(state, input.size(), reference.size_);
 }
+
 auto bm_huffman_decompress_stream(benchmark::State &state) -> void
 {
   auto const input = fixture(state, fixtures::stream_size);
@@ -117,6 +125,7 @@ auto bm_huffman_decompress_stream(benchmark::State &state) -> void
   }
   metrics(state, input.size(), archive.size());
 }
+
 auto bm_huffman_compress_parallel(benchmark::State &state) -> void
 {
   auto const input = fixture(state, fixtures::stream_size);
@@ -171,7 +180,9 @@ struct frequency_source
   std::span<std::byte const> input_;
   std::size_t block_size_;
   std::uint64_t committed_ = 0;
+
   auto initialize() -> void {}
+
   auto next() -> std::optional<input_type>
   {
     if (input_.empty()) { return std::nullopt; }
@@ -179,12 +190,15 @@ struct frequency_source
     input_ = input_.subspan(block_size_);
     return block;
   }
+
   auto commit(result_type const &frequencies) -> void
   {
     for (auto count : frequencies) { committed_ += count; }
   }
+
   [[nodiscard]] auto finish() const -> std::uint64_t { return committed_; }
 };
+
 auto bm_huffman_scheduling_overhead(benchmark::State &state) -> void
 {
   auto const input = fixture(state, fixtures::stream_size);
@@ -207,6 +221,7 @@ auto bm_huffman_scheduling_overhead(benchmark::State &state) -> void
   }
   state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(input.size()));
 }
+
 auto block_arguments(benchmark::Benchmark *benchmark) -> void
 {
   benchmark->ArgNames({ "block_bytes", "dataset" });
@@ -216,6 +231,7 @@ auto block_arguments(benchmark::Benchmark *benchmark) -> void
     }
   }
 }
+
 auto execution_arguments(benchmark::Benchmark *benchmark, bool scheduling) -> void
 {
   auto names = std::vector<std::string>{ "block_bytes", "dataset", "workers", "in_flight" };
@@ -240,8 +256,11 @@ auto execution_arguments(benchmark::Benchmark *benchmark, bool scheduling) -> vo
     }
   }
 }
+
 auto parallel_arguments(benchmark::Benchmark *benchmark) -> void { execution_arguments(benchmark, false); }
+
 auto scheduling_arguments(benchmark::Benchmark *benchmark) -> void { execution_arguments(benchmark, true); }
+
 BENCHMARK(bm_huffman_compress_block)->Apply(block_arguments);
 BENCHMARK(bm_huffman_decompress_block)->Apply(block_arguments);
 BENCHMARK(bm_huffman_compress_stream)->Apply(block_arguments)->UseRealTime();
@@ -249,4 +268,5 @@ BENCHMARK(bm_huffman_decompress_stream)->Apply(block_arguments)->UseRealTime();
 BENCHMARK(bm_huffman_compress_parallel)->Apply(parallel_arguments)->UseRealTime()->MeasureProcessCPUTime();
 BENCHMARK(bm_huffman_scheduling_overhead)->Apply(scheduling_arguments)->UseRealTime()->MeasureProcessCPUTime();
 }// namespace
+
 BENCHMARK_MAIN();

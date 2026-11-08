@@ -189,6 +189,7 @@ public:
   try : output_(std::move(other.output_)) {
     transfer_from(other);
   } catch (...) {
+
     other.retire();
     throw;
   }

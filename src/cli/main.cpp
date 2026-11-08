@@ -30,14 +30,19 @@ public:
     using iterator_category = std::input_iterator_tag;
     using value_type = char;
     using difference_type = std::ptrdiff_t;
+
     explicit iterator(file_bytes *source) : source_(source) {}
+
     auto operator*() const -> char { return source_->buffer_.at(source_->position_); }
+
     auto operator++() -> iterator &
     {
       if (++source_->position_ == source_->size_) { source_->fill(); }
       return *this;
     }
+
     auto operator++(int) -> void { ++*this; }
+
     auto operator==(std::default_sentinel_t) const -> bool { return source_->finished_; }
 
   private:
@@ -52,6 +57,7 @@ public:
     }
     return iterator{ this };
   }
+
   auto end() const -> std::default_sentinel_t { return {}; }
 
 private:
@@ -74,6 +80,7 @@ private:
       throw;
     }
   }
+
   static constexpr std::size_t buffer_size = 64U << 10U;
   std::istream *stream_;
   std::array<char, buffer_size> buffer_{};

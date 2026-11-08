@@ -16,6 +16,7 @@
 
 namespace {
 namespace fs = std::filesystem;
+
 class temporary_directory
 {
 public:
@@ -29,26 +30,31 @@ public:
     }
     throw std::runtime_error("Cannot create test directory");
   }
+
   temporary_directory(temporary_directory const &) = delete;
   auto operator=(temporary_directory const &) -> temporary_directory & = delete;
   temporary_directory(temporary_directory &&) = delete;
   auto operator=(temporary_directory &&) -> temporary_directory & = delete;
+
   ~temporary_directory()
   {
     std::error_code error;
     fs::remove_all(path_, error);
   }
+
   [[nodiscard]] auto path() const -> fs::path const & { return path_; }
 
 private:
   fs::path path_;
 };
+
 auto read_file(fs::path const &path) -> std::string
 {
   std::ifstream file(path, std::ios::binary);
   REQUIRE(file.good());
   return { std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>() };
 }
+
 auto write_file(fs::path const &path, std::string const &content) -> void
 {
   std::ofstream file(path, std::ios::binary);

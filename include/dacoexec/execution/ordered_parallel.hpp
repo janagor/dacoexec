@@ -78,6 +78,7 @@ namespace detail {
         // entire environment, including allocator and domain queries.
         [[nodiscard]] auto get_env() const noexcept -> stdexec::env_of_t<Receiver>
         { return stdexec::get_env(owner_->receiver_); }
+
         template<class Value> auto set_value(Value &&value) noexcept -> void
         {
           auto *owner = owner_;
@@ -89,6 +90,7 @@ namespace detail {
           if (owner->slots_.at(index_).error_) { owner->failed_.store(true, std::memory_order_release); }
           owner->settled();
         }
+
         template<class Error> auto set_error(Error &&error) noexcept -> void
         {
           auto *owner = owner_;
@@ -106,6 +108,7 @@ namespace detail {
           // cancel siblings: a lower-index scheduled job may also fail.
           owner->settled();
         }
+
         auto set_stopped() noexcept -> void
         {
           auto *owner = owner_;
@@ -114,12 +117,15 @@ namespace detail {
           owner->settled();
         }
       };
+
       struct work_function
       {
         Process *process_;
         input_type input_;
+
         auto operator()() -> result_type { return std::invoke(*process_, std::move(input_)); }
       };
+
       using work_sender =
         decltype(stdexec::then(stdexec::schedule(std::declval<Scheduler &>()), std::declval<work_function>()));
       using child_operation = stdexec::connect_result_t<work_sender, worker_receiver>;
@@ -129,6 +135,7 @@ namespace detail {
           capacity_(capacity), receiver_(std::move(receiver)),
           token_(stdexec::get_stop_token(stdexec::get_env(receiver_)))
       {}
+
       operation(operation const &) = delete;
       operation(operation &&) = delete;
       auto operator=(operation const &) -> operation & = delete;

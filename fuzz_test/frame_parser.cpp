@@ -12,9 +12,11 @@ namespace {
 namespace huffman = dacoexec::huffman;
 constexpr std::size_t input_limit = 65536;
 constexpr std::size_t output_limit = 256U * 1024U;
+
 struct checking_sink
 {
   std::size_t count_ = 0;
+
   auto write(std::span<std::byte const> bytes) -> void
   {
     if (bytes.size() > output_limit - count_) { std::abort(); }

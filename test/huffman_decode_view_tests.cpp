@@ -178,13 +178,16 @@ TEST_CASE("Decoder propagates source initialization and advance failures", "[huf
       bool ended_ = false;
 
       auto operator*() const -> std::byte { return std::byte{ 0 }; }
+
       auto operator++() -> iterator &
       {
         if (owner_->fail_advance_) { throw source_error{}; }
         ended_ = true;
         return *this;
       }
+
       auto operator++(int) -> void { ++*this; }
+
       auto operator==([[maybe_unused]] std::default_sentinel_t sentinel) const -> bool { return ended_; }
     };
 
@@ -193,6 +196,7 @@ TEST_CASE("Decoder propagates source initialization and advance failures", "[huf
       if (fail_begin_) { throw source_error{}; }
       return { .owner_ = this, .ended_ = false };
     }
+
     [[nodiscard]] static auto end() -> std::default_sentinel_t { return {}; }
   };
 

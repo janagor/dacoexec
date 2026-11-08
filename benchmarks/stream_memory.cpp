@@ -18,6 +18,7 @@ namespace {
 struct counting_sink
 {
   std::uint64_t size_ = 0;
+
   auto write(std::span<std::byte const> bytes) -> void { size_ += bytes.size(); }
 };
 }// namespace

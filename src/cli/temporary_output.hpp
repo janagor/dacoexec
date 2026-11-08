@@ -52,10 +52,12 @@ public:
     }
     throw stream_error("Cannot create temporary output file");
   }
+
   temporary_output(temporary_output const &) = delete;
   auto operator=(temporary_output const &) -> temporary_output & = delete;
   temporary_output(temporary_output &&) = delete;
   auto operator=(temporary_output &&) -> temporary_output & = delete;
+
   ~temporary_output()
   {
     file_.reset();

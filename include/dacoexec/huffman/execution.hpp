@@ -25,6 +25,7 @@ struct parallel_options
   //! Positive maximum number of owned blocks in one processing batch.
   std::size_t max_in_flight_ = execution::default_max_in_flight;
 };
+
 namespace detail {
   template<std::ranges::view V, io::byte_output_sink Sink> struct parallel_source
   {

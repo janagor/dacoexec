@@ -42,7 +42,6 @@ constexpr auto single_byte_block_count = 7;
 constexpr auto multi_block_input_size = 10;
 constexpr auto second_block_failure_read = 6;
 
-
 struct source_stats
 {
   std::size_t begin_calls_ = 0;
@@ -231,6 +230,7 @@ auto check_partition(partition_case const &test_case) -> void
 struct byte_proxy
 {
   std::byte value_{};
+
   // Implicit conversion is required by indirectly_readable.
   // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   constexpr operator std::byte() const { return value_; }
@@ -865,7 +865,6 @@ TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bi
     }
   }
 }
-
 
 TEST_CASE("codewords source begin and increment failures permanently end iteration", "[huffman][codewords]")
 {

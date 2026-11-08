@@ -76,6 +76,7 @@ inline constexpr std::array<std::byte, archive_header_size> archive_header_bytes
  * Serialized frame tags for RAW data, canonical Huffman data, and archive termination.
  */
 enum class frame_kind : std::uint8_t { raw = 0x00, huffman = 0x01, end = 0xFF };
+
 /**
  * DHF1 metadata in host integer representation; serialize with write_frame_header().
  */
@@ -90,6 +91,7 @@ struct frame_header
   //! IEEE CRC32 of uncompressed bytes; zero for END.
   std::uint32_t crc32_ = 0;
 };
+
 /**
  * Move-only owner pairing wire metadata with an independently owned encoded block.
  *
@@ -108,6 +110,7 @@ struct encoded_frame
   auto operator=(encoded_frame const &) -> encoded_frame & = delete;
   ~encoded_frame() = default;
 };
+
 /**
  * Checks frame kind, nonzero data sizes, limits, RAW size equality and END zeros.
  *
@@ -135,6 +138,7 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
     throw format_error("Inconsistent RAW sizes");
   }
 }
+
 /**
  * Checks the complete archive magic and reserved bytes.
  *
@@ -144,6 +148,7 @@ inline auto read_archive_header(std::span<std::byte const, archive_header_size> 
 {
   if (!std::ranges::equal(bytes, archive_header_bytes)) { throw format_error("Invalid DHF1 header"); }
 }
+
 /**
  * Reads little-endian fields from exactly one frame header and validates them.
  *
@@ -161,10 +166,12 @@ inline auto read_archive_header(std::span<std::byte const, archive_header_size> 
   validate_frame_header(header, limit);
   return header;
 }
+
 /**
  * Writes the fixed archive prefix. Sink exceptions propagate without rollback.
  */
 template<io::byte_output_sink S> inline auto write_archive_header(S &sink) -> void { sink.write(archive_header_bytes); }
+
 /**
  * Validates and writes a 13-byte little-endian header.
  *
@@ -185,6 +192,7 @@ template<io::byte_output_sink S> inline auto write_frame_header(S &sink, frame_h
   put(crc_field_offset, header.crc32_);
   sink.write(bytes);
 }
+
 /**
  * Writes a frame header, optional canonical length table, and owned payload.
  *

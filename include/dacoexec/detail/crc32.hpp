@@ -30,6 +30,7 @@ inline constexpr auto crc32_table = []() -> std::array<std::uint32_t, crc32_tabl
   }
   return table;
 }();
+
 [[nodiscard]] inline auto crc32(std::span<std::byte const> bytes) -> std::uint32_t
 {
   auto value = crc32_mask;

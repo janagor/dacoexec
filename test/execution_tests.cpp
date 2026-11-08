@@ -61,12 +61,14 @@ class timed_gate
 {
 public:
   explicit timed_gate(std::size_t count) : remaining_(count) {}
+
   auto arrive() -> void
   {
     std::scoped_lock const lock(mutex_);
     if (remaining_ != 0) { --remaining_; }
     condition_.notify_all();
   }
+
   [[nodiscard]] auto wait() -> bool
   {
     std::unique_lock lock(mutex_);
@@ -78,7 +80,9 @@ private:
   std::condition_variable condition_;
   std::size_t remaining_;
 };
+
 using erased_operation = std::unique_ptr<void, void (*)(void *)>;
+
 struct destructive_receiver
 {
   using receiver_concept = stdexec::receiver_tag;
@@ -86,8 +90,10 @@ struct destructive_receiver
   std::shared_ptr<std::promise<int>> promise_;
   std::atomic<std::size_t> *completions_;
   stdexec::inplace_stop_token token_;
+
   [[nodiscard]] auto get_env() const noexcept -> stdexec::prop<stdexec::get_stop_token_t, stdexec::inplace_stop_token>
   { return { stdexec::get_stop_token, token_ }; }
+
   auto complete(int outcome) const noexcept -> void
   {
     auto *operation = operation_;
@@ -97,11 +103,15 @@ struct destructive_receiver
     operation->reset();// destroys this receiver, its parent and child states
     promise->set_value(outcome);
   }
+
   template<class T> auto set_value([[maybe_unused]] T &&value) noexcept -> void { complete(value_completion); }
+
   auto set_error([[maybe_unused]] std::exception_ptr const &error) const noexcept -> void
   { complete(error_completion); }
+
   auto set_stopped() const noexcept -> void { complete(stopped_completion); }
 };
+
 template<class Sender>
 auto start_destructive(Sender sender, destructive_receiver receiver, erased_operation &storage) -> void
 {
@@ -118,58 +128,80 @@ auto start_destructive(Sender sender, destructive_receiver receiver, erased_oper
 struct vector_sink
 {
   bytes bytes_;
+
   auto write(std::span<std::byte const> data) -> void { bytes_.insert(bytes_.end(), data.begin(), data.end()); }
 };
+
 struct completion_receiver
 {
   using receiver_concept = stdexec::receiver_tag;
   std::promise<int> *promise_;
   stdexec::inplace_stop_token token_;
+
   [[nodiscard]] auto get_env() const noexcept -> stdexec::prop<stdexec::get_stop_token_t, stdexec::inplace_stop_token>
   { return { stdexec::get_stop_token, token_ }; }
+
   template<class T> auto set_value([[maybe_unused]] T &&value) noexcept -> void { promise_->set_value(0); }
+
   auto set_error(std::exception_ptr error) const noexcept -> void { promise_->set_exception(std::move(error)); }
+
   auto set_stopped() const noexcept -> void { promise_->set_value(1); }
 };
+
 constexpr std::size_t environment_marker = 73;
+
 struct marker_query
 {
   template<class Environment>
   [[nodiscard]] auto operator()(Environment const &environment) const noexcept -> decltype(environment.query(*this))
   { return environment.query(*this); }
+
   [[nodiscard]] static constexpr auto query([[maybe_unused]] stdexec::forwarding_query_t query) noexcept -> bool
   { return true; }
 };
+
 struct marker_receiver
 {
   using receiver_concept = stdexec::receiver_tag;
   completion_receiver completion_;
+
   struct environment
   {
     stdexec::inplace_stop_token token_;
+
     [[nodiscard]] auto query([[maybe_unused]] stdexec::get_stop_token_t query) const noexcept
       -> stdexec::inplace_stop_token
     { return token_; }
+
     [[nodiscard]] static auto query([[maybe_unused]] marker_query query) noexcept -> std::size_t
     { return environment_marker; }
   };
+
   [[nodiscard]] auto get_env() const noexcept -> environment { return { completion_.token_ }; }
+
   template<class T> auto set_value(T &&value) noexcept -> void { completion_.set_value(std::forward<T>(value)); }
+
   auto set_error(std::exception_ptr error) const noexcept -> void { completion_.set_error(std::move(error)); }
+
   auto set_stopped() const noexcept -> void { completion_.set_stopped(); }
 };
+
 struct marker_observer
 {
   std::atomic<std::size_t> *observed_;
+
   auto operator()(std::size_t marker) const -> void { observed_->store(marker); }
 };
+
 struct environment_scheduler
 {
   using scheduler_concept = stdexec::scheduler_tag;
   std::atomic<std::size_t> *observed_;
+
   [[nodiscard]] auto schedule() const
     -> decltype(stdexec::then(stdexec::read_env(marker_query{}), marker_observer{ observed_ }))
   { return stdexec::then(stdexec::read_env(marker_query{}), marker_observer{ observed_ }); }
+
   auto operator==(environment_scheduler const &) const noexcept -> bool = default;
 };
 
@@ -181,39 +213,50 @@ struct integer_source
   std::vector<std::size_t> *committed_;
   std::atomic<std::size_t> *acquired_;
   std::size_t cursor_ = 0;
+
   auto initialize() -> void {}
+
   auto next() -> std::optional<std::size_t>
   {
     if (cursor_ == count_) { return std::nullopt; }
     acquired_->fetch_add(1);
     return cursor_++;
   }
+
   auto commit(std::size_t value) const -> void { committed_->push_back(value); }
+
   [[nodiscard]] auto finish() const -> std::size_t { return committed_->size(); }
 };
+
 template<class Scheduler> struct throwing_scheduler
 {
   using scheduler_concept = stdexec::scheduler_tag;
   Scheduler scheduler_;
   std::size_t *submissions_;
   std::size_t fail_at_;
+
   [[nodiscard]] auto schedule() const -> stdexec::schedule_result_t<Scheduler>
   {
     if ((*submissions_)++ == fail_at_) { throw std::runtime_error("submission failed"); }
     return stdexec::schedule(scheduler_);
   }
+
   auto operator==(throwing_scheduler const &) const noexcept -> bool = default;
 };
+
 struct schedule_failure
 {
   auto operator()() const -> void { throw std::runtime_error("scheduler failed"); }
 };
+
 template<class Scheduler> struct error_scheduler
 {
   using scheduler_concept = stdexec::scheduler_tag;
   Scheduler scheduler_;
+
   [[nodiscard]] auto schedule() const -> decltype(stdexec::then(stdexec::schedule(scheduler_), schedule_failure{}))
   { return stdexec::then(stdexec::schedule(scheduler_), schedule_failure{}); }
+
   auto operator==(error_scheduler const &) const noexcept -> bool = default;
 };
 }// namespace
@@ -434,12 +477,14 @@ TEST_CASE("Source and sink exceptions end parallel encoding", "[execution]")
   struct failing_sink
   {
     std::size_t writes_ = 0;
+
     auto write([[maybe_unused]] std::span<std::byte const> data) -> void
     {
       ++writes_;
       if (writes_ > 1) { throw std::runtime_error("sink failed"); }
     }
   } failing;
+
   auto output_failure = huffman::encode_parallel_on(pool.get_scheduler(), bytes(block_size), failing);
   REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(output_failure)), "sink failed");
   constexpr std::size_t header_and_failed_frame = 2;
@@ -555,21 +600,27 @@ TEST_CASE("Parallel compression consumes an actual single-pass stream range", "[
 TEST_CASE("Cancellation between batches prevents further acquisition", "[execution]")
 {
   stdexec::inplace_stop_source stop;
+
   struct stopping_source
   {
     using input_type = integer_source::input_type;
     using result_type = integer_source::result_type;
     integer_source source_;
     stdexec::inplace_stop_source *stop_;
+
     auto initialize() -> void { source_.initialize(); }
+
     [[nodiscard]] auto next() -> std::optional<input_type> { return source_.next(); }
+
     auto commit(std::size_t value) const -> void
     {
       source_.commit(value);
       if (source_.committed_->size() == batch_size) { stop_->request_stop(); }
     }
+
     [[nodiscard]] auto finish() const -> result_type { return source_.finish(); }
   };
+
   std::atomic<std::size_t> acquired{ 0 };
   std::vector<std::size_t> committed;
   std::promise<int> promise;
@@ -615,6 +666,7 @@ TEST_CASE("Encoded results are released before acquiring the next batch", "[exec
   using result = std::shared_ptr<std::size_t>;
   std::vector<std::weak_ptr<std::size_t>> previous_results;
   bool released_before_next_batch = true;
+
   struct source
   {
     using input_type = std::size_t;
@@ -622,7 +674,9 @@ TEST_CASE("Encoded results are released before acquiring the next batch", "[exec
     std::vector<std::weak_ptr<std::size_t>> *previous_;
     bool *released_;
     std::size_t cursor_ = 0;
+
     auto initialize() -> void {}
+
     auto next() -> std::optional<std::size_t>
     {
       if (cursor_ == batch_size) {
@@ -631,9 +685,12 @@ TEST_CASE("Encoded results are released before acquiring the next batch", "[exec
       if (cursor_ == batch_size + 1) { return std::nullopt; }
       return cursor_++;
     }
+
     auto commit([[maybe_unused]] result const &value) const -> void {}
+
     [[nodiscard]] auto finish() const -> bool { return *released_; }
   };
+
   auto completed = stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(
     stdexec::inline_scheduler{},
     source{ .previous_ = &previous_results, .released_ = &released_before_next_batch },
@@ -858,11 +915,16 @@ TEST_CASE("Finish failure delivers one error to a destructive receiver", "[execu
     using input_type = integer_source::input_type;
     using result_type = integer_source::result_type;
     integer_source source_;
+
     auto initialize() -> void { source_.initialize(); }
+
     [[nodiscard]] auto next() -> std::optional<input_type> { return source_.next(); }
+
     auto commit(std::size_t value) const -> void { source_.commit(value); }
+
     [[nodiscard]] static auto finish() -> std::size_t { throw std::runtime_error("finish failed"); }
   };
+
   std::atomic<std::size_t> acquired{ 0 };
   std::atomic<std::size_t> completions{ 0 };
   std::vector<std::size_t> committed;

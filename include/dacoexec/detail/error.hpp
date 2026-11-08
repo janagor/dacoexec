@@ -17,6 +17,7 @@ class format_error : public std::runtime_error
 public:
   using std::runtime_error::runtime_error;
 };
+
 /**
  * Stream or file I/O failure, including errors reported by io::ostream_sink.
  *

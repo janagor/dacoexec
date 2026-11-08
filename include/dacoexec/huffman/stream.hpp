@@ -30,6 +30,7 @@ struct stream_options
   //! Maximum source bytes per data frame; must be in [1, max_frame_size].
   std::size_t block_size_ = default_block_size;
 };
+
 /**
  * Resource limits for verified stream decompression.
  *
@@ -42,6 +43,7 @@ struct decode_options
   //! Maximum total decoded bytes; zero permits only an archive without data frames.
   std::uint64_t max_output_bytes_ = std::numeric_limits<std::uint64_t>::max();
 };
+
 /**
  * Byte and data-frame counts returned only after successful completion.
  *
@@ -58,6 +60,7 @@ struct stream_statistics
   //! Number of data frames; excludes END and the archive header.
   std::uint64_t frames_ = 0;
 };
+
 namespace detail {
   inline auto checked_add(std::uint64_t &total, std::uint64_t amount) -> void
   {
@@ -67,6 +70,7 @@ namespace detail {
     total += amount;
   }
 }// namespace detail
+
 /**
  * Consumes one nonempty block, computes its uncompressed CRC32 and encodes it.
  *
@@ -93,6 +97,7 @@ namespace detail {
     .crc32_ = checksum };
   return frame;
 }
+
 /**
  * Compresses a viewable byte input range into a DHF1 archive in one pass.
  *
@@ -141,6 +146,7 @@ template<std::ranges::viewable_range R, io::byte_output_sink S>
   write_frame_header(sink, {});
   return statistics;
 }
+
 /**
  * Earlier frames remain written if a later frame fails. Current frame content
  * and output limits are validated before its first write; sinks cannot roll back.

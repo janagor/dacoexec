@@ -24,11 +24,13 @@ struct alignas(std::max_align_t) allocation_header
   std::size_t size_;
   void *allocation_;
 };
+
 struct allocation_counters
 {
   std::size_t retained_ = 0;
   std::size_t peak_ = 0;
 };
+
 auto allocation_statistics() -> allocation_counters &
 {
   static allocation_counters counters;
@@ -58,6 +60,7 @@ auto allocate(std::size_t size, std::size_t alignment) -> void *
   allocation_statistics().peak_ = std::max(allocation_statistics().peak_, allocation_statistics().retained_);
   return pointer;
 }
+
 auto deallocate(void *pointer) noexcept -> void
 {
   if (pointer == nullptr) { return; }
@@ -65,27 +68,39 @@ auto deallocate(void *pointer) noexcept -> void
   allocation_statistics().retained_ -= header->size_;
   std::free(header->allocation_);
 }
+
 // NOLINTEND(cppcoreguidelines-owning-memory,cppcoreguidelines-no-malloc,hicpp-no-malloc,cppcoreguidelines-pro-bounds-pointer-arithmetic)
 }// namespace
 
 // Isolated executable: track both ordinary and over-aligned heap allocations.
 auto operator new(std::size_t size) -> void * { return allocate(size, alignof(std::max_align_t)); }
+
 auto operator new[](std::size_t size) -> void * { return ::operator new(size); }
+
 auto operator delete(void *pointer) noexcept -> void { deallocate(pointer); }
+
 auto operator delete[](void *pointer) noexcept -> void { deallocate(pointer); }
+
 auto operator delete(void *pointer, [[maybe_unused]] std::size_t size) noexcept -> void { deallocate(pointer); }
+
 auto operator delete[](void *pointer, [[maybe_unused]] std::size_t size) noexcept -> void { deallocate(pointer); }
+
 auto operator new(std::size_t size, std::align_val_t alignment) -> void *
 { return allocate(size, static_cast<std::size_t>(alignment)); }
+
 auto operator new[](std::size_t size, std::align_val_t alignment) -> void * { return ::operator new(size, alignment); }
+
 auto operator delete(void *pointer, [[maybe_unused]] std::align_val_t alignment) noexcept -> void
 { deallocate(pointer); }
+
 auto operator delete[](void *pointer, [[maybe_unused]] std::align_val_t alignment) noexcept -> void
 { deallocate(pointer); }
+
 auto operator delete(void *pointer,
   [[maybe_unused]] std::size_t size,
   [[maybe_unused]] std::align_val_t alignment) noexcept -> void
 { deallocate(pointer); }
+
 auto operator delete[](void *pointer,
   [[maybe_unused]] std::size_t size,
   [[maybe_unused]] std::align_val_t alignment) noexcept -> void
@@ -93,10 +108,12 @@ auto operator delete[](void *pointer,
 
 namespace {
 namespace huffman = dacoexec::huffman;
+
 struct checking_sink
 {
   std::uint64_t count_ = 0;
   bool check_zero_ = false;
+
   auto write(std::span<std::byte const> bytes) -> void
   {
     if (check_zero_ && std::ranges::any_of(bytes, [](auto byte) -> bool { return byte != std::byte{ 0 }; })) {

@@ -80,7 +80,6 @@ constexpr auto large_fixture_seed = 11U;
 constexpr auto block_fixture_size = 4096;
 constexpr auto random_codeword_count = 300;
 
-
 struct source_stats
 {
   std::size_t begin_calls_ = 0;
@@ -430,6 +429,7 @@ public:
   explicit fail_sink_iterator(state *state) noexcept : state_(state) {}
 
   auto operator*() noexcept -> fail_sink_iterator & { return *this; }
+
   auto operator*() const noexcept -> fail_sink_iterator const & { return *this; }
 
   // Const assignment is required by std::indirectly_writable.
@@ -511,6 +511,7 @@ public:
   ~retarget_iterator() = default;
 
   auto operator*() noexcept -> retarget_iterator & { return *this; }
+
   auto operator*() const noexcept -> retarget_iterator const & { return *this; }
 
   // Const assignment is required by std::indirectly_writable.
@@ -523,6 +524,7 @@ public:
   }
 
   auto operator++() noexcept -> retarget_iterator & { return *this; }
+
   auto operator++([[maybe_unused]] int postfix) noexcept -> retarget_iterator { return *this; }
 
 private:

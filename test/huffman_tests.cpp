@@ -410,6 +410,7 @@ template<class Byte> auto require_extreme_byte_counts() -> void
 struct huffman_byte_proxy
 {
   std::byte value_{};
+
   // Implicit conversion is required by indirectly_readable.
   // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   constexpr operator std::byte() const { return value_; }
@@ -1011,7 +1012,6 @@ TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", 
     }
   }
 }
-
 
 TEST_CASE("unsupported canonical widths take precedence over invalid tree structure", "[huffman][canonical]")
 {

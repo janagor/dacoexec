@@ -47,6 +47,7 @@ auto compress(bytes const &input, std::size_t block_size = test_block_size) -> b
   REQUIRE(statistics.output_bytes_ == archive.size());
   return archive;
 }
+
 auto decompress(bytes const &archive, std::uint64_t limit = std::numeric_limits<std::uint64_t>::max()) -> bytes
 {
   bytes output;
@@ -57,6 +58,7 @@ auto decompress(bytes const &archive, std::uint64_t limit = std::numeric_limits<
   REQUIRE(statistics.output_bytes_ == output.size());
   return output;
 }
+
 auto manual_archive(huffman::frame_header header,
   bytes const &payload = {},
   huffman::code_length_table const &lengths = {}) -> bytes
@@ -250,10 +252,12 @@ TEST_CASE("DHF1 stops on sink failures and writes incrementally", "[streaming]")
       ++consumed;
       return std::byte{ 0 };
     });
+
   struct sink_type
   {
     std::reference_wrapper<std::size_t> consumed_;
     std::size_t calls_ = 0;
+
     auto write([[maybe_unused]] std::span<std::byte const> bytes) -> void
     {
       ++calls_;
@@ -263,6 +267,7 @@ TEST_CASE("DHF1 stops on sink failures and writes incrementally", "[streaming]")
       }
     }
   } sink{ .consumed_ = std::ref(consumed) };
+
   REQUIRE_THROWS_AS(huffman::compress_stream(source, sink, { test_block_size }), std::logic_error);
   REQUIRE(consumed == test_block_size);
   std::uint64_t total = std::numeric_limits<std::uint64_t>::max();
@@ -293,18 +298,22 @@ TEST_CASE("DHF1 accepts move-only nonsized single-pass sources", "[streaming]")
     explicit source_type(std::string data)
       : stream_(std::make_unique<std::istringstream>(std::move(data))), view_(*stream_)
     { *stream_ >> std::noskipws; }
+
     source_type(source_type &&) noexcept = default;
     auto operator=(source_type &&) noexcept -> source_type & = default;
     source_type(source_type const &) = delete;
     auto operator=(source_type const &) -> source_type & = delete;
     ~source_type() = default;
+
     auto begin() -> decltype(std::declval<std::ranges::istream_view<char> &>().begin()) { return view_.begin(); }
+
     [[nodiscard]] static auto end() -> std::default_sentinel_t { return {}; }
 
   private:
     std::unique_ptr<std::istringstream> stream_;
     std::ranges::istream_view<char> view_;
   };
+
   bytes archive;
   dacoexec::io::iterator_sink archive_sink(std::back_inserter(archive));
   std::string const original(test_block_size + 1, 'x');
@@ -454,6 +463,7 @@ TEST_CASE("DHF1 propagates source failure at every archive boundary", "[streamin
   {
     source_failure() : std::runtime_error("injected source failure") {}
   };
+
   constexpr std::size_t input_size = test_block_size + 1;
   auto const archive = compress(bytes(input_size, std::byte{ 'a' }));
   for (std::size_t boundary = 0; boundary < archive.size(); ++boundary) {
