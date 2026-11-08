@@ -28,6 +28,8 @@
 #include <dacoexec/views/blocks.hpp>
 #include <dacoexec/views/buffered_bytes.hpp>
 #include <dacoexec/views/frames.hpp>
+#include <dacoexec/views/integer_decode.hpp>
+#include <dacoexec/views/integer_encode.hpp>
 
 
 #endif// DACOEXEC_DACOEXEC_HPP
