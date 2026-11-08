@@ -80,8 +80,10 @@ file(
   DACOEXEC_HEADERS
   CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/include/dacoexec/*.hpp")
-set(DACOEXEC_EXECUTION_HEADERS "${PROJECT_SOURCE_DIR}/include/dacoexec/execution/ordered_parallel.hpp"
-                               "${PROJECT_SOURCE_DIR}/include/dacoexec/huffman/execution.hpp")
+set(DACOEXEC_EXECUTION_HEADERS
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/execution/ordered_parallel.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/huffman/execution.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/ans/execution.hpp")
 list(REMOVE_ITEM DACOEXEC_HEADERS ${DACOEXEC_EXECUTION_HEADERS})
 if(NOT DACOEXEC_HEADERS)
   message(FATAL_ERROR "No public headers found under include/dacoexec")

@@ -1,10 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
+#include <dacoexec/ans/execution.hpp>
+#include <dacoexec/ans/format.hpp>
+#include <dacoexec/ans/model.hpp>
+#include <dacoexec/ans/stream.hpp>
 #include <dacoexec/execution/ordered_parallel.hpp>
 #include <dacoexec/huffman/execution.hpp>
 #include <dacoexec/huffman/format.hpp>
 #include <dacoexec/huffman/stream.hpp>
 #include <dacoexec/io/output_sink.hpp>
+#include <dacoexec/views/ans_frames.hpp>
 #include <dacoexec/views/blocks.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
@@ -946,4 +951,141 @@ TEST_CASE("Finish failure delivers one error to a destructive receiver", "[execu
   REQUIRE(completions.load() == 1);
   REQUIRE(storage == nullptr);
   REQUIRE(committed.size() == batch_size);
+}
+
+TEST_CASE("Parallel ANS archives match sequential encoding", "[ans][execution]")
+{
+  namespace ans = dacoexec::ans;
+  constexpr std::size_t ans_block_size = 4096;
+  constexpr std::size_t ans_capacity = 2;
+  bytes input((ans_block_size * ans_capacity) + 1, std::byte{ 'A' });
+  bytes sequential;
+  dacoexec::io::iterator_sink sequential_sink{ std::back_inserter(sequential) };
+  static_cast<void>(ans::compress_stream(input, sequential_sink, { ans_block_size }));
+  exec::static_thread_pool pool{ ans_capacity };
+  bytes parallel;
+  dacoexec::io::iterator_sink parallel_sink{ std::back_inserter(parallel) };
+  auto result = stdexec::sync_wait(ans::encode_parallel_on(
+    pool.get_scheduler(), input, parallel_sink, { .block_size_ = ans_block_size, .max_in_flight_ = ans_capacity }));
+  REQUIRE(result.has_value());
+  REQUIRE(parallel == sequential);
+  bytes decoded;
+  dacoexec::io::iterator_sink decoded_sink{ std::back_inserter(decoded) };
+  static_cast<void>(ans::decompress_stream(parallel, decoded_sink));
+  REQUIRE(decoded == input);
+}
+
+TEST_CASE("Parallel ANS preserves mixed frame kinds and short final blocks", "[ans][execution]")
+{
+  namespace ans = dacoexec::ans;
+  constexpr std::size_t ans_block_size = 4096;
+  constexpr std::size_t final_size = 7;
+  constexpr std::array capacities{ std::size_t{ 1 }, std::size_t{ 2 }, std::size_t{ 4 } };
+  constexpr std::array workers{ 1U, 2U, 4U };
+  bytes input(ans_block_size, std::byte{ 'A' });
+  for (std::size_t index = 0; index < ans_block_size; ++index) {
+    input.push_back(static_cast<std::byte>(index % ans::alphabet_size));
+  }
+  input.insert(input.end(), final_size, std::byte{ 'Z' });
+  vector_sink sequential;
+  static_cast<void>(ans::compress_stream(input, sequential, { ans_block_size }));
+  std::vector<ans::frame_kind> kinds;
+  for (auto const &frame : sequential.bytes_ | dacoexec::views::ans_frames()) { kinds.push_back(frame.header_.kind_); }
+  REQUIRE(kinds == std::vector<ans::frame_kind>{ ans::frame_kind::rans, ans::frame_kind::raw, ans::frame_kind::raw });
+  for (auto count : workers) {
+    exec::static_thread_pool pool{ count };
+    for (auto capacity : capacities) {
+      vector_sink parallel;
+      auto result = stdexec::sync_wait(ans::encode_parallel_on(
+        pool.get_scheduler(), input, parallel, { .block_size_ = ans_block_size, .max_in_flight_ = capacity }));
+      REQUIRE(result.has_value());
+      REQUIRE(parallel.bytes_ == sequential.bytes_);
+      vector_sink decoded;
+      static_cast<void>(ans::decompress_stream(parallel.bytes_, decoded));
+      REQUIRE(decoded.bytes_ == input);
+    }
+  }
+}
+
+TEST_CASE("ANS parallel frame writes propagate sink failures", "[ans][execution]")
+{
+  namespace ans = dacoexec::ans;
+  constexpr std::size_t ans_block_size = 4096;
+  constexpr std::size_t archive_and_frame_headers = 2;
+
+  struct failing_sink
+  {
+    std::size_t writes_ = 0;
+
+    auto write([[maybe_unused]] std::span<std::byte const> data) -> void
+    {
+      if (++writes_ > archive_and_frame_headers) { throw std::runtime_error("ANS sink failed"); }
+    }
+  } sink;
+
+  exec::static_thread_pool pool{ 1 };
+  bytes input(ans_block_size, std::byte{ 'A' });
+  auto sender = ans::encode_parallel_on(pool.get_scheduler(), input, sink);
+  REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "ANS sink failed");
+  REQUIRE(sink.writes_ == archive_and_frame_headers + 1);
+}
+
+TEST_CASE("ANS cancellation drains in-flight frames without committing", "[ans][execution]")
+{
+  namespace ans = dacoexec::ans;
+  constexpr std::size_t ans_block_size = 4096;
+  constexpr std::size_t capacity = 2;
+  exec::static_thread_pool pool{ capacity };
+  stdexec::inplace_stop_source stop;
+  bytes input(ans_block_size * (capacity + 1), std::byte{ 'A' });
+  auto source = std::views::all(input);
+  vector_sink sink;
+  using source_type = ans::detail::parallel_source<decltype(source), vector_sink>;
+  std::latch entered(capacity);
+  std::latch release(1);
+  std::atomic<std::size_t> finished{ 0 };
+  auto encode = [&](dacoexec::byte_block block) -> ans::encoded_frame {
+    entered.count_down();
+    release.wait();
+    auto frame = ans::encode_frame(std::move(block));
+    finished.fetch_add(1);
+    return frame;
+  };
+  std::promise<int> promise;
+  auto future = promise.get_future();
+  auto operation =
+    stdexec::connect(dacoexec::execution::ordered_parallel_on(pool.get_scheduler(),
+                       source_type{ source, &sink, { .block_size_ = ans_block_size, .max_in_flight_ = capacity } },
+                       encode,
+                       capacity),
+      completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+  stdexec::start(operation);
+  entered.wait();
+  stop.request_stop();
+  release.count_down();
+  REQUIRE(future.get() == stopped_completion);
+  REQUIRE(finished.load() == capacity);
+  REQUIRE(sink.bytes_.size() == ans::archive_header_size);
+}
+
+TEST_CASE("ANS cancellation before start leaves source and sink untouched", "[ans][execution]")
+{
+  exec::static_thread_pool pool{ 1 };
+  stdexec::inplace_stop_source stop;
+  stop.request_stop();
+  vector_sink sink;
+  std::size_t reads = 0;
+  auto input =
+    std::views::iota(std::size_t{ 0 }, block_size) | std::views::transform([&reads](std::size_t value) -> std::byte {
+      ++reads;
+      return static_cast<std::byte>(value);
+    });
+  std::promise<int> promise;
+  auto future = promise.get_future();
+  auto operation = stdexec::connect(dacoexec::ans::encode_parallel_on(pool.get_scheduler(), input, sink),
+    completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+  stdexec::start(operation);
+  REQUIRE(future.get() == stopped_completion);
+  REQUIRE(reads == 0);
+  REQUIRE(sink.bytes_.empty());
 }
