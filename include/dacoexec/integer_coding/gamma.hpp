@@ -21,7 +21,7 @@ template<bit_output Writer> constexpr auto write_gamma(Writer &out, std::uint64_
 }
 
 // Malformed values may consume input before throwing; the reader remains bounded.
-constexpr auto read_gamma(bit_reader &reader) -> std::uint64_t
+template<bit_input Reader> constexpr auto read_gamma(Reader &reader) -> std::uint64_t
 {
   unsigned zeros = 0;
   while (!reader.read_bit()) {
@@ -30,6 +30,8 @@ constexpr auto read_gamma(bit_reader &reader) -> std::uint64_t
   }
   return (std::uint64_t{ 1 } << zeros) | reader.read_bits(zeros);
 }
+
+constexpr auto read_gamma(bit_reader &reader) -> std::uint64_t { return read_gamma<bit_reader>(reader); }
 
 }// namespace dacoexec::integer_coding
 

@@ -33,12 +33,16 @@ template<bit_output Writer> constexpr auto write_rice(Writer &out, std::uint64_t
   detail::write_value(out, { .value_ = value, .bit_count_ = shift });
 }
 
-constexpr auto read_rice(bit_reader &reader, unsigned shift, decode_limits limits = {}) -> std::uint64_t
+template<bit_input Reader>
+constexpr auto read_rice(Reader &reader, unsigned shift, decode_limits limits = {}) -> std::uint64_t
 {
   detail::validate_rice(shift);
   auto const quotient = detail::read_unary(reader, limits, std::numeric_limits<std::uint64_t>::max() >> shift);
   return (quotient << shift) | reader.read_bits(shift);
 }
+
+constexpr auto read_rice(bit_reader &reader, unsigned shift, decode_limits limits = {}) -> std::uint64_t
+{ return read_rice<bit_reader>(reader, shift, limits); }
 
 }// namespace dacoexec::integer_coding
 

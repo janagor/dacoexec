@@ -63,7 +63,8 @@ template<bit_output Writer> constexpr auto write_golomb(Writer &out, std::uint64
   }
 }
 
-constexpr auto read_golomb(bit_reader &reader, std::uint32_t divisor, decode_limits limits = {}) -> std::uint64_t
+template<bit_input Reader>
+constexpr auto read_golomb(Reader &reader, std::uint32_t divisor, decode_limits limits = {}) -> std::uint64_t
 {
   detail::validate_golomb(divisor);
   auto const maximum = std::numeric_limits<std::uint64_t>::max();
@@ -77,6 +78,9 @@ constexpr auto read_golomb(bit_reader &reader, std::uint32_t divisor, decode_lim
   }
   return detail::golomb_value({ .quotient_ = quotient, .remainder_ = remainder }, divisor);
 }
+
+constexpr auto read_golomb(bit_reader &reader, std::uint32_t divisor, decode_limits limits = {}) -> std::uint64_t
+{ return read_golomb<bit_reader>(reader, divisor, limits); }
 
 }// namespace dacoexec::integer_coding
 

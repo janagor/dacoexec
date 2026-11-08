@@ -21,13 +21,15 @@ template<bit_output Writer> constexpr auto write_delta(Writer &out, std::uint64_
   detail::write_value(out, { .value_ = value, .bit_count_ = width - 1U });
 }
 
-constexpr auto read_delta(bit_reader &reader) -> std::uint64_t
+template<bit_input Reader> constexpr auto read_delta(Reader &reader) -> std::uint64_t
 {
   auto const width = read_gamma(reader);
   if (width > integer_bits) { throw std::overflow_error("dacoexec::integer_coding delta overflow"); }
   auto const suffix = static_cast<unsigned>(width - 1U);
   return (std::uint64_t{ 1 } << suffix) | reader.read_bits(suffix);
 }
+
+constexpr auto read_delta(bit_reader &reader) -> std::uint64_t { return read_delta<bit_reader>(reader); }
 
 }// namespace dacoexec::integer_coding
 

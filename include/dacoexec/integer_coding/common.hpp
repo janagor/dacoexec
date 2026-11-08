@@ -24,6 +24,12 @@ struct decode_limits
   std::uint64_t max_unary_bits_ = default_max_unary_bits;
 };
 
+template<class Reader>
+concept bit_input = requires(Reader &reader, unsigned count) {
+  { reader.read_bit() } -> std::same_as<bool>;
+  { reader.read_bits(count) } -> std::same_as<std::uint64_t>;
+};
+
 template<class Writer>
 concept bit_output = requires(Writer &out, bit_sequence bits, bool bit) {
   { out.write_bits(bits) } -> std::same_as<void>;
@@ -76,7 +82,8 @@ namespace detail {
     out.write_bit(false);
   }
 
-  constexpr auto read_unary(bit_reader &reader, decode_limits limits, std::uint64_t maximum) -> std::uint64_t
+  template<bit_input Reader>
+  constexpr auto read_unary(Reader &reader, decode_limits limits, std::uint64_t maximum) -> std::uint64_t
   {
     std::uint64_t quotient = 0;
     while (reader.read_bit()) {
