@@ -298,4 +298,20 @@ static_assert(std::is_nothrow_move_constructible_v<dacoexec::huffman::encoded_bl
 static_assert(std::same_as<decltype(dacoexec::huffman::compress_block(std::declval<dacoexec::byte_block>())),
   dacoexec::huffman::encoded_block>);
 
+constexpr auto typed_tree_storage_matches() -> bool
+{
+  dacoexec::huffman::static_tree_arena arena;
+  dacoexec::huffman::dynamic_tree_allocator<> dynamic;
+  auto const expected = dacoexec::huffman::build_code_lengths(huffman_frequencies);
+  return dacoexec::huffman::build_code_lengths(huffman_frequencies, arena) == expected
+         && dacoexec::huffman::build_code_lengths(huffman_frequencies, dynamic) == expected
+         && arena.size() == dynamic.size();
+}
+
+static_assert(typed_tree_storage_matches());
+static_assert(!std::is_copy_constructible_v<dacoexec::huffman::static_tree_arena>);
+static_assert(!std::is_move_constructible_v<dacoexec::huffman::static_tree_arena>);
+static_assert(!std::is_copy_constructible_v<dacoexec::huffman::dynamic_tree_allocator<>>);
+static_assert(!std::is_move_constructible_v<dacoexec::huffman::dynamic_tree_allocator<>>);
+
 auto main() -> int { return 0; }

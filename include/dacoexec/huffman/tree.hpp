@@ -5,6 +5,7 @@
 #define DACOEXEC_HUFFMAN_TREE_HPP
 
 #include <dacoexec/huffman/frequency.hpp>
+#include <dacoexec/huffman/node_storage.hpp>
 
 #include <algorithm>
 #include <array>
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 
 namespace dacoexec::huffman {
@@ -52,26 +54,24 @@ namespace detail {
   // 256 leaves plus at most 255 internal nodes.
   inline constexpr std::size_t max_tree_nodes = (alphabet_size * 2U) - 1U;
 
-  // Not a valid node index. A leaf uses this value for both children.
-  inline constexpr std::uint16_t invalid_link = std::numeric_limits<std::uint16_t>::max();
+  // An internal node has no symbol.
+  inline constexpr std::uint16_t invalid_symbol = std::numeric_limits<std::uint16_t>::max();
 
   inline constexpr std::size_t expected_tree_nodes = 511U;
   static_assert(max_tree_nodes == expected_tree_nodes);
-  static_assert(max_tree_nodes < invalid_link);
+  static_assert(max_tree_nodes < invalid_symbol);
   static_assert(alphabet_size - 1U <= std::numeric_limits<std::uint8_t>::max());
 
   // Temporary node used only while deriving code lengths.
-  // left_ and right_ are indexes into the owning node array.
   struct tree_node
   {
     std::uint64_t frequency_ = 0;
     std::uint16_t min_symbol_ = 0;
-    std::uint16_t left_ = invalid_link;
-    std::uint16_t right_ = invalid_link;
-    std::uint16_t symbol_ = invalid_link;
+    tree_node const *left_ = nullptr;
+    tree_node const *right_ = nullptr;
+    std::uint16_t symbol_ = invalid_symbol;
 
-    [[nodiscard]] constexpr auto is_leaf() const noexcept -> bool
-    { return left_ == invalid_link && right_ == invalid_link; }
+    [[nodiscard]] constexpr auto is_leaf() const noexcept -> bool { return left_ == nullptr && right_ == nullptr; }
   };
 
   // Min-heap key. Lower frequency, then lower min_symbol, then lower node_index.
@@ -80,6 +80,7 @@ namespace detail {
     std::uint64_t frequency_ = 0;
     std::uint16_t min_symbol_ = 0;
     std::uint16_t node_index_ = 0;
+    tree_node const *node_ = nullptr;
   };
 
   // Inverted comparison so the priority queue keeps the minimum key at the front.
@@ -119,10 +120,12 @@ namespace detail {
     std::size_t size_ = 0;
   };
 
-  // Owns the Huffman forest and all state for one length computation.
-  class length_builder
+  // Builds a Huffman forest in caller-owned storage for one length computation.
+  template<class NodeStorage> class length_builder
   {
   public:
+    constexpr explicit length_builder(NodeStorage &nodes) noexcept : nodes_(&nodes) {}
+
     [[nodiscard]] constexpr auto build(frequency_table const &frequencies) -> code_length_table
     {
       for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
@@ -137,66 +140,66 @@ namespace detail {
     constexpr auto add_leaf(std::uint16_t symbol, std::uint64_t frequency) -> void
     {
       auto const index = node_count_;
-      nodes_.at(index) = tree_node{
+      auto const *node = nodes_->create(tree_node{
         .frequency_ = frequency,
         .min_symbol_ = symbol,
-        .left_ = invalid_link,
-        .right_ = invalid_link,
+        .left_ = nullptr,
+        .right_ = nullptr,
         .symbol_ = symbol,
-      };
+      });
       ++node_count_;
-      queue_.push(heap_entry{ .frequency_ = frequency, .min_symbol_ = symbol, .node_index_ = index });
+      queue_.push(heap_entry{ .frequency_ = frequency, .min_symbol_ = symbol, .node_index_ = index, .node_ = node });
     }
 
     constexpr auto merge_pair() -> void
     {
       heap_entry const first = queue_.pop();
       heap_entry const second = queue_.pop();
-      std::uint64_t const left_frequency = nodes_.at(first.node_index_).frequency_;
-      std::uint64_t const right_frequency = nodes_.at(second.node_index_).frequency_;
+      std::uint64_t const left_frequency = first.node_->frequency_;
+      std::uint64_t const right_frequency = second.node_->frequency_;
       if (left_frequency > std::numeric_limits<std::uint64_t>::max() - right_frequency) {
         throw std::overflow_error("Huffman tree frequency overflow");
       }
       std::uint64_t const frequency = left_frequency + right_frequency;
-      std::uint16_t const min_symbol =
-        std::min(nodes_.at(first.node_index_).min_symbol_, nodes_.at(second.node_index_).min_symbol_);
+      std::uint16_t const min_symbol = std::min(first.node_->min_symbol_, second.node_->min_symbol_);
       auto const index = node_count_;
       // The first popped node is the left child and the second is the right child.
-      nodes_.at(index) = tree_node{
+      auto const *node = nodes_->create(tree_node{
         .frequency_ = frequency,
         .min_symbol_ = min_symbol,
-        .left_ = first.node_index_,
-        .right_ = second.node_index_,
-        .symbol_ = invalid_link,
-      };
+        .left_ = first.node_,
+        .right_ = second.node_,
+        .symbol_ = invalid_symbol,
+      });
       ++node_count_;
-      queue_.push(heap_entry{ .frequency_ = frequency, .min_symbol_ = min_symbol, .node_index_ = index });
+      queue_.push(
+        heap_entry{ .frequency_ = frequency, .min_symbol_ = min_symbol, .node_index_ = index, .node_ = node });
     }
 
-    [[nodiscard]] constexpr auto depths_from(std::uint16_t root) const -> code_length_table
+    [[nodiscard]] static constexpr auto depths_from(tree_node const *root) -> code_length_table
     {
       struct frame
       {
-        std::uint16_t index_ = 0;
+        tree_node const *node_ = nullptr;
         std::uint16_t depth_ = 0;
       };
 
       code_length_table lengths{};
       std::array<frame, max_tree_nodes> stack{};
       std::size_t top = 1;
-      stack.at(0) = frame{ .index_ = root, .depth_ = 0 };
+      stack.at(0) = frame{ .node_ = root, .depth_ = 0 };
       while (top != 0) {
         frame const current = stack.at(top - 1);
         --top;
-        tree_node const node = nodes_.at(current.index_);
+        tree_node const &node = *current.node_;
         if (node.is_leaf()) {
           lengths.at(node.symbol_) = static_cast<std::uint8_t>(current.depth_);
           continue;
         }
         auto const child_depth = static_cast<std::uint16_t>(current.depth_ + 1U);
-        stack.at(top) = frame{ .index_ = node.right_, .depth_ = child_depth };
+        stack.at(top) = frame{ .node_ = node.right_, .depth_ = child_depth };
         ++top;
-        stack.at(top) = frame{ .index_ = node.left_, .depth_ = child_depth };
+        stack.at(top) = frame{ .node_ = node.left_, .depth_ = child_depth };
         ++top;
       }
       return lengths;
@@ -207,22 +210,42 @@ namespace detail {
       if (node_count_ == 0) { return {}; }
       if (node_count_ == 1) {
         code_length_table lengths{};
-        lengths.at(nodes_.at(0).symbol_) = std::uint8_t{ 1 };
+        lengths.at(queue_.pop().node_->symbol_) = std::uint8_t{ 1 };
         return lengths;
       }
       while (queue_.size() > 1) { merge_pair(); }
-      return depths_from(static_cast<std::uint16_t>(node_count_ - 1));
+      return depths_from(queue_.pop().node_);
     }
 
-    std::array<tree_node, max_tree_nodes> nodes_{};
+    NodeStorage *nodes_;
     tree_priority_queue queue_{};
     std::uint16_t node_count_ = 0;
   };
 
 }// namespace detail
 
+/** Fixed-capacity typed storage for one complete Huffman tree. */
+using static_tree_arena = static_node_arena<detail::tree_node, detail::max_tree_nodes>;
+
+/** Dynamically owned nodes; a runtime allocator such as PMR can be supplied. */
+template<class Allocator = std::allocator<detail::tree_node>>
+using dynamic_tree_allocator = dynamic_node_allocator<detail::tree_node, Allocator>;
+
+/**
+ * Build with caller-owned typed storage. Existing nodes remain alive; new nodes
+ * are appended. Storage must keep node addresses stable until this call returns.
+ * Allocation failures propagate, and storage retains nodes already created.
+ */
+template<class NodeStorage>
+[[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies, NodeStorage &storage)
+  -> code_length_table
+{ return detail::length_builder<NodeStorage>{ storage }.build(frequencies); }
+
 [[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies) -> code_length_table
-{ return detail::length_builder{}.build(frequencies); }
+{
+  static_tree_arena storage;
+  return build_code_lengths(frequencies, storage);
+}
 
 }// namespace dacoexec::huffman
 

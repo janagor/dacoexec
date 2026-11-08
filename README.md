@@ -129,6 +129,41 @@ The table holds 256 `std::uint64_t` counters (2048 bytes). Counting walks the in
 
 Ties break in a fixed order: lower frequency, then the smaller symbol contained in the subtree, then the earlier node. The same table yields the same lengths on every run. Construction uses a fixed array of 511 nodes and performs no dynamic allocation. A parent frequency that would pass the maximum `std::uint64_t` throws `std::overflow_error` (`Huffman tree frequency overflow`).
 
+Tree nodes use pointer links. The default overload owns a `static_tree_arena`;
+you can also pass typed storage explicitly:
+
+```cpp
+dacoexec::huffman::static_tree_arena arena;
+auto lengths = dacoexec::huffman::build_code_lengths(frequencies, arena);
+
+dacoexec::huffman::dynamic_tree_allocator<> dynamic;
+auto dynamic_lengths = dacoexec::huffman::build_code_lengths(frequencies, dynamic);
+```
+
+Both strategies support C++20 constant evaluation when their owners are destroyed
+within that evaluation. `static_node_arena<T, Capacity>` default-constructs all
+slots and throws `std::length_error` when exhausted. `dynamic_node_allocator<T,
+Allocator>` allocates each node separately and releases all nodes on destruction,
+including after a failed build. Its pointer bookkeeping uses `std::vector` with
+the default allocator. Both owners disable copying and moving to keep node
+addresses stable. Calls append nodes to the supplied storage; use a fresh owner
+for each tree when reusing a fixed-capacity arena.
+
+For runtime PMR allocation, keep the resource alive until the storage is destroyed:
+
+```cpp
+#include <memory_resource>
+
+using node = dacoexec::huffman::static_tree_arena::value_type;
+using allocator = std::pmr::polymorphic_allocator<node>;
+std::pmr::monotonic_buffer_resource resource;
+dacoexec::huffman::dynamic_tree_allocator<allocator> storage{ allocator{ &resource } };
+auto lengths = dacoexec::huffman::build_code_lengths(frequencies, storage);
+```
+
+PMR-backed storage is runtime-only. Custom storage must provide `create(node)`
+returning a pointer whose address remains stable throughout construction.
+
 Lengths are the leaf depths of that tree and can be as large as 255. With two or more present symbols they form a complete prefix code: the Kraft sum is 1, and the weighted path length is optimal. Canonical codewords are assigned from these lengths later. This step produces lengths only.
 
 ```cpp
