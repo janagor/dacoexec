@@ -45,6 +45,18 @@ Golomb and Rice encode the quotient as ones followed by a terminating zero. Prim
 
 `integer_coding/sequence.hpp` adds `write_gamma_sequence(writer, input)` and `read_gamma_sequence(reader, count, output_iterator)`, with corresponding Delta, Golomb, and Rice functions. Golomb and Rice take their parameter after the input range or output iterator; readers also accept optional decoding limits. Input ranges contain unsigned integers (excluding bool), are consumed once, and may be move-only or single-pass. Writers do not finalize the bitstream. Readers decode exactly the requested count, return the advanced output iterator, and leave subsequent bits available. Output storage must have sufficient capacity and preserve `uint64_t` values. Exceptions propagate without rolling back earlier input or output.
 
+`views/integer_encode.hpp` and `views/integer_decode.hpp` provide lazy, single-pass bit ranges, also available through the umbrella header:
+
+```cpp
+namespace dv = dacoexec::views;
+std::vector<std::uint64_t> values{1, 2, 3, 4, 13};
+auto decoded = values | dv::encode::gamma() | dv::decode::gamma(values.size());
+```
+
+The same interface supports `encode::delta()` / `decode::delta(count)`, `encode::golomb(divisor)` / `decode::golomb(divisor, count)`, and `encode::rice(shift)` / `decode::rice(shift, count)`. Golomb and Rice decoders accept an optional final `integer_coding::decode_limits` argument. Encoder inputs use the same unsigned integer constraint as the sequence API; decoder inputs contain `bool` values, including proxy references such as `vector<bool>`. Use `views::bits()` to unpack bytes before decoding, and `bit_output_iterator` with a `bit_writer` to pack encoder bits. Preserve the count and valid bit length alongside packed data.
+
+Construction consumes no input. Each encoder stages one integer using fixed storage, including for very long unary prefixes. Decoders stage one integer at a time, stop at the explicit count, and leave trailing bits unread; a zero count never starts the source. Truncation throws `std::out_of_range`, while overflow and unary limits follow the primitive decoder exceptions. Any source or codec exception permanently ends the view. Iterator copies share a cursor, repeated `begin()` resumes it, and iterators survive moves of the owning view. Default and moved-from views are empty. Borrowed source storage must outlive iteration. For bulk compression, the existing writer-based APIs avoid per-bit iterator overhead.
+
 For custom compositions, `write_sequence(writer, input, encoder)` calls `encoder(writer, value)` for each integer, and `read_sequence(reader, count, output, decoder)` calls `decoder(reader)` for each result. Numeric transforms remain in `dacoexec::numeric`: `numeric/mapping.hpp` provides `zigzag_encode(int64_t)` and `zigzag_decode(uint64_t)` separately from coding. To use Gamma or Delta, map the unsigned result with `numeric::to_positive` and undo it with `numeric::from_positive`; `to_positive(UINT64_MAX)` throws rather than overflowing. Consequently, this composition excludes `INT64_MIN`, whose ZigZag value is `UINT64_MAX`. Golomb and Rice accept that ZigZag value directly.
 
 ## Blocks
