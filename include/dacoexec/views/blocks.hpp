@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -249,7 +250,11 @@ public:
       [[maybe_unused]] std::default_sentinel_t sentinel) noexcept -> bool
     { return cursor.state_ == nullptr || !cursor.state_->current_.has_value(); }
 
-    [[nodiscard]] friend auto iter_move(iterator const &cursor) -> byte_block && { return *cursor; }
+    [[nodiscard]] friend auto iter_move(iterator const &cursor) noexcept -> byte_block &&
+    {
+      if (cursor.state_ == nullptr || !cursor.state_->current_) { std::terminate(); }
+      return std::move(*cursor.state_->current_);
+    }
 
   private:
     friend class blocks_view;
