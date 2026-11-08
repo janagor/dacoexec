@@ -21,7 +21,9 @@
 #include <dacoexec/numeric/delta.hpp>
 #include <dacoexec/numeric/gamma.hpp>
 #include <dacoexec/numeric/golomb.hpp>
+#include <dacoexec/numeric/mapping.hpp>
 #include <dacoexec/numeric/rice.hpp>
+#include <dacoexec/numeric/sequence.hpp>
 #include <dacoexec/views/bits.hpp>
 #include <dacoexec/views/blocks.hpp>
 #include <dacoexec/views/buffered_bytes.hpp>
