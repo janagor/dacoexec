@@ -15,19 +15,16 @@ inline constexpr std::size_t stream_size = 64 * mebibyte;
 inline constexpr std::uint32_t seed = 1729;
 inline constexpr std::array block_sizes{ 64 * kibibyte, 256 * kibibyte, mebibyte, 4 * mebibyte };
 inline constexpr std::array concurrency{ 1, 2, 4, 8 };
-enum class dataset : std::uint8_t { uniform, repeated, alternating, skewed, text, alphabet };
+enum class dataset : std::uint8_t { uniform, repeated, alternating, skewed, text, alphabet, binary_skewed };
 inline constexpr std::array datasets{ dataset::uniform,
   dataset::repeated,
   dataset::alternating,
   dataset::skewed,
   dataset::text,
-  dataset::alphabet };
-inline constexpr std::array<std::string_view, datasets.size()> names{ "uniform",
-  "repeated",
-  "alternating",
-  "skewed",
-  "text",
-  "alphabet" };
+  dataset::alphabet,
+  dataset::binary_skewed };
+inline constexpr std::array<std::string_view, datasets.size()>
+  names{ "uniform", "repeated", "alternating", "skewed", "text", "alphabet", "binary_skewed" };
 
 // Counter-based SplitMix64 bytes: fixed-seed, random-access, constant storage.
 // Each group of eight bytes exposes one independently mixed counter value.
@@ -73,6 +70,9 @@ inline auto make(std::size_t size, dataset kind) -> std::vector<std::byte>
       break;
     case dataset::skewed:
       symbol = value % skew_period == 0 ? static_cast<unsigned char>(value % alphabet_size) : 'a';
+      break;
+    case dataset::binary_skewed:
+      symbol = value % skew_period == 0 ? 1 : 0;
       break;
     case dataset::text:
       symbol = static_cast<unsigned char>(text.at(value % text.size()));

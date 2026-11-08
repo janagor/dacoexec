@@ -1,6 +1,10 @@
 #include "fixtures.hpp"
 
 #include <benchmark/benchmark.h>
+#include <dacoexec/ans/block.hpp>
+#include <dacoexec/ans/execution.hpp>
+#include <dacoexec/ans/model.hpp>
+#include <dacoexec/ans/stream.hpp>
 #include <dacoexec/execution/ordered_parallel.hpp>
 #include <dacoexec/huffman/block.hpp>
 #include <dacoexec/huffman/execution.hpp>
@@ -22,6 +26,7 @@
 
 namespace {
 namespace huffman = dacoexec::huffman;
+namespace ans = dacoexec::ans;
 using bytes = std::vector<std::byte>;
 constexpr std::int64_t representative_in_flight = 4;
 constexpr std::size_t block_parameter = 0;
@@ -126,6 +131,91 @@ auto bm_huffman_decompress_stream(benchmark::State &state) -> void
   metrics(state, input.size(), archive.size());
 }
 
+auto bm_ans_normalize(benchmark::State &state) -> void
+{
+  auto const input = fixture(state, static_cast<std::size_t>(state.range(block_parameter)));
+  auto const counts = ans::count_frequencies(input);
+  for (auto iteration : state) {
+    static_cast<void>(iteration);
+    auto model = ans::make_model(counts);
+    benchmark::DoNotOptimize(model.frequencies().data());
+  }
+}
+
+auto bm_ans_compress_block(benchmark::State &state) -> void
+{
+  auto const input = fixture(state, static_cast<std::size_t>(state.range(block_parameter)));
+  auto const reference = ans::compress_block({ 0, input });
+  auto validation = ans::compress_block({ 0, input });
+  if (ans::decompress_block(std::move(validation), input.size()).bytes_ != input) {
+    state.SkipWithError("Block round trip differs");
+    return;
+  }
+  for (auto iteration : state) {
+    static_cast<void>(iteration);
+    state.PauseTiming();
+    dacoexec::byte_block copy{ 0, input };
+    state.ResumeTiming();
+    auto encoded = ans::compress_block(std::move(copy));
+    benchmark::DoNotOptimize(encoded.payload_.data());
+  }
+  metrics(state,
+    input.size(),
+    reference.payload_.size() + (reference.model_.has_value() ? ans::model_wire_size(*reference.model_) : 0U));
+}
+
+auto bm_ans_decompress_block(benchmark::State &state) -> void
+{
+  auto const input = fixture(state, static_cast<std::size_t>(state.range(block_parameter)));
+  auto const encoded = ans::compress_block({ 0, input });
+  for (auto iteration : state) {
+    static_cast<void>(iteration);
+    state.PauseTiming();
+    ans::encoded_block copy;
+    copy.encoding_ = encoded.encoding_;
+    copy.uncompressed_size_ = encoded.uncompressed_size_;
+    copy.payload_ = encoded.payload_;
+    copy.model_ = encoded.model_;
+    state.ResumeTiming();
+    auto decoded = ans::decompress_block(std::move(copy), input.size());
+    benchmark::DoNotOptimize(decoded.bytes_.data());
+  }
+  metrics(state,
+    input.size(),
+    encoded.payload_.size() + (encoded.model_.has_value() ? ans::model_wire_size(*encoded.model_) : 0U));
+}
+
+auto bm_ans_compress_stream(benchmark::State &state) -> void
+{
+  auto const input = fixture(state, fixtures::stream_size);
+  auto const block_size = static_cast<std::size_t>(state.range(block_parameter));
+  counting_sink reference;
+  static_cast<void>(ans::compress_stream(input, reference, { block_size }));
+  for (auto iteration : state) {
+    static_cast<void>(iteration);
+    counting_sink sink;
+    auto statistics = ans::compress_stream(input, sink, { block_size });
+    benchmark::DoNotOptimize(statistics.output_bytes_);
+  }
+  metrics(state, input.size(), reference.size_);
+}
+
+auto bm_ans_decompress_stream(benchmark::State &state) -> void
+{
+  auto const input = fixture(state, fixtures::stream_size);
+  bytes archive;
+  dacoexec::io::iterator_sink destination{ std::back_inserter(archive) };
+  static_cast<void>(
+    ans::compress_stream(input, destination, { static_cast<std::size_t>(state.range(block_parameter)) }));
+  for (auto iteration : state) {
+    static_cast<void>(iteration);
+    counting_sink sink;
+    auto statistics = ans::decompress_stream(archive, sink);
+    benchmark::DoNotOptimize(statistics.output_bytes_);
+  }
+  metrics(state, input.size(), archive.size());
+}
+
 auto bm_huffman_compress_parallel(benchmark::State &state) -> void
 {
   auto const input = fixture(state, fixtures::stream_size);
@@ -160,6 +250,52 @@ auto bm_huffman_compress_parallel(benchmark::State &state) -> void
     static_cast<void>(iteration);
     counting_sink sink;
     auto result = stdexec::sync_wait(huffman::encode_parallel_on(pool.get_scheduler(),
+      input,
+      sink,
+      { .block_size_ = block_size, .max_in_flight_ = static_cast<std::size_t>(state.range(in_flight_parameter)) }));
+    if (!result || sink.size_ != reference_size) {
+      state.SkipWithError("Parallel output size mismatch");
+      break;
+    }
+    benchmark::DoNotOptimize(sink.size_);
+  }
+  metrics(state, input.size(), reference_size);
+}
+
+auto bm_ans_compress_parallel(benchmark::State &state) -> void
+{
+  auto const input = fixture(state, fixtures::stream_size);
+  auto const block_size = static_cast<std::size_t>(state.range(block_parameter));
+  exec::static_thread_pool pool{ static_cast<std::uint32_t>(state.range(workers_parameter)) };
+  std::size_t reference_size = 0;
+  {
+    // Preflight is outside timing and releases all collected buffers before measurement.
+    bytes reference;
+    dacoexec::io::iterator_sink sequential{ std::back_inserter(reference) };
+    static_cast<void>(ans::compress_stream(input, sequential, { .block_size_ = block_size }));
+    bytes parallel;
+    dacoexec::io::iterator_sink output{ std::back_inserter(parallel) };
+    auto result = stdexec::sync_wait(ans::encode_parallel_on(pool.get_scheduler(),
+      input,
+      output,
+      { .block_size_ = block_size, .max_in_flight_ = static_cast<std::size_t>(state.range(in_flight_parameter)) }));
+    if (!result || parallel != reference) {
+      state.SkipWithError("Parallel archive differs from sequential archive");
+      return;
+    }
+    bytes decoded;
+    dacoexec::io::iterator_sink plain{ std::back_inserter(decoded) };
+    static_cast<void>(ans::decompress_stream(parallel, plain));
+    if (decoded != input) {
+      state.SkipWithError("Parallel archive round trip differs");
+      return;
+    }
+    reference_size = reference.size();
+  }
+  for (auto iteration : state) {
+    static_cast<void>(iteration);
+    counting_sink sink;
+    auto result = stdexec::sync_wait(ans::encode_parallel_on(pool.get_scheduler(),
       input,
       sink,
       { .block_size_ = block_size, .max_in_flight_ = static_cast<std::size_t>(state.range(in_flight_parameter)) }));
@@ -261,6 +397,12 @@ auto parallel_arguments(benchmark::Benchmark *benchmark) -> void { execution_arg
 
 auto scheduling_arguments(benchmark::Benchmark *benchmark) -> void { execution_arguments(benchmark, true); }
 
+BENCHMARK(bm_ans_normalize)->Apply(block_arguments);
+BENCHMARK(bm_ans_compress_parallel)->Apply(parallel_arguments)->UseRealTime()->MeasureProcessCPUTime();
+BENCHMARK(bm_ans_compress_block)->Apply(block_arguments);
+BENCHMARK(bm_ans_decompress_block)->Apply(block_arguments);
+BENCHMARK(bm_ans_compress_stream)->Apply(block_arguments)->UseRealTime();
+BENCHMARK(bm_ans_decompress_stream)->Apply(block_arguments)->UseRealTime();
 BENCHMARK(bm_huffman_compress_block)->Apply(block_arguments);
 BENCHMARK(bm_huffman_decompress_block)->Apply(block_arguments);
 BENCHMARK(bm_huffman_compress_stream)->Apply(block_arguments)->UseRealTime();

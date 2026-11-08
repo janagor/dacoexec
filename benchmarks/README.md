@@ -83,3 +83,19 @@ that lifecycle. RSS is a separate empirical check of that allocation model.
 The manual/weekly workflow uploads measurements as artifacts. No local runtime
 measurements are recorded by this change: builds and execution must be completed
 before claiming the fuzz, TSan, packaging or memory acceptance criteria are met.
+
+The `bm_ans_*` cases use the same fixture matrix and block sizes as Huffman,
+including metadata in encoded size. Block compression includes frequency counting
+and normalization; decoding starts from an existing block/model. Stream cases
+include serialization and CRC32. Parallel cases verify byte equality against
+sequential encoding before timing. `dacoexec_ans_stream_memory` accepts the same
+arguments as `dacoexec_stream_memory` for separate-process peak-RSS comparisons.
+No benchmark results are claimed until these executables have been built and run.
+
+`bm_ans_normalize` isolates integer model normalization from counting and payload
+coding. `dacoexec_ans_allocations` prints CSV allocation counts and total requested
+bytes for both codecs over the same matrix, excluding input copies. Its private
+ordinary `new`/`delete` replacements measure the standard-alignment allocations
+used here; they do not instrument aligned allocation or third-party `malloc`.
+Use separate processes for the memory probes and record peak RSS (for example
+with `/usr/bin/time -v` on Linux); total allocated bytes are not peak live memory.
