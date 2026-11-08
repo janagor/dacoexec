@@ -189,6 +189,43 @@ namespace detail {
         }
       }
 
+      auto acquire_inputs() -> std::vector<input_type>
+      {
+        std::vector<input_type> inputs;
+        inputs.reserve(capacity_);
+        while (inputs.size() < capacity_ && !stop_requested()) {
+          auto input = source_.next();
+          if (!input) { break; }
+          inputs.push_back(std::move(*input));
+        }
+        return inputs;
+      }
+
+      auto dispatch_batch(std::vector<input_type> &inputs) -> void
+      {
+        slots_.resize(inputs.size());
+        children_.reserve(inputs.size());
+        failed_.store(false, std::memory_order_release);
+        remaining_.store(1, std::memory_order_release);// dispatch sentinel
+        batch_active_ = true;
+        for (std::size_t index = 0; index < inputs.size(); ++index) {
+          if (stop_requested() || failed_.load(std::memory_order_acquire)) { break; }
+          try {
+            auto work =
+              stdexec::then(stdexec::schedule(scheduler_), work_function{ &process_, std::move(inputs.at(index)) });
+            auto child = std::unique_ptr<child_operation>(
+              new child_operation(stdexec::connect(std::move(work), worker_receiver{ this, index })));
+            children_.push_back(std::move(child));
+            remaining_.fetch_add(1, std::memory_order_relaxed);
+            stdexec::start(*children_.back());
+          } catch (...) {
+            slots_.at(index).error_ = std::current_exception();
+            break;
+          }
+        }
+        settled();// release sentinel; a ready batch queues another drive
+      }
+
       auto advance() noexcept -> bool
       {
         try {
@@ -200,39 +237,13 @@ namespace detail {
             batch_active_ = false;
           }
           if (error_ || stop_requested()) { return complete(); }
-          std::vector<input_type> inputs;
-          inputs.reserve(capacity_);
-          while (inputs.size() < capacity_ && !stop_requested()) {
-            auto input = source_.next();
-            if (!input) { break; }
-            inputs.push_back(std::move(*input));
-          }
+          auto inputs = acquire_inputs();
           if (stop_requested()) {
             inputs.clear();
             return complete();
           }
           if (inputs.empty()) { return complete(); }
-          slots_.resize(inputs.size());
-          children_.reserve(inputs.size());
-          failed_.store(false, std::memory_order_release);
-          remaining_.store(1, std::memory_order_release);// dispatch sentinel
-          batch_active_ = true;
-          for (std::size_t index = 0; index < inputs.size(); ++index) {
-            if (stop_requested() || failed_.load(std::memory_order_acquire)) { break; }
-            try {
-              auto work =
-                stdexec::then(stdexec::schedule(scheduler_), work_function{ &process_, std::move(inputs.at(index)) });
-              auto child = std::unique_ptr<child_operation>(
-                new child_operation(stdexec::connect(std::move(work), worker_receiver{ this, index })));
-              children_.push_back(std::move(child));
-              remaining_.fetch_add(1, std::memory_order_relaxed);
-              stdexec::start(*children_.back());
-            } catch (...) {
-              slots_.at(index).error_ = std::current_exception();
-              break;
-            }
-          }
-          settled();// release sentinel; a ready batch queues another drive
+          dispatch_batch(inputs);
           return false;
         } catch (...) {
           error_ = std::current_exception();
