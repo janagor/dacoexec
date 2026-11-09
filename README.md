@@ -225,3 +225,8 @@ The existing presets `unixlike-clang-debug`, `unixlike-clang-release`, `unixlike
 * [Building](README_building.md)
 * [Troubleshooting](README_troubleshooting.md)
 * [Docker](README_docker.md)
+
+The ANS facade also supports `dacoexec::ans::entropy_coder::tans` through
+`stream_options::coder_`; the CLI accepts `--algorithm tans`. rANS remains the
+default. See [tANS format and options](docs/tans.md) for table-log limits,
+bitstream details, and compatibility with older DAN1 readers.

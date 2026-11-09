@@ -1,7 +1,7 @@
 //! \file
 //! DAN1: eight-byte magic (DAN1 and four zero bytes), followed by frames.
 //! Each frame has a tag and little-endian uint32 output size, payload size,
-//! and uncompressed IEEE CRC32. Tags: RAW=0, rANS=1, END=255. END fields
+//! and uncompressed IEEE CRC32. Tags: RAW=0, rANS=1, tANS=2, END=255. END fields
 //! are zero and no bytes follow. rANS carries one precision byte, a uint16 entry count, and sorted
 //! (uint8 symbol, uint16 frequency-minus-one) entries before its payload (excluded from payload size).
 //! Payload includes the little-endian decoder state. Sizes are bounded to 16 MiB.
@@ -37,7 +37,7 @@ inline constexpr std::array<std::byte, archive_header_size> archive_header_bytes
   std::byte{ 0 },
   std::byte{ 0 },
   std::byte{ 0 } };
-enum class frame_kind : std::uint8_t { raw = 0x00, rans = 0x01, end = 0xFF };
+enum class frame_kind : std::uint8_t { raw = 0x00, rans = 0x01, tans = 0x02, end = 0xFF };
 
 struct frame_header
 {
@@ -73,7 +73,9 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
     }
     return;
   }
-  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::rans) { throw format_error("Unknown frame type"); }
+  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::rans && header.kind_ != frame_kind::tans) {
+    throw format_error("Unknown frame type");
+  }
   if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > limit
       || header.payload_size_ > limit || header.uncompressed_size_ > max_frame_size
       || header.payload_size_ > max_frame_size) {
@@ -81,6 +83,9 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
   }
   if (header.kind_ == frame_kind::rans && header.payload_size_ < ::dacoexec::detail::ans::state_bytes) {
     throw format_error("Truncated ANS state");
+  }
+  if (header.kind_ == frame_kind::tans && header.payload_size_ < tans::payload_prefix_size) {
+    throw format_error("Truncated tANS state and bit count");
   }
   if (header.kind_ == frame_kind::raw && header.payload_size_ != header.uncompressed_size_) {
     throw format_error("Inconsistent RAW sizes");
@@ -125,17 +130,18 @@ template<io::byte_output_sink S> inline auto write_frame_header(S &sink, frame_h
 template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame const &frame) -> void
 {
   validate_frame_header(frame.header_);
+  if (frame.header_.kind_ == frame_kind::end) { throw format_error("END has no data block"); }
   auto const &block = frame.block_;
   if (block.payload_.size() != frame.header_.payload_size_
       || block.uncompressed_size_ != frame.header_.uncompressed_size_
-      || block.encoding_ != (frame.header_.kind_ == frame_kind::rans ? block_encoding::rans : block_encoding::raw)) {
+      || block.encoding_ != (static_cast<block_encoding>(frame.header_.kind_))) {
     throw format_error("Inconsistent encoded frame");
   }
-  if ((block.encoding_ == block_encoding::rans) != block.model_.has_value()) {
+  if ((block.encoding_ != block_encoding::raw) != block.model_.has_value()) {
     throw format_error("Inconsistent ANS model metadata");
   }
   write_frame_header(sink, frame.header_);
-  if (frame.header_.kind_ == frame_kind::rans) {
+  if (frame.header_.kind_ == frame_kind::rans || frame.header_.kind_ == frame_kind::tans) {
     if (!block.model_) { throw format_error("Missing ANS model"); }
     constexpr auto max_model_wire_size =
       ::dacoexec::detail::ans::model_prefix_size + (alphabet_size * ::dacoexec::detail::ans::model_entry_size);

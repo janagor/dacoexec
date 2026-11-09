@@ -5,6 +5,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/detail/ans/coder.hpp>// IWYU pragma: export
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/facade_sink.hpp>
@@ -23,6 +24,8 @@ namespace dacoexec::ans {
 struct stream_options
 {
   std::size_t block_size_ = ::dacoexec::detail::ans::default_block_size;
+  entropy_coder coder_ = entropy_coder::rans;
+  unsigned table_log_ = ::dacoexec::detail::ans::tans::default_table_log;
 };
 
 //! Bounds checked before publishing each decoded frame. Zero total output permits empty archives only.
@@ -52,8 +55,9 @@ template<std::ranges::viewable_range R, class Destination>
   -> stream_statistics
 {
   auto statistics = ::dacoexec::detail::with_byte_sink(std::forward<Destination>(destination), [&](auto &sink) -> auto {
-    return ::dacoexec::detail::ans::compress_stream(
-      std::forward<R>(source), sink, { .block_size_ = options.block_size_ });
+    return ::dacoexec::detail::ans::compress_stream(std::forward<R>(source),
+      sink,
+      { .block_size_ = options.block_size_, .coder_ = options.coder_, .table_log_ = options.table_log_ });
   });
   return { statistics.input_bytes_, statistics.output_bytes_, statistics.frames_ };
 }

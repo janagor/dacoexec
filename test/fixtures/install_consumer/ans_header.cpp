@@ -12,5 +12,7 @@
   auto encoded = dacoexec::ans::compress_stream(input, std::back_inserter(archive), { .block_size_ = 2 });
   std::ostringstream output;
   auto decoded = dacoexec::ans::decompress_stream(archive, output);
-  return output.str() == "abcab" && encoded.frames_ == 3 && decoded.output_bytes_ == input.size();
+  auto tans = dacoexec::ans::compress(input, { .coder_ = dacoexec::ans::entropy_coder::tans });
+  return dacoexec::ans::decompress(tans) == dacoexec::ans::decompress(archive) && output.str() == "abcab"
+         && encoded.frames_ == 3 && decoded.output_bytes_ == input.size();
 }

@@ -4,6 +4,7 @@
 #define DACOEXEC_ANS_DECODER_HPP
 
 #include <dacoexec/detail/ans/encoded_block.hpp>
+#include <dacoexec/detail/ans/tans/codec.hpp>
 #include <dacoexec/detail/codec/decoder_base.hpp>
 
 namespace dacoexec::detail::ans {
@@ -25,7 +26,7 @@ public:
   {
     if (is_raw(block)) {
       if (block.model_) { throw decode_error("Invalid ANS RAW metadata"); }
-    } else if (block.encoding_ != block_encoding::rans || !block.model_) {
+    } else if ((block.encoding_ != block_encoding::rans && block.encoding_ != block_encoding::tans) || !block.model_) {
       throw decode_error("Invalid ANS block metadata");
     }
   }
@@ -33,6 +34,10 @@ public:
   [[nodiscard]] static auto decode_compressed(encoded_block const &block, std::size_t limit) -> std::vector<std::byte>
   {
     if (!block.model_) { throw decode_error("Invalid ANS block metadata"); }
+    if (block.encoding_ == block_encoding::tans) {
+      return tans::decode_block(
+        block.payload_, *block.model_, static_cast<std::size_t>(block.uncompressed_size_), limit);
+    }
     return rans::decode_block(block.payload_, *block.model_, static_cast<std::size_t>(block.uncompressed_size_), limit);
   }
 };

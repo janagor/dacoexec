@@ -42,6 +42,7 @@ add_executable(
   tests.cpp
   facade_tests.cpp
   ans_tests.cpp
+  tans_tests.cpp
   codec_base_tests.cpp
   ranges_tests.cpp
   bit_tests.cpp

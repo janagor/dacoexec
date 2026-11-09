@@ -24,6 +24,8 @@ struct stream_options
 {
   //! Maximum source bytes per data frame; must be in [1, max_frame_size].
   std::size_t block_size_ = default_block_size;
+  entropy_coder coder_ = entropy_coder::rans;
+  unsigned table_log_ = tans::default_table_log;
 };
 
 struct decode_options
@@ -53,13 +55,15 @@ inline auto checked_add(std::uint64_t &total, std::uint64_t amount) -> void
 }
 
 //! Computes CRC32 before consuming a nonempty bounded block.
-[[nodiscard]] inline auto encode_frame(byte_block block) -> encoded_frame
+[[nodiscard]] inline auto encode_frame(byte_block block,
+  entropy_coder coder = entropy_coder::rans,
+  unsigned table_log = tans::default_table_log) -> encoded_frame
 {
   if (block.bytes_.empty() || block.bytes_.size() > max_frame_size) { throw format_error("Invalid input block size"); }
   auto const checksum = dacoexec::detail::support::crc32(block.bytes_);
   encoded_frame frame;
-  frame.block_ = compress_block(std::move(block));
-  frame.header_ = { .kind_ = frame.block_.encoding_ == block_encoding::raw ? frame_kind::raw : frame_kind::rans,
+  frame.block_ = encoder{ coder, table_log }.encode(std::move(block));
+  frame.header_ = { .kind_ = static_cast<frame_kind>(frame.block_.encoding_),
     .uncompressed_size_ = static_cast<std::uint32_t>(frame.block_.uncompressed_size_),
     .payload_size_ = static_cast<std::uint32_t>(frame.block_.payload_.size()),
     .crc32_ = checksum };
@@ -74,10 +78,11 @@ template<std::ranges::viewable_range R, io::byte_output_sink S>
   if (options.block_size_ == 0 || options.block_size_ > max_frame_size) {
     throw std::invalid_argument("Invalid block size");
   }
+  validate_coder(options.coder_, options.table_log_);
   stream_statistics statistics{ .output_bytes_ = archive_header_size + frame_header_size };
   write_archive_header(sink);
   for (auto block : std::forward<R>(source) | dacoexec::detail::views::blocks(options.block_size_)) {
-    auto frame = encode_frame(std::move(block));
+    auto frame = encode_frame(std::move(block), options.coder_, options.table_log_);
     ::dacoexec::detail::ans::checked_add(statistics.input_bytes_, frame.header_.uncompressed_size_);
     ::dacoexec::detail::ans::checked_add(statistics.output_bytes_,
       frame_header_size + frame.block_.payload_.size() + ::dacoexec::detail::ans::model_metadata_size(frame.block_));

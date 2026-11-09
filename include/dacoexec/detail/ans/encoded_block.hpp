@@ -13,7 +13,7 @@
 
 namespace dacoexec::detail::ans {
 
-enum class block_encoding : std::uint8_t { raw, rans };
+enum class block_encoding : std::uint8_t { raw, rans, tans };
 
 struct encoded_block
 {

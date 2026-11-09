@@ -96,7 +96,10 @@ struct ans_frame_parser
     }
     auto &block = frame.block_;
     block.uncompressed_size_ = frame.header_.uncompressed_size_;
-    if (frame.header_.kind_ == ans::frame_kind::rans) { read_ans_model(block); }
+    if (frame.header_.kind_ == ans::frame_kind::rans || frame.header_.kind_ == ans::frame_kind::tans) {
+      read_ans_model(block);
+      block.encoding_ = static_cast<ans::block_encoding>(frame.header_.kind_);
+    }
     block.payload_.resize(frame.header_.payload_size_);
     std::ranges::generate(block.payload_, [this]() -> std::byte { return read_byte(); });
     block.sequence_ = next_sequence_;
