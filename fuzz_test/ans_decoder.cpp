@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/detail/ans/rans.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <span>
 #include <stdexcept>
@@ -31,9 +32,8 @@ extern "C" auto LLVMFuzzerTestOneInput(std::uint8_t const *data, std::size_t siz
     static_cast<void>(dacoexec::detail::ans::tans::decode_block(bytes, byte_model, 1024, output_limit));
   } catch (dacoexec::ans::decode_error const &) {}
   constexpr std::size_t symbols = 1024;
-  auto const model = dacoexec::detail::ans::make_binary_model(1, 1);
   try {
-    static_cast<void>(dacoexec::detail::ans::decode(bytes, model, symbols, output_limit));
+    static_cast<void>(dacoexec::detail::ans::rans::decode_block(bytes, byte_model, symbols, output_limit));
   } catch (dacoexec::detail::ans::decode_error const &) {}
   return 0;
 }

@@ -1,5 +1,4 @@
 #include <catch2/catch_test_macros.hpp>
-#include <dacoexec/detail/ans/binary.hpp>
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
 #include <dacoexec/detail/ans/format.hpp>
@@ -66,13 +65,14 @@ auto restore(bytes const &input, std::uint64_t limit = std::numeric_limits<std::
 TEST_CASE("ANS normalization preserves support and handles full-width counts", "[ans]")
 {
   constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
-  auto const model = ans::make_binary_model(maximum - 1, 1);
+  auto const model = ans::make_model(std::array<std::uint64_t, 2>{ maximum - 1, 1 });
   REQUIRE(model.frequencies().front() == model.total() - 1);
   REQUIRE(model.frequencies().back() == 1);
-  REQUIRE_THROWS_AS(ans::make_binary_model(maximum, 1), std::overflow_error);
-  REQUIRE_THROWS_AS(ans::make_binary_model(0, 0), std::invalid_argument);
-  REQUIRE_THROWS_AS(ans::make_binary_model(1, 1, 0), std::invalid_argument);
-  REQUIRE_THROWS_AS(ans::make_binary_model(1, 1, ans::max_precision_bits + 1), std::invalid_argument);
+  REQUIRE_THROWS_AS((ans::make_model(std::array<std::uint64_t, 2>{ maximum, 1 })), std::overflow_error);
+  REQUIRE_THROWS_AS((ans::make_model(std::array<std::uint64_t, 2>{ 0, 0 })), std::invalid_argument);
+  REQUIRE_THROWS_AS((ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, 0)), std::invalid_argument);
+  REQUIRE_THROWS_AS(
+    (ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, ans::max_precision_bits + 1)), std::invalid_argument);
   ans::frequency_table counts{};
   counts.fill(1);
   REQUIRE_THROWS_AS(ans::make_model(counts, 1), std::invalid_argument);
@@ -90,22 +90,26 @@ TEST_CASE("ANS normalization preserves support and handles full-width counts", "
   }
 }
 
-TEST_CASE("Binary rANS has a stable wire vector and rejects invalid symbols", "[ans]")
+TEST_CASE("rANS has a stable wire vector and rejects symbols absent from its model", "[ans]")
 {
-  auto const model = ans::make_binary_model(1, 1, 1);
-  std::vector<bool> input{ false, true, false, true };
+  ans::frequency_table counts{};
+  counts.at(0) = 1;
+  counts.at(1) = 1;
+  auto const model = ans::make_model(counts, 1);
+  bytes input{ std::byte{ 0 }, std::byte{ 1 }, std::byte{ 0 }, std::byte{ 1 } };
   bytes const expected{ std::byte{ 0x0a }, std::byte{ 0 }, std::byte{ 0 }, std::byte{ 0x08 } };
-  auto const encoded = ans::binary::encode_block(input, model);
+  auto const encoded = ans::rans::encode_block(input, model);
   REQUIRE(encoded == expected);
-  REQUIRE(ans::binary::decode_block(encoded, model, input.size()) == input);
-  std::array const invalid{ 0, 2 };
-  REQUIRE_THROWS_AS(ans::binary::encode_block(invalid, model), std::invalid_argument);
-  auto const single = ans::make_binary_model(1, 0);
-  REQUIRE_THROWS_AS(ans::binary::encode_block(input, single), std::invalid_argument);
-  std::vector<bool> repeated(block_size, false);
-  auto const compact = ans::binary::encode_block(repeated, single);
+  REQUIRE(ans::rans::decode_block(encoded, model, input.size()) == input);
+  bytes const invalid{ std::byte{ 0 }, std::byte{ 2 } };
+  REQUIRE_THROWS_AS(ans::rans::encode_block(invalid, model), std::invalid_argument);
+  counts.at(1) = 0;
+  auto const single = ans::make_model(counts);
+  REQUIRE_THROWS_AS(ans::rans::encode_block(input, single), std::invalid_argument);
+  bytes repeated(block_size, std::byte{ 0 });
+  auto const compact = ans::rans::encode_block(repeated, single);
   REQUIRE(compact.size() == sizeof(std::uint32_t));
-  REQUIRE(ans::binary::decode_block(compact, single, repeated.size()) == repeated);
+  REQUIRE(ans::rans::decode_block(compact, single, repeated.size()) == repeated);
 }
 
 TEST_CASE("rANS round trips byte alphabets at every supported precision", "[ans]")
@@ -191,20 +195,23 @@ TEST_CASE("ANS adaptors consume independent owned blocks", "[ans]")
 
 TEST_CASE("ANS rejects inconsistent normalized models and decoder states", "[ans]")
 {
-  using model_type = ans::frequency_model<2>;
+  using model_type = ans::frequency_model<ans::alphabet_size>;
   REQUIRE_THROWS_AS(model_type(model_type::table_type{}, ans::default_precision_bits), std::invalid_argument);
-  auto const model = ans::make_binary_model(1, 1);
-  std::vector<bool> const empty;
-  auto const encoded_empty = ans::binary::encode_block(empty, model);
-  REQUIRE(ans::binary::decode_block(encoded_empty, model, 0).empty());
+  ans::frequency_table counts{};
+  counts.at(0) = 1;
+  counts.at(1) = 1;
+  auto const model = ans::make_model(counts);
+  bytes const empty;
+  auto const encoded_empty = ans::rans::encode_block(empty, model);
+  REQUIRE(ans::rans::decode_block(encoded_empty, model, 0).empty());
   bytes invalid_state(sizeof(std::uint32_t), std::byte{ 0 });
-  REQUIRE_THROWS_AS(ans::binary::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_AS(ans::rans::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
   constexpr auto all_bits_set = std::numeric_limits<unsigned char>::max();
   invalid_state.assign(sizeof(std::uint32_t), static_cast<std::byte>(all_bits_set));
-  REQUIRE_THROWS_AS(ans::binary::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_AS(ans::rans::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
   auto wrong_terminal = encoded_empty;
   wrong_terminal.front() ^= std::byte{ 1 };
-  REQUIRE_THROWS_AS(ans::binary::decode_block(wrong_terminal, model, 0), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_AS(ans::rans::decode_block(wrong_terminal, model, 0), dacoexec::ans::decode_error);
 }
 
 TEST_CASE("ANS block views stage once and preserve borrowed dereferences", "[ans][ranges]")

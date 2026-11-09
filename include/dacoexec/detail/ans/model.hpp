@@ -91,11 +91,6 @@ template<std::size_t symbol_count>
   return frequency_model<symbol_count>{ frequencies, precision };
 }
 
-[[nodiscard]] inline auto make_binary_model(std::uint64_t zeros,
-  std::uint64_t ones,
-  unsigned precision = default_precision_bits) -> frequency_model<2>
-{ return make_model(std::array<std::uint64_t, 2>{ zeros, ones }, precision); }
-
 template<byte_input_range R> [[nodiscard]] constexpr auto count_frequencies(R &&source) -> frequency_table
 { return codec::count_frequencies(std::forward<R>(source), "ANS count overflow"); }
 }// namespace dacoexec::detail::ans
