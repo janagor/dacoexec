@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <dacoexec/detail/ans/model_wire.hpp>
-#include <dacoexec/detail/ans/rans.hpp>
+#include <dacoexec/detail/ans/rans/codec.hpp>
 #include <optional>
 #include <vector>
 

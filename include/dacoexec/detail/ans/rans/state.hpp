@@ -1,7 +1,7 @@
 //! \file
 //! Single-state byte-renormalized rANS engine.
-#ifndef DACOEXEC_ANS_DETAIL_STATE_HPP
-#define DACOEXEC_ANS_DETAIL_STATE_HPP
+#ifndef DACOEXEC_ANS_RANS_STATE_HPP
+#define DACOEXEC_ANS_RANS_STATE_HPP
 
 #include <algorithm>
 #include <dacoexec/detail/ans/error.hpp>
@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace dacoexec::detail::ans {
+namespace dacoexec::detail::ans::rans {
 inline constexpr std::uint32_t lower_bound = 1U << 23U;
 inline constexpr unsigned byte_bits = dacoexec::detail::support::bits_per_byte;
 inline constexpr std::uint32_t radix = 1U << byte_bits;
@@ -86,5 +86,5 @@ template<class Symbol = std::uint8_t, std::size_t symbol_count>
   }
   return output;
 }
-}// namespace dacoexec::detail::ans
-#endif// DACOEXEC_ANS_DETAIL_STATE_HPP
+}// namespace dacoexec::detail::ans::rans
+#endif// DACOEXEC_ANS_RANS_STATE_HPP

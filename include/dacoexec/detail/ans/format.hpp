@@ -82,7 +82,7 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
       || header.payload_size_ > max_frame_size) {
     throw format_error("Invalid DAN1 frame size");
   }
-  if (header.kind_ == frame_kind::rans && header.payload_size_ < ::dacoexec::detail::ans::state_bytes) {
+  if (header.kind_ == frame_kind::rans && header.payload_size_ < rans::state_bytes) {
     throw format_error("Truncated ANS state");
   }
   if (header.kind_ == frame_kind::tans && header.payload_size_ < tans::payload_prefix_size) {

@@ -4,7 +4,7 @@
 #include <dacoexec/detail/ans/format.hpp>
 #include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/ans/model_wire.hpp>
-#include <dacoexec/detail/ans/rans.hpp>
+#include <dacoexec/detail/ans/rans/codec.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/support/byte.hpp>

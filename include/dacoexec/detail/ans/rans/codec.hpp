@@ -1,9 +1,9 @@
 //! \file
 //! Byte alphabet rANS block coding. The payload starts with a little-endian
 //! 32-bit decoder state followed by renormalization bytes in decode order.
-#ifndef DACOEXEC_ANS_RANS_HPP
-#define DACOEXEC_ANS_RANS_HPP
-#include <dacoexec/detail/ans/state.hpp>
+#ifndef DACOEXEC_ANS_RANS_CODEC_HPP
+#define DACOEXEC_ANS_RANS_CODEC_HPP
+#include <dacoexec/detail/ans/rans/state.hpp>
 #include <limits>
 #include <utility>
 
@@ -12,7 +12,7 @@ template<byte_input_range R>
 [[nodiscard]] auto encode_block(R &&source, frequency_model<alphabet_size> const &model) -> std::vector<std::byte>
 {
   if constexpr (std::ranges::bidirectional_range<R>) {
-    return ::dacoexec::detail::ans::encode(std::forward<R>(source), model);
+    return ::dacoexec::detail::ans::rans::encode(std::forward<R>(source), model);
   } else {
     // Single-pass sources need owned storage before reverse encoding.
     std::vector<std::byte> symbols;
@@ -21,7 +21,7 @@ template<byte_input_range R>
       using source_value = std::ranges::range_value_t<R>;
       symbols.push_back(dacoexec::detail::support::to_byte(static_cast<source_value>(value)));
     }
-    return ::dacoexec::detail::ans::encode(symbols, model);
+    return ::dacoexec::detail::ans::rans::encode(symbols, model);
   }
 }
 
@@ -29,6 +29,6 @@ template<byte_input_range R>
   frequency_model<alphabet_size> const &model,
   std::size_t count,
   std::size_t limit = std::numeric_limits<std::size_t>::max()) -> std::vector<std::byte>
-{ return ::dacoexec::detail::ans::decode<std::byte>(payload, model, count, limit); }
+{ return ::dacoexec::detail::ans::rans::decode<std::byte>(payload, model, count, limit); }
 }// namespace dacoexec::detail::ans::rans
-#endif// DACOEXEC_ANS_RANS_HPP
+#endif// DACOEXEC_ANS_RANS_CODEC_HPP

@@ -1,6 +1,6 @@
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/ans/rans.hpp>
+#include <dacoexec/detail/ans/rans/codec.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <span>
 #include <stdexcept>
