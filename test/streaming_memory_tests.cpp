@@ -1,6 +1,7 @@
 #include <dacoexec/ans.hpp>
 #include <dacoexec/error.hpp>
 #include <dacoexec/huffman.hpp>
+#include <dacoexec/views.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -112,6 +113,7 @@ auto operator delete[](void *pointer,
 namespace {
 namespace huffman = dacoexec::huffman;
 constexpr auto memory_block_size = huffman::stream_options{}.block_size_;
+constexpr std::size_t view_memory_block_size = std::size_t{ 64 } * 1024;
 
 // SplitMix64 gives reproducible, near-uniform bytes without retaining PRNG state.
 [[nodiscard]] auto source_byte(std::uint64_t offset, bool high_entropy) -> std::byte
@@ -267,6 +269,58 @@ template<bool use_ans> auto exercise(std::uint64_t size, bool high_entropy = fal
   return allocation_statistics().peak_ - baseline;
 }
 
+// Measure both archive production alone and an encode/decode pipeline, without
+// storing the input, archive, or restored output.
+template<class Encode, class Decode>
+auto exercise_view(std::uint64_t size, bool high_entropy, bool round_trip, Encode encode, Decode decode) -> std::size_t
+{
+  auto const baseline = allocation_statistics().retained_;
+  allocation_statistics().peak_ = baseline;
+  {
+    generated_bytes source(size, [high_entropy](std::uint64_t offset) -> std::byte {
+      return source_byte(offset % view_memory_block_size, high_entropy);
+    });
+    auto archive = source | encode;
+    std::uint64_t count = 0;
+    if (round_trip) {
+      auto decoded = std::move(archive) | decode;
+      for (auto byte : decoded) {
+        if (byte != source_byte((count++) % view_memory_block_size, high_entropy)) {
+          throw std::logic_error("View decoded content mismatch");
+        }
+      }
+      if (count != size) { throw std::logic_error("View decoded size mismatch"); }
+    } else {
+      for ([[maybe_unused]] auto byte : archive) { ++count; }
+      if (count == 0) { throw std::logic_error("View produced no archive"); }
+    }
+  }
+  if (allocation_statistics().retained_ != baseline) { throw std::logic_error("Archive view leaked storage"); }
+  return allocation_statistics().peak_ - baseline;
+}
+
+auto check_view_memory() -> void
+{
+  namespace dv = dacoexec::views;
+  auto check = [](auto encode, auto decode) -> void {
+    for (bool const high_entropy : { false, true }) {
+      for (bool const round_trip : { false, true }) {
+        auto const small = exercise_view(view_memory_block_size * 2U, high_entropy, round_trip, encode, decode);
+        auto const large = exercise_view(view_memory_block_size * 32U, high_entropy, round_trip, encode, decode);
+        if (large > small + view_memory_block_size) {
+          std::cerr << "view peaks=" << small << ',' << large << " high_entropy=" << high_entropy
+                    << " round_trip=" << round_trip << '\n';
+          throw std::logic_error("Archive view memory grows with input length");
+        }
+      }
+    }
+  };
+  check(dv::encode::huffman({ .block_size_ = view_memory_block_size }), dv::decode::huffman());
+  for (auto coder : { dacoexec::ans::entropy_coder::rans, dacoexec::ans::entropy_coder::tans }) {
+    check(dv::encode::ans({ .block_size_ = view_memory_block_size, .coder_ = coder }), dv::decode::ans());
+  }
+}
+
 }// namespace
 
 auto main(int argc, char **argv) -> int
@@ -290,6 +344,7 @@ auto main(int argc, char **argv) -> int
       static_cast<void>(exercise<false>(large_size));
       static_cast<void>(exercise<true>(large_size));
     } else {
+      check_view_memory();
       constexpr auto smaller_size = memory_block_size * 2U;
       constexpr auto larger_size = memory_block_size * 16U;
       for (bool const high_entropy : { false, true }) {

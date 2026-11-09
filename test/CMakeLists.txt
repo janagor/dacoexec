@@ -41,6 +41,7 @@ add_executable(
   dacoexec_tests
   tests.cpp
   facade_tests.cpp
+  archive_view_tests.cpp
   ans_tests.cpp
   tans_tests.cpp
   codec_base_tests.cpp
