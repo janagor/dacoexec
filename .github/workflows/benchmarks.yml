@@ -39,7 +39,7 @@ jobs:
           -R '^streaming\.(memory|large)$' --output-on-failure
       - name: Preserve raw measurements and environment
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: huffman-performance-${{ github.sha }}
           path: |
