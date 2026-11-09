@@ -5,9 +5,9 @@
 
 #include <cstddef>
 #include <dacoexec/detail/codec/stream_statistics.hpp>
+#include <dacoexec/detail/codec/verified_frame.hpp>
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
-#include <dacoexec/detail/support/crc32.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
 #include <dacoexec/error.hpp>
 #include <iterator>
@@ -53,15 +53,11 @@ template<class Format, std::ranges::viewable_range R, io::byte_output_sink S>
     // Both parsers transfer ownership through iter_move, even when ordinary
     // dereference borrows a const frame. Decode before advancing the parser.
     auto frame = std::ranges::iter_move(cursor);
-    if (frame.header_.uncompressed_size_ > options.max_output_bytes_ - statistics.output_bytes_) {
-      throw format_error("Decompressed output exceeds configured limit");
-    }
-    checked_add(
-      statistics.input_bytes_, Format::frame_header_size + frame.block_.payload_.size() + Format::metadata_size(frame));
+    auto const archive_bytes = Format::frame_header_size + frame.block_.payload_.size() + Format::metadata_size(frame);
+    auto decoded = decode_verified_frame<Format>(frame, options, statistics.output_bytes_);
+    checked_add(statistics.input_bytes_, archive_bytes);
     checked_add(statistics.output_bytes_, frame.header_.uncompressed_size_);
     checked_add(statistics.frames_, 1);
-    auto decoded = Format::decode_block(std::move(frame.block_), options.max_frame_size_);
-    if (support::crc32(decoded.bytes_) != frame.header_.crc32_) { throw format_error(Format::checksum_message()); }
     sink.write(decoded.bytes_);
   }
   return statistics;
