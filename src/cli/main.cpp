@@ -6,6 +6,7 @@
 #include <dacoexec/error.hpp>
 #include <dacoexec/huffman.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -47,7 +48,7 @@ public:
 
     auto operator++(int) -> void { ++*this; }
 
-    auto operator==(std::default_sentinel_t) const -> bool { return source_->finished_; }
+    auto operator==([[maybe_unused]] std::default_sentinel_t sentinel) const -> bool { return source_->finished_; }
 
   private:
     file_bytes *source_;
@@ -62,7 +63,7 @@ public:
     return iterator{ this };
   }
 
-  auto end() const -> std::default_sentinel_t { return {}; }
+  [[nodiscard]] static auto end() noexcept -> std::default_sentinel_t { return {}; }
 
 private:
   auto fill() -> void
@@ -94,31 +95,38 @@ private:
   bool finished_ = false;
 };
 
-auto process(std::string const &input_name,
-  std::string const &output_name,
-  bool force,
-  bool compress,
-  std::string const &algorithm,
-  std::size_t block_size,
-  std::uint64_t output_limit) -> void
+struct process_options
 {
-  auto const input_path = fs::absolute(input_name);
-  auto const output_path = fs::absolute(output_name);
+  std::string input_name_;
+  std::string output_name_;
+  bool force_;
+  bool compress_;
+  std::string algorithm_;
+  std::size_t block_size_;
+  std::uint64_t output_limit_;
+};
+
+auto process(process_options const &options) -> void
+{
+  auto const input_path = fs::absolute(options.input_name_);
+  auto const output_path = fs::absolute(options.output_name_);
   if (fs::exists(output_path) && fs::equivalent(input_path, output_path)) {
     throw dacoexec::stream_error("Input and output refer to the same file");
   }
-  if (fs::exists(output_path) && !force) { throw dacoexec::stream_error("Output exists; use --force to replace it"); }
+  if (fs::exists(output_path) && !options.force_) {
+    throw dacoexec::stream_error("Output exists; use --force to replace it");
+  }
   std::ifstream input(input_path, std::ios::binary);
   if (!input) { throw dacoexec::stream_error("Cannot open input file"); }
   // badbit distinguishes underlying read failures from ordinary EOF.
   input.exceptions(std::ios::badbit);
   dacoexec::cli::temporary_output output(output_path);
   file_bytes source(input);
-  if (compress) {
-    if (algorithm == "rans") {
-      static_cast<void>(dacoexec::ans::compress_stream(source, output, { .block_size_ = block_size }));
+  if (options.compress_) {
+    if (options.algorithm_ == "rans") {
+      static_cast<void>(dacoexec::ans::compress_stream(source, output, { .block_size_ = options.block_size_ }));
     } else {
-      static_cast<void>(dacoexec::huffman::compress_stream(source, output, { .block_size_ = block_size }));
+      static_cast<void>(dacoexec::huffman::compress_stream(source, output, { .block_size_ = options.block_size_ }));
     }
   } else {
     std::array<char, dacoexec::detail::ans::archive_header_size> prefix{};
@@ -132,20 +140,22 @@ auto process(std::string const &input_name,
     input.seekg(0);
     if (!input) { throw dacoexec::stream_error("Cannot rewind input file"); }
     if (is_ans) {
-      static_cast<void>(dacoexec::ans::decompress_stream(source, output, { .max_output_bytes_ = output_limit }));
+      static_cast<void>(
+        dacoexec::ans::decompress_stream(source, output, { .max_output_bytes_ = options.output_limit_ }));
     } else {
-      static_cast<void>(dacoexec::huffman::decompress_stream(source, output, { .max_output_bytes_ = output_limit }));
+      static_cast<void>(
+        dacoexec::huffman::decompress_stream(source, output, { .max_output_bytes_ = options.output_limit_ }));
     }
   }
   if (input.bad()) { throw dacoexec::stream_error("Input read failed"); }
   output.close();
   input.close();
-  output.publish(output_path, force);
+  output.publish(output_path, options.force_);
 }
 }// namespace
 
 auto main(int argc, char **argv) -> int
-{
+try {
   CLI::App app{ "Sequential Huffman and rANS file compression" };
   app.require_subcommand(1);
   std::string input;
@@ -167,11 +177,18 @@ auto main(int argc, char **argv) -> int
   decompress->add_option("output", output)->required();
   decompress->add_flag("--force", force);
   CLI11_PARSE(app, argc, argv);
-  try {
-    process(input, output, force, compress->parsed(), algorithm, block_size, output_limit);
-    return 0;
-  } catch (std::exception const &error) {
-    std::cerr << "dacoexec: " << error.what() << '\n';
-    return 1;
-  }
+  process({ .input_name_ = input,
+    .output_name_ = output,
+    .force_ = force,
+    .compress_ = compress->parsed(),
+    .algorithm_ = algorithm,
+    .block_size_ = block_size,
+    .output_limit_ = output_limit });
+  return 0;
+} catch (std::exception const &error) {
+  std::cerr << "dacoexec: " << error.what() << '\n';
+  return 1;
+} catch (...) {
+  std::cerr << "dacoexec: Unknown failure\n";
+  return 1;
 }
