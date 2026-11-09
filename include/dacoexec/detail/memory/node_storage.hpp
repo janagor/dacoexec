@@ -1,8 +1,8 @@
 //! \file
 //! Typed node ownership with stable addresses for constant and runtime evaluation.
 
-#ifndef DACOEXEC_HUFFMAN_NODE_STORAGE_HPP
-#define DACOEXEC_HUFFMAN_NODE_STORAGE_HPP
+#ifndef DACOEXEC_MEMORY_NODE_STORAGE_HPP
+#define DACOEXEC_MEMORY_NODE_STORAGE_HPP
 
 #include <array>
 #include <cstddef>
@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace dacoexec::detail::huffman {
+namespace dacoexec::detail::memory {
 
 /**
  * Fixed-capacity object pool. All slots are default-constructed up front.
@@ -106,6 +106,6 @@ private:
   std::vector<T *> nodes_{};
 };
 
-}// namespace dacoexec::detail::huffman
+}// namespace dacoexec::detail::memory
 
-#endif// DACOEXEC_HUFFMAN_NODE_STORAGE_HPP
+#endif// DACOEXEC_MEMORY_NODE_STORAGE_HPP

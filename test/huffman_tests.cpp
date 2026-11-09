@@ -6,8 +6,8 @@
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/huffman/canonical.hpp>
 #include <dacoexec/detail/huffman/frequency.hpp>
-#include <dacoexec/detail/huffman/node_storage.hpp>
 #include <dacoexec/detail/huffman/tree.hpp>
+#include <dacoexec/detail/memory/node_storage.hpp>
 
 #include <dacoexec/detail/views/blocks.hpp>
 
@@ -1108,12 +1108,12 @@ TEST_CASE("typed node arenas reject exhaustion without invalidating nodes", "[hu
 {
   using node = dacoexec::detail::huffman::static_tree_arena::value_type;
   constexpr std::size_t leaf_capacity = 2;
-  dacoexec::detail::huffman::static_node_arena<node, leaf_capacity> arena;
+  dacoexec::detail::memory::static_node_arena<node, leaf_capacity> arena;
   auto const frequencies = dacoexec::detail::huffman::count_frequencies(std::string_view{ "AB" });
   REQUIRE_THROWS_AS(dacoexec::detail::huffman::build_code_lengths(frequencies, arena), std::length_error);
   REQUIRE(arena.size() == leaf_capacity);
 
-  dacoexec::detail::huffman::static_node_arena<node, leaf_capacity> linked;
+  dacoexec::detail::memory::static_node_arena<node, leaf_capacity> linked;
   auto const *leaf = linked.create(node{});
   auto const *parent = linked.create(node{ .left_ = leaf, .right_ = leaf });
   REQUIRE_THROWS_AS(linked.create(node{}), std::length_error);
@@ -1121,7 +1121,7 @@ TEST_CASE("typed node arenas reject exhaustion without invalidating nodes", "[hu
   REQUIRE(parent->right_ == leaf);
   REQUIRE(leaf->is_leaf());
 
-  dacoexec::detail::huffman::static_node_arena<node, 0> empty;
+  dacoexec::detail::memory::static_node_arena<node, 0> empty;
   REQUIRE(dacoexec::detail::huffman::build_code_lengths({}, empty) == dacoexec::detail::huffman::code_length_table{});
   REQUIRE_THROWS_AS(empty.create(node{}), std::length_error);
 }

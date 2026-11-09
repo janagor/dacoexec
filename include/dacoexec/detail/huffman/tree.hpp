@@ -5,8 +5,8 @@
 #define DACOEXEC_HUFFMAN_TREE_HPP
 
 #include <dacoexec/detail/huffman/frequency.hpp>
-#include <dacoexec/detail/huffman/node_storage.hpp>
 #include <dacoexec/detail/huffman/tree_builder.hpp>
+#include <dacoexec/detail/memory/node_storage.hpp>
 
 #include <algorithm>
 #include <array>
@@ -45,11 +45,11 @@ namespace dacoexec::detail::huffman {
 
 /** Fixed-capacity typed storage for one complete Huffman tree. */
 using static_tree_arena =
-  static_node_arena<::dacoexec::detail::huffman::tree_node, ::dacoexec::detail::huffman::max_tree_nodes>;
+  memory::static_node_arena<::dacoexec::detail::huffman::tree_node, ::dacoexec::detail::huffman::max_tree_nodes>;
 
 /** Dynamically owned nodes; a runtime allocator such as PMR can be supplied. */
 template<class Allocator = std::allocator<::dacoexec::detail::huffman::tree_node>>
-using dynamic_tree_allocator = dynamic_node_allocator<::dacoexec::detail::huffman::tree_node, Allocator>;
+using dynamic_tree_allocator = memory::dynamic_node_allocator<::dacoexec::detail::huffman::tree_node, Allocator>;
 
 /**
  * Build with caller-owned typed storage. Existing nodes remain alive; new nodes
