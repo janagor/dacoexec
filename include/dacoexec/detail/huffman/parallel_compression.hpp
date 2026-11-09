@@ -27,27 +27,9 @@ struct parallel_options
   std::size_t max_in_flight_ = execution::default_max_in_flight;
 };
 
-struct parallel_format
+struct parallel_format : stream_format
 {
-  using frame_type = encoded_frame;
   using options_type = parallel_options;
-  static constexpr auto archive_header_size = huffman::archive_header_size;
-  static constexpr auto frame_header_size = huffman::frame_header_size;
-  static constexpr auto max_frame_size = huffman::max_frame_size;
-
-  static auto validate_options(parallel_options const & /*options*/) -> void {}
-
-  [[nodiscard]] static auto metadata_size(encoded_frame const &frame) -> std::size_t
-  { return frame.header_.kind_ == frame_kind::huffman ? alphabet_size : 0U; }
-
-  template<io::byte_output_sink Sink> static auto write_archive_header(Sink &sink) -> void
-  { huffman::write_archive_header(sink); }
-
-  template<io::byte_output_sink Sink> static auto write_frame(Sink &sink, encoded_frame const &frame) -> void
-  { huffman::write_frame(sink, frame); }
-
-  template<io::byte_output_sink Sink> static auto write_end(Sink &sink) -> void
-  { huffman::write_frame_header(sink, {}); }
 };
 
 template<std::ranges::view V, io::byte_output_sink Sink>

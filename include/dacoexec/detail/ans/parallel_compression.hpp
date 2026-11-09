@@ -29,27 +29,9 @@ struct parallel_options
   unsigned table_log_ = tans::default_table_log;
 };
 
-struct parallel_format
+struct parallel_format : stream_format
 {
-  using frame_type = encoded_frame;
   using options_type = parallel_options;
-  static constexpr auto archive_header_size = ans::archive_header_size;
-  static constexpr auto frame_header_size = ans::frame_header_size;
-  static constexpr auto max_frame_size = ans::max_frame_size;
-
-  static auto validate_options(parallel_options const &options) -> void
-  { validate_coder(options.coder_, options.table_log_); }
-
-  [[nodiscard]] static auto metadata_size(encoded_frame const &frame) -> std::size_t
-  { return ::dacoexec::detail::ans::model_metadata_size(frame.block_); }
-
-  template<io::byte_output_sink Sink> static auto write_archive_header(Sink &sink) -> void
-  { ans::write_archive_header(sink); }
-
-  template<io::byte_output_sink Sink> static auto write_frame(Sink &sink, encoded_frame const &frame) -> void
-  { ans::write_frame(sink, frame); }
-
-  template<io::byte_output_sink Sink> static auto write_end(Sink &sink) -> void { ans::write_frame_header(sink, {}); }
 };
 
 template<std::ranges::view V, io::byte_output_sink Sink>

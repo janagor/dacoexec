@@ -6,18 +6,16 @@
 
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/format.hpp>
-#include <dacoexec/detail/codec/stream_statistics.hpp>
+#include <dacoexec/detail/codec/stream.hpp>
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/support/crc32.hpp>
 #include <dacoexec/detail/views/ans_frames.hpp>
-#include <dacoexec/detail/views/blocks.hpp>
 
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <ranges>
-#include <stdexcept>
 #include <utility>
 
 namespace dacoexec::detail::ans {
@@ -56,53 +54,52 @@ using codec::checked_add;
   return frame;
 }
 
+struct stream_format
+{
+  using frame_type = encoded_frame;
+  using options_type = stream_options;
+  using decode_options_type = decode_options;
+  static constexpr auto archive_header_size = ans::archive_header_size;
+  static constexpr auto frame_header_size = ans::frame_header_size;
+  static constexpr auto max_frame_size = ans::max_frame_size;
+
+  template<class Options> static auto validate_options(Options const &options) -> void
+  { validate_coder(options.coder_, options.table_log_); }
+
+  [[nodiscard]] static auto metadata_size(encoded_frame const &frame) -> std::size_t
+  { return ::dacoexec::detail::ans::model_metadata_size(frame.block_); }
+
+  template<io::byte_output_sink Sink> static auto write_archive_header(Sink &sink) -> void
+  { ans::write_archive_header(sink); }
+
+  template<io::byte_output_sink Sink> static auto write_frame(Sink &sink, encoded_frame const &frame) -> void
+  { ans::write_frame(sink, frame); }
+
+  template<io::byte_output_sink Sink> static auto write_end(Sink &sink) -> void { ans::write_frame_header(sink, {}); }
+
+  [[nodiscard]] static auto encode_frame(byte_block block, stream_options const &options) -> encoded_frame
+  { return ans::encode_frame(std::move(block), options.coder_, options.table_log_); }
+
+  template<std::ranges::viewable_range R> [[nodiscard]] static auto frames(R &&source, std::size_t limit)
+  { return std::forward<R>(source) | ::dacoexec::detail::views::ans_frames(limit); }
+
+  [[nodiscard]] static auto decode_block(encoded_block block, std::size_t limit) -> byte_block
+  { return ans::decompress_block(std::move(block), limit); }
+
+  [[nodiscard]] static auto checksum_message() noexcept -> char const * { return "DAN1 checksum mismatch"; }
+};
+
 //! Incremental archive writer. Exceptions propagate; prior sink writes remain.
 template<std::ranges::viewable_range R, io::byte_output_sink S>
   requires byte_input_range<std::views::all_t<R>>
 [[nodiscard]] auto compress_stream(R &&source, S &sink, stream_options options = {}) -> stream_statistics
-{
-  if (options.block_size_ == 0 || options.block_size_ > max_frame_size) {
-    throw std::invalid_argument("Invalid block size");
-  }
-  validate_coder(options.coder_, options.table_log_);
-  stream_statistics statistics{ .output_bytes_ = archive_header_size + frame_header_size };
-  write_archive_header(sink);
-  for (auto block : std::forward<R>(source) | dacoexec::detail::views::blocks(options.block_size_)) {
-    auto frame = encode_frame(std::move(block), options.coder_, options.table_log_);
-    ::dacoexec::detail::ans::checked_add(statistics.input_bytes_, frame.header_.uncompressed_size_);
-    ::dacoexec::detail::ans::checked_add(statistics.output_bytes_,
-      frame_header_size + frame.block_.payload_.size() + ::dacoexec::detail::ans::model_metadata_size(frame.block_));
-    ::dacoexec::detail::ans::checked_add(statistics.frames_, 1);
-    write_frame(sink, frame);
-  }
-  write_frame_header(sink, {});
-  return statistics;
-}
+{ return codec::compress_stream<stream_format>(std::forward<R>(source), sink, options); }
 
 //! Verifies each complete frame before writing; earlier frames remain on error.
 //! Size limits are checked before output allocation. END and exact EOF are required.
 template<std::ranges::viewable_range R, io::byte_output_sink S>
   requires byte_input_range<std::views::all_t<R>>
 [[nodiscard]] auto decompress_stream(R &&source, S &sink, decode_options options = {}) -> stream_statistics
-{
-  stream_statistics statistics{ .input_bytes_ = archive_header_size + frame_header_size };
-  auto frames = std::forward<R>(source) | dacoexec::detail::views::ans_frames(options.max_frame_size_);
-  for (auto cursor = frames.begin(); cursor != frames.end(); ++cursor) {
-    auto frame = std::ranges::iter_move(cursor);
-    if (frame.header_.uncompressed_size_ > options.max_output_bytes_ - statistics.output_bytes_) {
-      throw format_error("Decompressed output exceeds configured limit");
-    }
-    ::dacoexec::detail::ans::checked_add(statistics.input_bytes_,
-      frame_header_size + frame.block_.payload_.size() + ::dacoexec::detail::ans::model_metadata_size(frame.block_));
-    ::dacoexec::detail::ans::checked_add(statistics.output_bytes_, frame.header_.uncompressed_size_);
-    ::dacoexec::detail::ans::checked_add(statistics.frames_, 1);
-    auto decoded = decompress_block(std::move(frame.block_), options.max_frame_size_);
-    if (dacoexec::detail::support::crc32(decoded.bytes_) != frame.header_.crc32_) {
-      throw format_error("DAN1 checksum mismatch");
-    }
-    sink.write(decoded.bytes_);
-  }
-  return statistics;
-}
+{ return codec::decompress_stream<stream_format>(std::forward<R>(source), sink, options); }
 }// namespace dacoexec::detail::ans
 #endif// DACOEXEC_ANS_STREAM_HPP
