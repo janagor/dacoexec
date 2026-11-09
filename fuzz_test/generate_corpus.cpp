@@ -1,6 +1,7 @@
 // Optional developer utility: regenerate valid seeds through the public encoder.
 #include "../benchmarks/fixtures.hpp"
 
+#include <dacoexec/ans.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 
 #include <array>
@@ -28,7 +29,7 @@ auto main(int argc, char **argv) -> int
   if (argc != 2) { return 1; }
   namespace huffman = dacoexec::detail::huffman;
   auto const root = std::filesystem::path(argv[1]);
-  for (auto directory : { "huffman_decoder", "frame_parser", "round_trip" }) {
+  for (auto directory : { "huffman_decoder", "frame_parser", "round_trip", "ans_decoder" }) {
     std::filesystem::create_directories(root / directory);
   }
   constexpr std::size_t seed_size = 4097;
@@ -46,6 +47,12 @@ auto main(int argc, char **argv) -> int
     envelope.insert(envelope.end(), block.payload_.begin(), block.payload_.end());
     save(root / "huffman_decoder" / name, envelope);
     save(root / "round_trip" / name, input);
+    for (unsigned table_log = 8; table_log <= 12; ++table_log) {
+      auto archive =
+        dacoexec::ans::compress(input, { .coder_ = dacoexec::ans::entropy_coder::tans, .table_log_ = table_log });
+      save(root / "ans_decoder" / (name + "-tans-log-" + std::to_string(table_log) + ".dan"), archive);
+    }
+
     constexpr std::array frame_block_sizes{ std::size_t{ 256 }, std::size_t{ 1024 } };
     for (auto block_size : frame_block_sizes) {
       std::vector<std::byte> archive;
