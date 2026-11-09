@@ -10,6 +10,7 @@
 #define DACOEXEC_ANS_FORMAT_HPP
 
 #include <dacoexec/detail/ans/block.hpp>
+#include <dacoexec/detail/codec/frame_header.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/support/endian.hpp>
 #include <dacoexec/error.hpp>
@@ -25,10 +26,10 @@ namespace dacoexec::detail::ans {
 inline constexpr std::size_t default_block_size = 1U << 20U;
 inline constexpr std::size_t max_frame_size = 16U << 20U;
 inline constexpr std::size_t archive_header_size = 8;
-inline constexpr std::size_t frame_header_size = 13;
-inline constexpr std::size_t size_field_offset = 1;
-inline constexpr std::size_t payload_field_offset = size_field_offset + sizeof(std::uint32_t);
-inline constexpr std::size_t crc_field_offset = payload_field_offset + sizeof(std::uint32_t);
+using codec::frame_header_size;
+using codec::size_field_offset;
+using codec::payload_field_offset;
+using codec::crc_field_offset;
 inline constexpr std::array<std::byte, archive_header_size> archive_header_bytes{ std::byte{ 'D' },
   std::byte{ 'A' },
   std::byte{ 'N' },
@@ -100,12 +101,7 @@ inline auto read_archive_header(std::span<std::byte const, archive_header_size> 
 [[nodiscard]] inline auto read_frame_header(std::span<std::byte const, frame_header_size> bytes,
   std::size_t limit = max_frame_size) -> frame_header
 {
-  frame_header header{ .kind_ = static_cast<frame_kind>(bytes.front()),
-    .uncompressed_size_ =
-      dacoexec::detail::support::read_u32_le(bytes.subspan<size_field_offset, sizeof(std::uint32_t)>()),
-    .payload_size_ =
-      dacoexec::detail::support::read_u32_le(bytes.subspan<payload_field_offset, sizeof(std::uint32_t)>()),
-    .crc32_ = dacoexec::detail::support::read_u32_le(bytes.subspan<crc_field_offset, sizeof(std::uint32_t)>()) };
+  auto header = codec::decode_frame_header<frame_header>(bytes);
   validate_frame_header(header, limit);
   return header;
 }
@@ -115,16 +111,7 @@ template<io::byte_output_sink S> inline auto write_archive_header(S &sink) -> vo
 template<io::byte_output_sink S> inline auto write_frame_header(S &sink, frame_header const &header) -> void
 {
   validate_frame_header(header);
-  std::array<std::byte, frame_header_size> bytes{};
-  bytes.front() = static_cast<std::byte>(header.kind_);
-  auto const put = [&bytes](std::size_t offset, std::uint32_t value) -> void {
-    auto const encoded = dacoexec::detail::support::write_u32_le(value);
-    for (auto byte : encoded) { bytes.at(offset++) = byte; }
-  };
-  put(size_field_offset, header.uncompressed_size_);
-  put(payload_field_offset, header.payload_size_);
-  put(crc_field_offset, header.crc32_);
-  sink.write(bytes);
+  sink.write(codec::encode_frame_header(header));
 }
 
 template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame const &frame) -> void
