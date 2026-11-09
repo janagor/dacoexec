@@ -18,7 +18,7 @@ Only declarations documented in these facade headers are supported:
 | `<dacoexec/dacoexec.hpp>` | All dependency-free facades below |
 | `<dacoexec/huffman.hpp>` | Huffman archive compression and decompression |
 | `<dacoexec/ans.hpp>` | ANS archive compression and decompression |
-| `<dacoexec/views.hpp>` | Bit and integer adaptors |
+| `<dacoexec/views.hpp>` | Archive, bit, and integer adaptors |
 | `<dacoexec/bit.hpp>` | MSB-first bit reader, writer, and output iterator |
 | `<dacoexec/error.hpp>` | Archive, I/O, and codec exceptions |
 | `<dacoexec/execution.hpp>` | Optional parallel compression with stdexec |
@@ -97,9 +97,68 @@ std::array<std::uint64_t, 3> values{1, 2, 13};
 auto decoded = values | dv::encode::gamma() | dv::decode::gamma(values.size());
 ```
 
-Archive compression/decompression views are deferred until they can process
-incrementally with bounded memory. Use codec stream functions for incremental
-compression and decompression; the convenience functions materialize their result.
+Archive adaptors are `views::encode::huffman(options)`, `views::decode::huffman(options)`,
+`views::encode::ans(options)`, and `views::decode::ans(options)`. They accept the
+same byte ranges and codec option types as the corresponding stream functions,
+and yield `std::byte` values. ANS encoding supports rANS and tANS selection.
+
+```cpp
+#include <dacoexec/views.hpp>
+#include <algorithm>
+#include <cstddef>
+#include <iterator>
+#include <string>
+#include <vector>
+
+namespace dv = dacoexec::views;
+std::string input = "hello hello hello";
+auto archive = input | dv::encode::huffman({ .block_size_ = 64 * 1024 });
+std::vector<std::byte> stored;
+std::ranges::copy(archive, std::back_inserter(stored));
+
+auto decoded = stored | dv::decode::huffman({ .max_output_bytes_ = 1024 * 1024 });
+std::vector<std::byte> restored;
+std::ranges::copy(decoded, std::back_inserter(restored));
+
+// Direct pipelines need no complete intermediate archive buffer.
+auto round_trip = input
+    | dv::encode::ans({ .coder_ = dacoexec::ans::entropy_coder::tans })
+    | dv::decode::ans();
+```
+
+Archive views require bounded additional working memory, proportional to the
+configured frame size and codec workspace. Storage owned by the input range is
+excluded. Creating an adaptor validates options; applying it performs no
+source iteration. Calling `begin()` only returns a cursor and performs no
+producer work. The first dereference, increment, or end comparison prepares the
+initial chunk: the archive header when encoding, or a verified frame when
+decoding. Decoding verifies an entire frame, including its checksum and output
+limit, before yielding any of that frame's bytes.
+
+Advancing past a chunk's final byte does not prepare the next chunk. The next
+dereference, increment, or end comparison prepares it when needed; those
+operations can propagate processing exceptions. A counted consumer such as
+`std::views::take` can stop exactly at a frame or archive-header boundary without
+processing the next chunk. `std::views::take(0)` performs no producer work,
+including on malformed archives or sources that throw when iteration starts.
+Option validation still happens when creating the adaptor.
+
+These are move-only, non-const, single-pass views. Iterator copies share the
+current position; repeated `begin()` resumes the pass. Moving a view preserves
+its iterators; destruction or replacing its state invalidates them. Ordinary
+lvalue containers are borrowed and movable rvalue containers are owned through
+`std::views::all`; any borrowed storage must survive iteration. Move a move-only
+view when transferring it into another adaptor. Default and moved-from views
+are empty. Both `range | adaptor` and `adaptor(range)` are supported; standalone
+adaptor-to-adaptor composition is not provided.
+
+Exhaust an encoding view to obtain a complete archive including END. Exhaust a
+decoding view to validate END and reject trailing input. A consumer that stops
+early, such as `std::views::take`, may leave later corruption undetected.
+Destruction never drains a view. Processing exceptions propagate and permanently
+end the pass; previously consumed bytes remain with the caller. Exceptions in
+downstream consumers are outside this failure handling. The convenience codec
+functions continue to materialize their complete result.
 
 Integer adaptors include `encode::gamma()`, `encode::delta()`,
 `encode::golomb(divisor)`, and `encode::rice(shift)`. Decoders take a count:
