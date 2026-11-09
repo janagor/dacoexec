@@ -21,7 +21,7 @@ jobs:
       - name: Build measurement targets
         run: >-
           cmake --build out/build/unixlike-clang-bench --target
-          dacoexec_benchmarks dacoexec_stream_memory dacoexec_streaming_memory_tests
+          dacoexec_benchmarks dacoexec_ans_benchmarks dacoexec_stream_memory dacoexec_streaming_memory_tests
       - name: Verify benchmark comparison failure handling
         run: python3 -B test/benchmark_compare_tests.py
       - name: Benchmark in-memory codec and ordered execution
@@ -31,6 +31,11 @@ jobs:
             --benchmark_repetitions=3 --benchmark_min_time=0.1s \
             --benchmark_out=results/benchmarks.json --benchmark_out_format=json
           python3 benchmarks/compare.py results/benchmarks.json > results/comparison.json
+      - name: Benchmark ANS stages separately
+        run: |
+          out/build/unixlike-clang-bench/benchmarks/dacoexec_ans_benchmarks \
+            --benchmark_min_time=0.1s \
+            --benchmark_out=results/ans-stages.json --benchmark_out_format=json
       - name: Measure bounded parallel working memory
         run: python3 benchmarks/measure.py --build-dir out/build/unixlike-clang-bench --output results --large
       - name: Check existing sequential large-stream invariants

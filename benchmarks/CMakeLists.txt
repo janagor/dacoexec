@@ -25,3 +25,7 @@ target_link_libraries(dacoexec_ans_stream_memory PRIVATE dacoexec::execution dac
 add_executable(dacoexec_ans_allocations ans_allocations.cpp)
 dacoexec_configure_linker(dacoexec_ans_allocations)
 target_link_libraries(dacoexec_ans_allocations PRIVATE dacoexec::dacoexec dacoexec_warnings)
+
+add_executable(dacoexec_ans_benchmarks ans_bench.cpp)
+dacoexec_configure_linker(dacoexec_ans_benchmarks)
+target_link_libraries(dacoexec_ans_benchmarks PRIVATE dacoexec::dacoexec benchmark::benchmark dacoexec_warnings)
