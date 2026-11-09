@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <dacoexec/detail/ans/stream.hpp>
+#include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/facade_sink.hpp>
 #include <dacoexec/error.hpp>
 #include <iterator>
@@ -43,7 +44,8 @@ struct stream_statistics
 //! Input may contain byte, char, signed/unsigned char, or char8_t values, including single-pass ranges.
 //! Memory is bounded by the block size. Source and destination failures propagate; accepted writes remain.
 template<std::ranges::viewable_range R, class Destination>
-  requires (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
+  requires ::dacoexec::detail::byte_input_range<std::views::all_t<R>>
+    && (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
     || std::output_iterator<std::remove_cvref_t<Destination>, std::byte>
     || requires(Destination &sink, std::span<std::byte const> bytes) { { sink.write(bytes) } -> std::same_as<void>; })
 [[nodiscard]] auto compress_stream(R &&source, Destination &&destination, stream_options options = {})
@@ -59,7 +61,8 @@ template<std::ranges::viewable_range R, class Destination>
 //! One-pass verified decompression. Each frame is validated before its output is written.
 //! Missing END, trailing input, bad checksums, and configured limits throw. Earlier writes remain on failure.
 template<std::ranges::viewable_range R, class Destination>
-  requires (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
+  requires ::dacoexec::detail::byte_input_range<std::views::all_t<R>>
+    && (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
     || std::output_iterator<std::remove_cvref_t<Destination>, std::byte>
     || requires(Destination &sink, std::span<std::byte const> bytes) { { sink.write(bytes) } -> std::same_as<void>; })
 [[nodiscard]] auto decompress_stream(R &&source, Destination &&destination, decode_options options = {})
@@ -75,6 +78,7 @@ template<std::ranges::viewable_range R, class Destination>
 
 //! Returns a complete archive. Empty input produces a valid empty archive.
 template<std::ranges::viewable_range R>
+  requires ::dacoexec::detail::byte_input_range<std::views::all_t<R>>
 [[nodiscard]] auto compress(R &&source, stream_options options = {}) -> std::vector<std::byte>
 {
   std::vector<std::byte> result;
@@ -84,6 +88,7 @@ template<std::ranges::viewable_range R>
 
 //! Returns verified bytes from one complete archive. No result is returned on failure.
 template<std::ranges::viewable_range R>
+  requires ::dacoexec::detail::byte_input_range<std::views::all_t<R>>
 [[nodiscard]] auto decompress(R &&source, decode_options options = {}) -> std::vector<std::byte>
 {
   std::vector<std::byte> result;

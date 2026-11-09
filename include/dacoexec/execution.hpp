@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <dacoexec/ans.hpp>
 #include <dacoexec/detail/ans/execution.hpp>
+#include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/huffman/execution.hpp>
 #include <dacoexec/huffman.hpp>
 #include <functional>
@@ -29,7 +30,8 @@ struct parallel_options
 //! ostream objects, and scheduler contexts must outlive completion.
 //! Writes are ordered; failures and cancellation drain in-flight work. Earlier writes remain.
 template<stdexec::scheduler Scheduler, std::ranges::viewable_range R, class Destination>
-  requires (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
+  requires ::dacoexec::detail::byte_input_range<std::views::all_t<R>>
+    && (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
     || std::output_iterator<std::remove_cvref_t<Destination>, std::byte>
     || requires(Destination &sink, std::span<std::byte const> bytes) { { sink.write(bytes) } -> std::same_as<void>; })
 [[nodiscard]] auto
@@ -72,7 +74,8 @@ struct parallel_options
 //! ostream objects, and scheduler contexts must outlive completion.
 //! Writes are ordered; failures and cancellation drain in-flight work. Earlier writes remain.
 template<stdexec::scheduler Scheduler, std::ranges::viewable_range R, class Destination>
-  requires (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
+  requires ::dacoexec::detail::byte_input_range<std::views::all_t<R>>
+    && (std::derived_from<std::remove_reference_t<Destination>, std::ostream>
     || std::output_iterator<std::remove_cvref_t<Destination>, std::byte>
     || requires(Destination &sink, std::span<std::byte const> bytes) { { sink.write(bytes) } -> std::same_as<void>; })
 [[nodiscard]] auto

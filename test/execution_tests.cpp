@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
+#include <dacoexec/ans.hpp>
 #include <dacoexec/detail/ans/execution.hpp>
 #include <dacoexec/detail/ans/format.hpp>
 #include <dacoexec/detail/ans/model.hpp>
@@ -11,6 +12,9 @@
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/views/ans_frames.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/error.hpp>
+#include <dacoexec/execution.hpp>
+#include <dacoexec/huffman.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
 
@@ -26,9 +30,11 @@
 #include <ios>
 #include <iterator>
 #include <latch>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <ostream>
 #include <random>
 #include <ranges>
 #include <span>
@@ -1090,4 +1096,219 @@ TEST_CASE("ANS cancellation before start leaves source and sink untouched", "[an
   REQUIRE(future.get() == stopped_completion);
   REQUIRE(reads == 0);
   REQUIRE(sink.bytes_.empty());
+}
+
+namespace {
+template<bool use_ans, class Scheduler, class R, class Destination>
+auto public_parallel(Scheduler scheduler, R &&source, Destination &&destination)
+{
+  if constexpr (use_ans) {
+    return dacoexec::ans::compress_parallel_on(std::move(scheduler),
+      std::forward<R>(source),
+      std::forward<Destination>(destination),
+      { .block_size_ = block_size, .max_in_flight_ = batch_size });
+  } else {
+    return dacoexec::huffman::compress_parallel_on(std::move(scheduler),
+      std::forward<R>(source),
+      std::forward<Destination>(destination),
+      { .block_size_ = block_size, .max_in_flight_ = batch_size });
+  }
+}
+
+template<class R>
+concept public_huffman_parallel_range = requires(R &&source, bytes &output) {
+  dacoexec::huffman::compress_parallel_on(
+    stdexec::inline_scheduler{}, std::forward<R>(source), std::back_inserter(output));
+};
+template<class R>
+concept public_ans_parallel_range = requires(R &&source, bytes &output) {
+  dacoexec::ans::compress_parallel_on(stdexec::inline_scheduler{}, std::forward<R>(source), std::back_inserter(output));
+};
+static_assert(public_huffman_parallel_range<std::vector<char> &>);
+static_assert(public_ans_parallel_range<std::ranges::owning_view<bytes>>);
+static_assert(!public_huffman_parallel_range<std::vector<int> &>);
+static_assert(!public_ans_parallel_range<std::vector<int> &>);
+static_assert(!public_huffman_parallel_range<std::vector<bool> &>);
+static_assert(!public_ans_parallel_range<std::vector<bool> &>);
+
+struct observed_sink
+{
+  bytes bytes_;
+  std::size_t writes_ = 0;
+
+  auto write(std::span<std::byte const> data) -> void
+  {
+    ++writes_;
+    bytes_.insert(bytes_.end(), data.begin(), data.end());
+  }
+};
+
+struct tracked_output
+{
+  using difference_type = std::ptrdiff_t;
+  using iterator_category = std::output_iterator_tag;
+  bytes *output_;
+  std::shared_ptr<int> lifetime_;
+  std::size_t fail_after_ = std::numeric_limits<std::size_t>::max();
+
+  auto operator*() -> tracked_output & { return *this; }
+
+  auto operator++() -> tracked_output & { return *this; }
+
+  auto operator++(int) -> tracked_output { return *this; }
+
+  auto operator=(std::byte value) -> tracked_output &
+  {
+    if (!lifetime_) { throw std::logic_error("Output adapter lost its lifetime"); }
+    if (output_->size() == fail_after_) { throw std::runtime_error("public output failed"); }
+    output_->push_back(value);
+    return *this;
+  }
+};
+
+static_assert(std::output_iterator<tracked_output, std::byte>);
+
+template<bool use_ans> auto check_public_owned_lifetimes() -> void
+{
+  exec::static_thread_pool pool{ 1 };
+  timed_gate entered(1);
+  timed_gate release(1);
+  auto blocker = std::async(std::launch::async, [&]() -> void {
+    static_cast<void>(stdexec::sync_wait(stdexec::schedule(pool.get_scheduler()) | stdexec::then([&]() -> void {
+      entered.arrive();
+      if (!release.wait()) { throw std::runtime_error("Lifetime gate timed out"); }
+    })));
+  });
+  bool const blocked = entered.wait();
+  bytes output;
+  bytes const input((block_size * batch_size) + 1, std::byte{ 'a' });
+  std::weak_ptr<int> lifetime;
+  {
+    auto owner = std::make_shared<int>(0);
+    lifetime = owner;
+    auto sender = public_parallel<use_ans>(pool.get_scheduler(),
+      std::ranges::owning_view{ bytes(input) },
+      tracked_output{ .output_ = &output, .lifetime_ = std::move(owner) });
+    stdexec::inplace_stop_source const stop;
+    std::promise<int> promise;
+    auto future = promise.get_future();
+    auto operation =
+      stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+    stdexec::start(operation);
+    bool const retained = !lifetime.expired();
+    release.arrive();
+    blocker.get();
+    REQUIRE(future.get() == value_completion);
+    REQUIRE(blocked);
+    REQUIRE(retained);
+    if constexpr (use_ans) {
+      REQUIRE(output == dacoexec::ans::compress(input, { .block_size_ = block_size }));
+    } else {
+      REQUIRE(output == dacoexec::huffman::compress(input, { .block_size_ = block_size }));
+    }
+  }
+  REQUIRE(lifetime.expired());
+}
+
+template<bool use_ans> auto check_public_cancellation() -> void
+{
+  exec::static_thread_pool pool{ 1 };
+  stdexec::inplace_stop_source stop;
+  stop.request_stop();
+  std::size_t reads = 0;
+  auto source =
+    std::views::iota(std::size_t{ 0 }, block_size) | std::views::transform([&](std::size_t value) -> std::byte {
+      ++reads;
+      return static_cast<std::byte>(value);
+    });
+  auto run_stopped = [&](auto &&destination) -> void {
+    std::promise<int> promise;
+    auto future = promise.get_future();
+    auto operation = stdexec::connect(
+      public_parallel<use_ans>(pool.get_scheduler(), source, std::forward<decltype(destination)>(destination)),
+      completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+    stdexec::start(operation);
+    REQUIRE(future.get() == stopped_completion);
+  };
+  bytes output;
+  run_stopped(std::back_inserter(output));
+  std::ostringstream stream;
+  run_stopped(stream);
+  REQUIRE(reads == 0);
+  REQUIRE(output.empty());
+  REQUIRE(stream.str().empty());
+
+  stdexec::inplace_stop_source active_stop;
+  timed_gate entered(1);
+  timed_gate release(1);
+  auto blocker = std::async(std::launch::async, [&]() -> void {
+    static_cast<void>(stdexec::sync_wait(stdexec::schedule(pool.get_scheduler()) | stdexec::then([&]() -> void {
+      entered.arrive();
+      if (!release.wait()) { throw std::runtime_error("Cancellation gate timed out"); }
+    })));
+  });
+  bool const blocked = entered.wait();
+  observed_sink sink;
+  std::promise<int> promise;
+  auto future = promise.get_future();
+  auto operation =
+    stdexec::connect(public_parallel<use_ans>(pool.get_scheduler(), bytes(block_size * batch_size), sink),
+      completion_receiver{ .promise_ = &promise, .token_ = active_stop.get_token() });
+  stdexec::start(operation);
+  active_stop.request_stop();
+  release.arrive();
+  blocker.get();
+  REQUIRE(future.get() == stopped_completion);
+  REQUIRE(blocked);
+  REQUIRE(sink.writes_ == 1);// Only the archive header; no queued batch was committed.
+}
+
+template<bool use_ans> auto check_public_failures() -> void
+{
+  exec::static_thread_pool pool{ 2 };
+  observed_sink scheduler_sink;
+  REQUIRE_THROWS_WITH(stdexec::sync_wait(public_parallel<use_ans>(
+                        error_scheduler{ pool.get_scheduler() }, bytes(block_size * batch_size), scheduler_sink)),
+    "scheduler failed");
+  REQUIRE(scheduler_sink.writes_ == 1);
+
+  observed_sink submission_sink;
+  std::size_t submissions = 0;
+  throwing_scheduler const scheduler{ .scheduler_ = pool.get_scheduler(), .submissions_ = &submissions, .fail_at_ = 1 };
+  REQUIRE_THROWS_WITH(
+    stdexec::sync_wait(public_parallel<use_ans>(scheduler, bytes(block_size * batch_size), submission_sink)),
+    "submission failed");
+  REQUIRE(submission_sink.writes_ == 1);// A successful sibling cannot commit a failed batch.
+
+  bytes output;
+  auto owner = std::make_shared<int>(0);
+  auto sender = public_parallel<use_ans>(pool.get_scheduler(),
+    bytes(block_size * batch_size),
+    tracked_output{ .output_ = &output, .lifetime_ = owner, .fail_after_ = scheduler_sink.bytes_.size() });
+  REQUIRE_THROWS_WITH(stdexec::sync_wait(std::move(sender)), "public output failed");
+  REQUIRE(output == scheduler_sink.bytes_);// No retry or subsequent frame output.
+
+  std::ostream broken_stream(nullptr);
+  REQUIRE_THROWS_AS(
+    stdexec::sync_wait(public_parallel<use_ans>(pool.get_scheduler(), bytes(block_size), broken_stream)),
+    dacoexec::stream_error);
+}
+}// namespace
+
+TEST_CASE("Public parallel facades own move-only sources and asynchronous output adapters", "[execution][facade]")
+{
+  check_public_owned_lifetimes<false>();
+  check_public_owned_lifetimes<true>();
+}
+
+TEST_CASE("Public parallel facades preserve cancellation through destination adapters", "[execution][facade]")
+{
+  check_public_cancellation<false>();
+  check_public_cancellation<true>();
+}
+
+TEST_CASE("Public parallel facades propagate scheduler and output errors without batch commits", "[execution][facade]")
+{
+  check_public_failures<false>();
+  check_public_failures<true>();
 }
