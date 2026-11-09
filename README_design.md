@@ -96,3 +96,43 @@ the configure line, for example:
 
 The `myproject_` prefix is the placeholder the rename workflow replaces, so
 renaming the project is one search-and-replace.
+
+## Public API and implementation visibility
+
+The supported API consists only of declarations documented in the public facade
+headers. All other declarations, including implementation classes, concrete
+archive representations, codec bases, helper algorithms, and internal execution
+facilities, are unsupported implementation details. Internal headers are
+installed only to satisfy compilation requirements of the header-only library.
+
+CMake's explicit `DACOEXEC_PUBLIC_HEADERS` inventory contains six core facades:
+`dacoexec.hpp`, `huffman.hpp`, `ans.hpp`, `views.hpp`, `bit.hpp`, and `error.hpp`.
+The optional execution target adds only `execution.hpp`. Every other header lives
+under `include/dacoexec/detail/`, and implementation declarations live under
+`dacoexec::detail`. Subsystem namespaces are directly beneath that single detail namespace.
+
+Codec facades consume ordinary byte ranges and return byte vectors or public
+statistics. Public option/statistics structs own their interface; they do not
+alias private block or stream classes. Parallel senders map completion values to
+public statistics and keep owned output-iterator adapters alive until completion.
+Public bit I/O classes are defined in `dacoexec` in `bit.hpp`; only their helpers
+live under `detail/bit/`. Concrete view,
+iterator, and sender types are unspecified and should not be named by consumers.
+
+Models are estimated internally. An entropy/model facade is deferred until a
+consumer-facing operation needs custom probability distributions. Frame parsing,
+node storage, canonical codebooks, blocks, integer primitives, sink concepts, and
+generic ordered processing have no public entry points. This is an intentional
+source API break, while DHF1 and DAN1 wire compatibility is preserved.
+
+Tests of implementation algorithms can include private headers. Public-header
+checks and relocated installed consumers use only the facade headers. Facade
+tests exercise archive operations, output destinations, integer/bit view composition,
+resource bounds, and public exceptions without using private representations.
+
+Codec views are deferred rather than caching a complete archive on first iteration.
+The public streaming functions provide incremental, frame-bounded processing.
+Codec option/statistics types remain separate so algorithm-specific settings can
+evolve independently. Installed consumers compile each facade in its own translation
+unit, and allocation-tracked streaming tests exercise both codecs with single-pass
+sources and temporary-file archives whose total size exceeds the frame size.
