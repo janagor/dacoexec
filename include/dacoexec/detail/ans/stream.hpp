@@ -6,6 +6,7 @@
 
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/format.hpp>
+#include <dacoexec/detail/codec/stream_statistics.hpp>
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/support/crc32.hpp>
@@ -36,23 +37,8 @@ struct decode_options
   std::uint64_t max_output_bytes_ = std::numeric_limits<std::uint64_t>::max();
 };
 
-struct stream_statistics
-{
-  //! Plain bytes for compression; complete archive bytes for decompression.
-  std::uint64_t input_bytes_ = 0;
-  //! Complete archive bytes for compression; plain bytes for decompression.
-  std::uint64_t output_bytes_ = 0;
-  //! Number of data frames; excludes END and the archive header.
-  std::uint64_t frames_ = 0;
-};
-
-inline auto checked_add(std::uint64_t &total, std::uint64_t amount) -> void
-{
-  if (amount > std::numeric_limits<std::uint64_t>::max() - total) {
-    throw std::overflow_error("Stream statistics overflow");
-  }
-  total += amount;
-}
+using codec::stream_statistics;
+using codec::checked_add;
 
 //! Computes CRC32 before consuming a nonempty bounded block.
 [[nodiscard]] inline auto encode_frame(byte_block block,

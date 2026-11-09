@@ -7,17 +7,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <dacoexec/detail/ans/model_normalization.hpp>
-#include <dacoexec/detail/concepts.hpp>
-#include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/detail/codec/frequency.hpp>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
 namespace dacoexec::detail::ans {
-inline constexpr std::size_t alphabet_size = 256;
+using codec::alphabet_size;
 inline constexpr unsigned default_precision_bits = 12;
 inline constexpr unsigned max_precision_bits = 16;
-using frequency_table = std::array<std::uint64_t, alphabet_size>;
+using codec::frequency_table;
 
 template<std::size_t symbol_count> class frequency_model
 {
@@ -97,17 +96,7 @@ template<std::size_t symbol_count>
   unsigned precision = default_precision_bits) -> frequency_model<2>
 { return make_model(std::array<std::uint64_t, 2>{ zeros, ones }, precision); }
 
-template<byte_input_range R> [[nodiscard]] auto count_frequencies(R &&source) -> frequency_table
-{
-  frequency_table counts{};
-  for (auto value : std::forward<R>(source)) {
-    using source_value = std::ranges::range_value_t<R>;
-    auto &count =
-      counts.at(std::to_integer<unsigned>(dacoexec::detail::support::to_byte(static_cast<source_value>(value))));
-    if (count == std::numeric_limits<std::uint64_t>::max()) { throw std::overflow_error("ANS count overflow"); }
-    ++count;
-  }
-  return counts;
-}
+template<byte_input_range R> [[nodiscard]] constexpr auto count_frequencies(R &&source) -> frequency_table
+{ return codec::count_frequencies(std::forward<R>(source), "ANS count overflow"); }
 }// namespace dacoexec::detail::ans
 #endif// DACOEXEC_ANS_MODEL_HPP

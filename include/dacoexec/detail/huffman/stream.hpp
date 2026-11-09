@@ -4,6 +4,7 @@
 #ifndef DACOEXEC_HUFFMAN_STREAM_HPP
 #define DACOEXEC_HUFFMAN_STREAM_HPP
 
+#include <dacoexec/detail/codec/stream_statistics.hpp>
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/huffman/block.hpp>
 #include <dacoexec/detail/huffman/format.hpp>
@@ -44,30 +45,8 @@ struct decode_options
   std::uint64_t max_output_bytes_ = std::numeric_limits<std::uint64_t>::max();
 };
 
-/**
- * Byte and data-frame counts returned only after successful completion.
- *
- * Archive byte counts include the eight-byte archive header, every 13-byte frame
- * header including END, Huffman length tables, and encoded payloads. Plain byte
- * counts include only uncompressed data. No statistics are returned on failure.
- */
-struct stream_statistics
-{
-  //! Plain bytes for compression; complete archive bytes for decompression.
-  std::uint64_t input_bytes_ = 0;
-  //! Complete archive bytes for compression; plain bytes for decompression.
-  std::uint64_t output_bytes_ = 0;
-  //! Number of data frames; excludes END and the archive header.
-  std::uint64_t frames_ = 0;
-};
-
-inline auto checked_add(std::uint64_t &total, std::uint64_t amount) -> void
-{
-  if (amount > std::numeric_limits<std::uint64_t>::max() - total) {
-    throw std::overflow_error("Stream statistics overflow");
-  }
-  total += amount;
-}
+using codec::stream_statistics;
+using codec::checked_add;
 
 /**
  * Consumes one nonempty block, computes its uncompressed CRC32 and encodes it.
