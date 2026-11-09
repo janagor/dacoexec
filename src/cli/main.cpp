@@ -17,6 +17,7 @@
 #include <iterator>
 #include <limits>
 #include <ranges>
+#include <stdexcept>
 #include <string>
 
 namespace {
@@ -104,6 +105,7 @@ struct process_options
   std::string algorithm_;
   std::size_t block_size_;
   std::uint64_t output_limit_;
+  unsigned table_log_;
 };
 
 auto process(process_options const &options) -> void
@@ -123,8 +125,13 @@ auto process(process_options const &options) -> void
   dacoexec::cli::temporary_output output(output_path);
   file_bytes source(input);
   if (options.compress_) {
-    if (options.algorithm_ == "rans") {
-      static_cast<void>(dacoexec::ans::compress_stream(source, output, { .block_size_ = options.block_size_ }));
+    if (options.algorithm_ == "rans" || options.algorithm_ == "tans") {
+      static_cast<void>(dacoexec::ans::compress_stream(source,
+        output,
+        { .block_size_ = options.block_size_,
+          .coder_ =
+            options.algorithm_ == "tans" ? dacoexec::ans::entropy_coder::tans : dacoexec::ans::entropy_coder::rans,
+          .table_log_ = options.table_log_ }));
     } else {
       static_cast<void>(dacoexec::huffman::compress_stream(source, output, { .block_size_ = options.block_size_ }));
     }
@@ -156,16 +163,19 @@ auto process(process_options const &options) -> void
 
 auto main(int argc, char **argv) -> int
 try {
-  CLI::App app{ "Sequential Huffman and rANS file compression" };
+  CLI::App app{ "Sequential Huffman, rANS and tANS file compression" };
   app.require_subcommand(1);
   std::string input;
   std::string output;
   std::string algorithm;
   bool force = false;
+  auto table_log = dacoexec::ans::stream_options{}.table_log_;
   auto block_size = dacoexec::huffman::stream_options{}.block_size_;
   auto output_limit = std::numeric_limits<std::uint64_t>::max();
   auto *compress = app.add_subcommand("compress", "Compress a file to DHF1 or DAN1");
-  compress->add_option("--algorithm", algorithm)->required()->check(CLI::IsMember({ "huffman", "rans" }));
+  compress->add_option("--algorithm", algorithm)->required()->check(CLI::IsMember({ "huffman", "rans", "tans" }));
+  auto *table_log_option =
+    compress->add_option("--table-log", table_log, "tANS precision (8-12); requires --algorithm tans");
   compress->add_option("--block-size", block_size)
     ->check(CLI::Range(std::size_t{ 1 }, dacoexec::huffman::decode_options{}.max_frame_size_));
   compress->add_option("input", input)->required();
@@ -177,13 +187,17 @@ try {
   decompress->add_option("output", output)->required();
   decompress->add_flag("--force", force);
   CLI11_PARSE(app, argc, argv);
+  if (table_log_option->count() != 0 && algorithm != "tans") {
+    throw std::invalid_argument("--table-log requires --algorithm tans");
+  }
   process({ .input_name_ = input,
     .output_name_ = output,
     .force_ = force,
     .compress_ = compress->parsed(),
     .algorithm_ = algorithm,
     .block_size_ = block_size,
-    .output_limit_ = output_limit });
+    .output_limit_ = output_limit,
+    .table_log_ = table_log });
   return 0;
 } catch (std::exception const &error) {
   std::cerr << "dacoexec: " << error.what() << '\n';

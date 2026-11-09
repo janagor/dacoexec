@@ -1312,3 +1312,36 @@ TEST_CASE("Public parallel facades propagate scheduler and output errors without
   check_public_failures<false>();
   check_public_failures<true>();
 }
+
+TEST_CASE("Parallel tANS matches sequential archives", "[ans][tans][execution]")
+{
+  namespace ans = dacoexec::detail::ans;
+  constexpr std::size_t input_size = 16384;
+  constexpr std::size_t tans_block_size = 4096;
+  bytes input(input_size, std::byte{ 'A' });
+  vector_sink sequential;
+  static_cast<void>(
+    ans::compress_stream(input, sequential, { .block_size_ = tans_block_size, .coder_ = ans::entropy_coder::tans }));
+  exec::static_thread_pool pool{ 2 };
+  vector_sink parallel;
+  auto result = stdexec::sync_wait(ans::encode_parallel_on(pool.get_scheduler(),
+    input,
+    parallel,
+    { .block_size_ = tans_block_size, .max_in_flight_ = 2, .coder_ = ans::entropy_coder::tans }));
+  REQUIRE(result.has_value());
+  REQUIRE(parallel.bytes_ == sequential.bytes_);
+}
+
+TEST_CASE("Parallel ANS rejects unknown coders before writing", "[ans][tans][execution]")
+{
+  bytes input;
+  bytes output;
+  auto sender = dacoexec::ans::compress_parallel_on(stdexec::inline_scheduler{},
+    input,
+    std::back_inserter(output),
+    // Deliberately pass an unsupported enumerator.
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    { .coder_ = static_cast<dacoexec::ans::entropy_coder>(std::numeric_limits<std::uint8_t>::max()) });
+  REQUIRE_THROWS_AS(stdexec::sync_wait(sender), std::invalid_argument);
+  REQUIRE(output.empty());
+}

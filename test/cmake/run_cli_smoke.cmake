@@ -139,3 +139,18 @@ if(NOT
    ans_preserved)
   message(FATAL_ERROR "Failed ANS operation replaced existing output")
 endif()
+
+foreach(table_log 8 10 12)
+  run_success(compress --algorithm tans --table-log ${table_log} --force "${input}" "${ans_archive}")
+  run_success(decompress --force "${ans_archive}" "${ans_restored}")
+  file(SHA256 "${ans_restored}" tans_actual)
+  if(NOT ans_expected STREQUAL tans_actual)
+    message(FATAL_ERROR "tANS CLI round trip differs at table log ${table_log}")
+  endif()
+endforeach()
+run_failure(compress --algorithm tans --table-log 7 --force "${input}" "${ans_archive}")
+run_failure(compress --algorithm tans --table-log 13 --force "${input}" "${ans_archive}")
+
+foreach(other_algorithm rans huffman)
+  run_failure(compress --algorithm ${other_algorithm} --table-log 10 --force "${input}" "${ans_archive}")
+endforeach()

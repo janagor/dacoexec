@@ -24,6 +24,8 @@ struct parallel_options
   std::size_t block_size_ = default_block_size;
   //! Positive maximum number of owned blocks in one processing batch.
   std::size_t max_in_flight_ = execution::default_max_in_flight;
+  entropy_coder coder_ = entropy_coder::rans;
+  unsigned table_log_ = tans::default_table_log;
 };
 
 template<std::ranges::view V, io::byte_output_sink Sink> struct parallel_source
@@ -47,6 +49,7 @@ template<std::ranges::view V, io::byte_output_sink Sink> struct parallel_source
     if (options_.block_size_ == 0 || options_.block_size_ > max_frame_size) {
       throw std::invalid_argument("Invalid block size");
     }
+    validate_coder(options_.coder_, options_.table_log_);
     blocks_.emplace(std::move(source_), options_.block_size_);
     write_archive_header(*sink_);
   }
@@ -84,7 +87,11 @@ template<std::ranges::view V, io::byte_output_sink Sink> struct parallel_source
 
 struct frame_encoder
 {
-  auto operator()(byte_block block) const -> encoded_frame { return encode_frame(std::move(block)); }
+  entropy_coder coder_ = entropy_coder::rans;
+  unsigned table_log_ = tans::default_table_log;
+
+  auto operator()(byte_block block) const -> encoded_frame
+  { return encode_frame(std::move(block), coder_, table_log_); }
 };
 
 /**
@@ -116,7 +123,7 @@ template<stdexec::scheduler Scheduler, std::ranges::viewable_range R, io::byte_o
   return execution::ordered_parallel_on(std::move(scheduler),
     ::dacoexec::detail::ans::parallel_source<std::views::all_t<R>, S>{
       std::views::all(std::forward<R>(source)), &sink, options },
-    ::dacoexec::detail::ans::frame_encoder{},
+    ::dacoexec::detail::ans::frame_encoder{ options.coder_, options.table_log_ },
     options.max_in_flight_);
 }
 

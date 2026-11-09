@@ -67,6 +67,8 @@ struct parallel_options
 {
   std::size_t block_size_ = ::dacoexec::detail::ans::default_block_size;
   std::size_t max_in_flight_ = ::dacoexec::detail::execution::default_max_in_flight;
+  entropy_coder coder_ = entropy_coder::rans;
+  unsigned table_log_ = ::dacoexec::detail::ans::tans::default_table_log;
 };
 
 //! Returns a lazy single-use sender completing with public stream_statistics.
@@ -87,7 +89,10 @@ template<stdexec::scheduler Scheduler, std::ranges::viewable_range R, class Dest
     return stdexec::then(::dacoexec::detail::ans::encode_parallel_on(std::move(scheduler),
                            std::move(source),
                            sink,
-                           { .block_size_ = options.block_size_, .max_in_flight_ = options.max_in_flight_ }),
+                           { .block_size_ = options.block_size_,
+                             .max_in_flight_ = options.max_in_flight_,
+                             .coder_ = options.coder_,
+                             .table_log_ = options.table_log_ }),
       [](auto statistics) -> stream_statistics {
         return { statistics.input_bytes_, statistics.output_bytes_, statistics.frames_ };
       });
