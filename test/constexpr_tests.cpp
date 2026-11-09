@@ -5,6 +5,7 @@
 #include <dacoexec/huffman/block.hpp>
 #include <dacoexec/huffman/canonical.hpp>
 #include <dacoexec/huffman/decode_view.hpp>
+#include <dacoexec/huffman/encoded_block.hpp>
 #include <utility>
 
 #include <dacoexec/huffman/frequency.hpp>

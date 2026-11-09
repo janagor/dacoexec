@@ -3,11 +3,11 @@
 #ifndef DACOEXEC_ANS_MODEL_HPP
 #define DACOEXEC_ANS_MODEL_HPP
 
-#include <dacoexec/concepts.hpp>
-#include <dacoexec/detail/byte.hpp>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/concepts.hpp>
+#include <dacoexec/detail/byte.hpp>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -37,8 +37,11 @@ public:
   }
 
   [[nodiscard]] auto frequencies() const noexcept -> table_type const & { return frequencies_; }
+
   [[nodiscard]] auto cumulative() const noexcept -> table_type const & { return cumulative_; }
+
   [[nodiscard]] auto precision_bits() const noexcept -> unsigned { return precision_bits_; }
+
   [[nodiscard]] auto total() const noexcept -> std::uint32_t { return std::uint32_t{ 1 } << precision_bits_; }
 
 private:
@@ -48,38 +51,46 @@ private:
 };
 
 namespace detail {
-struct frequency_share
-{
-  std::uint32_t quotient_;
-  std::uint64_t remainder_;
-};
+  struct frequency_share
+  {
+    std::uint32_t quotient_;
+    std::uint64_t remainder_;
+  };
 
-struct proportional_share_parameters
-{
-  std::uint64_t count_;
-  std::uint32_t slots_;
-  std::uint64_t sum_;
-  unsigned precision_;
-};
+  struct proportional_share_parameters
+  {
+    std::uint64_t count_;
+    std::uint32_t slots_;
+    std::uint64_t sum_;
+    unsigned precision_;
+  };
 
-// Computes count * slots / sum and its remainder without forming the product.
-// The caller supplies count <= sum, sum > 0, and slots <= 2^precision.
-[[nodiscard]] inline auto proportional_share(proportional_share_parameters parameters) -> frequency_share
-{
-  auto const [count, slots, sum, precision] = parameters;
-  std::uint64_t remainder = 0;
-  std::uint32_t quotient = 0;
-  for (unsigned bit = precision + 1; bit != 0; --bit) {
-    quotient *= 2;
-    if (remainder >= sum - remainder) { remainder -= sum - remainder; ++quotient; }
-    else { remainder += remainder; }
-    if (((slots >> (bit - 1)) & 1U) != 0) {
-      if (remainder >= sum - count) { remainder -= sum - count; ++quotient; }
-      else { remainder += count; }
+  // Computes count * slots / sum and its remainder without forming the product.
+  // The caller supplies count <= sum, sum > 0, and slots <= 2^precision.
+  [[nodiscard]] inline auto proportional_share(proportional_share_parameters parameters) -> frequency_share
+  {
+    auto const [count, slots, sum, precision] = parameters;
+    std::uint64_t remainder = 0;
+    std::uint32_t quotient = 0;
+    for (unsigned bit = precision + 1; bit != 0; --bit) {
+      quotient *= 2;
+      if (remainder >= sum - remainder) {
+        remainder -= sum - remainder;
+        ++quotient;
+      } else {
+        remainder += remainder;
+      }
+      if (((slots >> (bit - 1)) & 1U) != 0) {
+        if (remainder >= sum - count) {
+          remainder -= sum - count;
+          ++quotient;
+        } else {
+          remainder += count;
+        }
+      }
     }
+    return { .quotient_ = quotient, .remainder_ = remainder };
   }
-  return { .quotient_ = quotient, .remainder_ = remainder };
-}
 }// namespace detail
 
 // Reserve one slot for each observed symbol, then apportion the remaining
@@ -105,8 +116,8 @@ template<std::size_t symbol_count>
   for (std::size_t symbol = 0; symbol < symbol_count; ++symbol) {
     auto const count = counts.at(symbol);
     if (count == 0) { continue; }
-    auto const [quotient, remainder] = detail::proportional_share(
-      { .count_ = count, .slots_ = slots, .sum_ = sum, .precision_ = precision });
+    auto const [quotient, remainder] =
+      detail::proportional_share({ .count_ = count, .slots_ = slots, .sum_ = sum, .precision_ = precision });
     frequencies.at(symbol) = quotient + 1;
     remainders.at(symbol) = remainder;
     assigned += quotient + 1;
@@ -123,7 +134,8 @@ template<std::size_t symbol_count>
   return frequency_model<symbol_count>{ frequencies, precision };
 }
 
-[[nodiscard]] inline auto make_binary_model(std::uint64_t zeros, std::uint64_t ones,
+[[nodiscard]] inline auto make_binary_model(std::uint64_t zeros,
+  std::uint64_t ones,
   unsigned precision = default_precision_bits) -> frequency_model<2>
 { return make_model(std::array<std::uint64_t, 2>{ zeros, ones }, precision); }
 

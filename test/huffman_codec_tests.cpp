@@ -4,6 +4,8 @@
 #include <dacoexec/huffman/block.hpp>
 #include <dacoexec/huffman/canonical.hpp>
 #include <dacoexec/huffman/decode_view.hpp>
+#include <dacoexec/huffman/encoded_block.hpp>
+#include <dacoexec/huffman/encoder.hpp>
 #include <dacoexec/huffman/frequency.hpp>
 #include <dacoexec/huffman/tree.hpp>
 #include <utility>

@@ -9,9 +9,9 @@
 #ifndef DACOEXEC_ANS_FORMAT_HPP
 #define DACOEXEC_ANS_FORMAT_HPP
 
+#include <dacoexec/ans/block.hpp>
 #include <dacoexec/detail/endian.hpp>
 #include <dacoexec/detail/error.hpp>
-#include <dacoexec/ans/block.hpp>
 #include <dacoexec/io/output_sink.hpp>
 
 #include <algorithm>
@@ -73,9 +73,7 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
     }
     return;
   }
-  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::rans) {
-    throw format_error("Unknown frame type");
-  }
+  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::rans) { throw format_error("Unknown frame type"); }
   if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > limit
       || header.payload_size_ > limit || header.uncompressed_size_ > max_frame_size
       || header.payload_size_ > max_frame_size) {
@@ -128,8 +126,7 @@ template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame 
   auto const &block = frame.block_;
   if (block.payload_.size() != frame.header_.payload_size_
       || block.uncompressed_size_ != frame.header_.uncompressed_size_
-      || block.encoding_
-           != (frame.header_.kind_ == frame_kind::rans ? block_encoding::rans : block_encoding::raw)) {
+      || block.encoding_ != (frame.header_.kind_ == frame_kind::rans ? block_encoding::rans : block_encoding::raw)) {
     throw format_error("Inconsistent encoded frame");
   }
   if ((block.encoding_ == block_encoding::rans) != block.model_.has_value()) {

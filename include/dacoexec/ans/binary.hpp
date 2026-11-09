@@ -5,6 +5,7 @@
 #include <dacoexec/ans/detail/state.hpp>
 #include <limits>
 #include <utility>
+
 namespace dacoexec::ans::binary {
 template<std::ranges::input_range R>
 [[nodiscard]] auto encode_block(R &&source, frequency_model<2> const &model) -> std::vector<std::byte>
@@ -16,10 +17,11 @@ template<std::ranges::input_range R>
   }
   return detail::encode(std::span<std::uint8_t const>{ symbols }, model);
 }
-[[nodiscard]] inline auto decode_block(std::span<std::byte const> payload, frequency_model<2> const &model,
-  std::size_t count, std::size_t limit = std::numeric_limits<std::size_t>::max()) -> std::vector<bool>
-{
-  return detail::decode<bool>(payload, model, count, limit);
-}
+
+[[nodiscard]] inline auto decode_block(std::span<std::byte const> payload,
+  frequency_model<2> const &model,
+  std::size_t count,
+  std::size_t limit = std::numeric_limits<std::size_t>::max()) -> std::vector<bool>
+{ return detail::decode<bool>(payload, model, count, limit); }
 }// namespace dacoexec::ans::binary
 #endif// DACOEXEC_ANS_BINARY_HPP

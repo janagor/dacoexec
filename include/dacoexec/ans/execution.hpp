@@ -4,8 +4,8 @@
 #ifndef DACOEXEC_ANS_EXECUTION_HPP
 #define DACOEXEC_ANS_EXECUTION_HPP
 
-#include <dacoexec/execution/ordered_parallel.hpp>
 #include <dacoexec/ans/stream.hpp>
+#include <dacoexec/execution/ordered_parallel.hpp>
 
 #include <cstddef>
 #include <optional>
@@ -71,8 +71,7 @@ namespace detail {
     {
       checked_add(statistics_.input_bytes_, frame.header_.uncompressed_size_);
       checked_add(statistics_.output_bytes_,
-        frame_header_size + frame.block_.payload_.size()
-          + detail::model_metadata_size(frame.block_));
+        frame_header_size + frame.block_.payload_.size() + detail::model_metadata_size(frame.block_));
       checked_add(statistics_.frames_, 1);
       write_frame(*sink_, frame);
     }

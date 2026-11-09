@@ -4,13 +4,13 @@
 #ifndef DACOEXEC_ANS_STREAM_HPP
 #define DACOEXEC_ANS_STREAM_HPP
 
-#include <dacoexec/concepts.hpp>
-#include <dacoexec/detail/crc32.hpp>
 #include <dacoexec/ans/block.hpp>
 #include <dacoexec/ans/format.hpp>
+#include <dacoexec/concepts.hpp>
+#include <dacoexec/detail/crc32.hpp>
 #include <dacoexec/io/output_sink.hpp>
-#include <dacoexec/views/blocks.hpp>
 #include <dacoexec/views/ans_frames.hpp>
+#include <dacoexec/views/blocks.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -82,8 +82,7 @@ template<std::ranges::viewable_range R, io::byte_output_sink S>
     auto frame = encode_frame(std::move(block));
     detail::checked_add(statistics.input_bytes_, frame.header_.uncompressed_size_);
     detail::checked_add(statistics.output_bytes_,
-      frame_header_size + frame.block_.payload_.size()
-        + detail::model_metadata_size(frame.block_));
+      frame_header_size + frame.block_.payload_.size() + detail::model_metadata_size(frame.block_));
     detail::checked_add(statistics.frames_, 1);
     write_frame(sink, frame);
   }
@@ -105,8 +104,7 @@ template<std::ranges::viewable_range R, io::byte_output_sink S>
       throw format_error("Decompressed output exceeds configured limit");
     }
     detail::checked_add(statistics.input_bytes_,
-      frame_header_size + frame.block_.payload_.size()
-        + detail::model_metadata_size(frame.block_));
+      frame_header_size + frame.block_.payload_.size() + detail::model_metadata_size(frame.block_));
     detail::checked_add(statistics.output_bytes_, frame.header_.uncompressed_size_);
     detail::checked_add(statistics.frames_, 1);
     auto decoded = decompress_block(std::move(frame.block_), options.max_frame_size_);

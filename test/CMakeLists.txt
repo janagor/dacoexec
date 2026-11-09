@@ -41,6 +41,7 @@ add_executable(
   dacoexec_tests
   tests.cpp
   ans_tests.cpp
+  codec_base_tests.cpp
   ranges_tests.cpp
   bit_tests.cpp
   integer_coding_tests.cpp

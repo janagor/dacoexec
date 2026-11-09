@@ -2,11 +2,13 @@
 
 #include <benchmark/benchmark.h>
 #include <dacoexec/ans/block.hpp>
+#include <dacoexec/ans/encoded_block.hpp>
 #include <dacoexec/ans/execution.hpp>
 #include <dacoexec/ans/model.hpp>
 #include <dacoexec/ans/stream.hpp>
 #include <dacoexec/execution/ordered_parallel.hpp>
 #include <dacoexec/huffman/block.hpp>
+#include <dacoexec/huffman/encoded_block.hpp>
 #include <dacoexec/huffman/execution.hpp>
 #include <dacoexec/huffman/frequency.hpp>
 #include <dacoexec/huffman/stream.hpp>

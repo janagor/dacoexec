@@ -3,15 +3,15 @@
 #ifndef DACOEXEC_ANS_DETAIL_STATE_HPP
 #define DACOEXEC_ANS_DETAIL_STATE_HPP
 
+#include <algorithm>
 #include <dacoexec/ans/model.hpp>
 #include <dacoexec/detail/endian.hpp>
 #include <dacoexec/detail/error.hpp>
-#include <algorithm>
-#include <span>
 #include <iterator>
 #include <ranges>
-#include <vector>
+#include <span>
 #include <utility>
+#include <vector>
 
 namespace dacoexec::ans {
 class decode_error : public std::runtime_error
@@ -29,8 +29,7 @@ inline constexpr std::uint32_t byte_mask = radix - 1;
 inline constexpr std::size_t state_bytes = sizeof(std::uint32_t);
 
 template<std::ranges::bidirectional_range R, std::size_t symbol_count>
-[[nodiscard]] auto encode(R &&source, frequency_model<symbol_count> const &model)
-  -> std::vector<std::byte>
+[[nodiscard]] auto encode(R &&source, frequency_model<symbol_count> const &model) -> std::vector<std::byte>
 {
   static_assert(symbol_count <= alphabet_size);
   std::uint32_t state = lower_bound;
@@ -58,8 +57,10 @@ template<std::ranges::bidirectional_range R, std::size_t symbol_count>
 }
 
 template<class Symbol = std::uint8_t, std::size_t symbol_count>
-[[nodiscard]] auto decode(std::span<std::byte const> payload, frequency_model<symbol_count> const &model,
-  std::size_t count, std::size_t limit) -> std::vector<Symbol>
+[[nodiscard]] auto decode(std::span<std::byte const> payload,
+  frequency_model<symbol_count> const &model,
+  std::size_t count,
+  std::size_t limit) -> std::vector<Symbol>
 {
   static_assert(symbol_count <= alphabet_size);
   if (count > limit || payload.size() < state_bytes) { throw decode_error("Invalid ANS size"); }
@@ -69,7 +70,8 @@ template<class Symbol = std::uint8_t, std::size_t symbol_count>
   }
   std::vector<std::uint8_t> lookup(model.total());
   for (std::size_t symbol = 0; symbol < symbol_count; ++symbol) {
-    std::fill_n(lookup.begin() + model.cumulative().at(symbol), model.frequencies().at(symbol),
+    std::fill_n(lookup.begin() + model.cumulative().at(symbol),
+      model.frequencies().at(symbol),
       static_cast<std::uint8_t>(symbol));
   }
   std::vector<Symbol> output;
@@ -85,7 +87,9 @@ template<class Symbol = std::uint8_t, std::size_t symbol_count>
       state = (state << byte_bits) | std::to_integer<std::uint32_t>(payload.subspan(position++).front());
     }
   }
-  if (position != payload.size() || state != lower_bound) { throw decode_error("Invalid ANS terminal state or trailing bytes"); }
+  if (position != payload.size() || state != lower_bound) {
+    throw decode_error("Invalid ANS terminal state or trailing bytes");
+  }
   return output;
 }
 }// namespace dacoexec::ans::detail
