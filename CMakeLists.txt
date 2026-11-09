@@ -90,6 +90,7 @@ file(
   CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/*.hpp")
 set(DACOEXEC_EXECUTION_DETAIL_HEADERS
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/codec/parallel_source.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/execution/ordered_parallel.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/execution/ordered_sender.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/huffman/execution.hpp"

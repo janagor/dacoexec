@@ -111,6 +111,16 @@ The optional execution target adds only `execution.hpp`. Every other header live
 under `include/dacoexec/detail/`, and implementation declarations live under
 `dacoexec::detail`. Subsystem namespaces are directly beneath that single detail namespace.
 
+Shared block workflows, byte-frequency counting, stream accounting, frame header
+serialization, parser lifecycle, and parallel archive sources live in
+`detail/codec/` and are used by both Huffman and ANS. Format policies retain codec
+metadata parsing, tag validation, and diagnostics; frame views retain their
+individual iterator ownership semantics. The constexpr fixed-capacity priority
+queue lives in `detail/adt/`. Typed node ownership lives
+in `detail/memory/`; it has no codec dependency. Huffman keeps its tree-specific
+storage aliases beside tree construction. Codec-specific models, validation, and
+wire formats stay in their respective codec directories.
+
 Codec facades consume ordinary byte ranges and return byte vectors or public
 statistics. Public option/statistics structs own their interface; they do not
 alias private block or stream classes. Parallel senders map completion values to

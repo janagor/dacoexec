@@ -4,6 +4,7 @@
 #ifndef DACOEXEC_HUFFMAN_EXECUTION_HPP
 #define DACOEXEC_HUFFMAN_EXECUTION_HPP
 
+#include <dacoexec/detail/codec/parallel_source.hpp>
 #include <dacoexec/detail/execution/ordered_parallel.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 
@@ -26,62 +27,31 @@ struct parallel_options
   std::size_t max_in_flight_ = execution::default_max_in_flight;
 };
 
-template<std::ranges::view V, io::byte_output_sink Sink> struct parallel_source
+struct parallel_format
 {
-  using input_type = byte_block;
-  using result_type = encoded_frame;
-  V source_;
-  Sink *sink_;
-  parallel_options options_;
-  std::optional<blocks_view<V>> blocks_;
-  std::optional<typename blocks_view<V>::iterator> cursor_;
-  bool advance_ = false;
-  stream_statistics statistics_{ .output_bytes_ = archive_header_size + frame_header_size };
+  using frame_type = encoded_frame;
+  using options_type = parallel_options;
+  static constexpr auto archive_header_size = huffman::archive_header_size;
+  static constexpr auto frame_header_size = huffman::frame_header_size;
+  static constexpr auto max_frame_size = huffman::max_frame_size;
 
-  parallel_source(V source, Sink *sink, parallel_options options)
-    : source_(std::move(source)), sink_(sink), options_(options)
-  {}
+  static auto validate_options(parallel_options const & /*options*/) -> void {}
 
-  auto initialize() -> void
-  {
-    if (options_.block_size_ == 0 || options_.block_size_ > max_frame_size) {
-      throw std::invalid_argument("Invalid block size");
-    }
-    blocks_.emplace(std::move(source_), options_.block_size_);
-    write_archive_header(*sink_);
-  }
+  [[nodiscard]] static auto metadata_size(encoded_frame const &frame) -> std::size_t
+  { return frame.header_.kind_ == frame_kind::huffman ? alphabet_size : 0U; }
 
-  auto next() -> std::optional<byte_block>
-  {
-    if (!blocks_) { throw std::logic_error("Parallel source is not initialized"); }
-    if (!cursor_) {
-      cursor_.emplace(blocks_->begin());
-    } else if (advance_) {
-      ++*cursor_;
-    }
-    advance_ = false;
-    if (!cursor_) { throw std::logic_error("Parallel source cursor is not initialized"); }
-    if (*cursor_ == blocks_->end()) { return std::nullopt; }
-    advance_ = true;
-    return std::optional<byte_block>{ std::in_place, std::move(**cursor_) };
-  }
+  template<io::byte_output_sink Sink> static auto write_archive_header(Sink &sink) -> void
+  { huffman::write_archive_header(sink); }
 
-  auto commit(encoded_frame frame) -> void
-  {
-    checked_add(statistics_.input_bytes_, frame.header_.uncompressed_size_);
-    checked_add(statistics_.output_bytes_,
-      frame_header_size + frame.block_.payload_.size()
-        + (frame.header_.kind_ == frame_kind::huffman ? alphabet_size : 0U));
-    checked_add(statistics_.frames_, 1);
-    write_frame(*sink_, frame);
-  }
+  template<io::byte_output_sink Sink> static auto write_frame(Sink &sink, encoded_frame const &frame) -> void
+  { huffman::write_frame(sink, frame); }
 
-  auto finish() -> stream_statistics
-  {
-    write_frame_header(*sink_, {});
-    return statistics_;
-  }
+  template<io::byte_output_sink Sink> static auto write_end(Sink &sink) -> void
+  { huffman::write_frame_header(sink, {}); }
 };
+
+template<std::ranges::view V, io::byte_output_sink Sink>
+using parallel_source = codec::parallel_source<V, Sink, parallel_format>;
 
 struct frame_encoder
 {
