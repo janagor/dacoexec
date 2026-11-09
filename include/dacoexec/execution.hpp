@@ -5,9 +5,9 @@
 #include <concepts>
 #include <cstddef>
 #include <dacoexec/ans.hpp>
-#include <dacoexec/detail/ans/execution.hpp>
+#include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/concepts.hpp>
-#include <dacoexec/detail/huffman/execution.hpp>
+#include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/huffman.hpp>
 #include <functional>
 #include <iterator>

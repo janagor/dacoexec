@@ -1,12 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <dacoexec/ans.hpp>
-#include <dacoexec/detail/ans/execution.hpp>
+#include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/ans/format.hpp>
 #include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/execution/ordered_parallel.hpp>
-#include <dacoexec/detail/huffman/execution.hpp>
+#include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/detail/huffman/format.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>

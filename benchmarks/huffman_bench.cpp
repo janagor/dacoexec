@@ -4,13 +4,13 @@
 #include <benchmark/benchmark.h>
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
-#include <dacoexec/detail/ans/execution.hpp>
+#include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/execution/ordered_parallel.hpp>
 #include <dacoexec/detail/huffman/block.hpp>
 #include <dacoexec/detail/huffman/encoded_block.hpp>
-#include <dacoexec/detail/huffman/execution.hpp>
+#include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/detail/huffman/frequency.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>

@@ -1,6 +1,6 @@
 #include "fixtures.hpp"
 
-#include <dacoexec/detail/ans/execution.hpp>
+#include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/ans/format.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>

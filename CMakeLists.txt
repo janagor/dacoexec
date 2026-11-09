@@ -93,8 +93,8 @@ set(DACOEXEC_EXECUTION_DETAIL_HEADERS
     "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/codec/parallel_source.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/execution/ordered_parallel.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/execution/ordered_sender.hpp"
-    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/huffman/execution.hpp"
-    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/ans/execution.hpp")
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/huffman/parallel_compression.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/ans/parallel_compression.hpp")
 list(REMOVE_ITEM DACOEXEC_DETAIL_HEADERS ${DACOEXEC_EXECUTION_DETAIL_HEADERS})
 set(DACOEXEC_HEADERS ${DACOEXEC_PUBLIC_HEADERS} ${DACOEXEC_DETAIL_HEADERS})
 
