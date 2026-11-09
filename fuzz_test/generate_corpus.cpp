@@ -1,7 +1,7 @@
 // Optional developer utility: regenerate valid seeds through the public encoder.
 #include "../benchmarks/fixtures.hpp"
 
-#include <dacoexec/huffman/stream.hpp>
+#include <dacoexec/detail/huffman/stream.hpp>
 
 #include <array>
 #include <cstddef>
@@ -26,7 +26,7 @@ auto save(std::filesystem::path const &path, std::vector<std::byte> const &bytes
 auto main(int argc, char **argv) -> int
 {
   if (argc != 2) { return 1; }
-  namespace huffman = dacoexec::huffman;
+  namespace huffman = dacoexec::detail::huffman;
   auto const root = std::filesystem::path(argv[1]);
   for (auto directory : { "huffman_decoder", "frame_parser", "round_trip" }) {
     std::filesystem::create_directories(root / directory);
@@ -39,7 +39,7 @@ auto main(int argc, char **argv) -> int
     std::vector<std::byte> envelope{ static_cast<std::byte>(block.encoding_),
       static_cast<std::byte>(block.padding_bits_) };
     for (std::size_t index = 0; index < sizeof(block.uncompressed_size_); ++index) {
-      auto const shift = index * dacoexec::detail::bits_per_byte;
+      auto const shift = index * dacoexec::detail::support::bits_per_byte;
       envelope.push_back(static_cast<std::byte>(block.uncompressed_size_ >> shift));
     }
     for (auto length : block.lengths_) { envelope.push_back(static_cast<std::byte>(length)); }
@@ -49,7 +49,7 @@ auto main(int argc, char **argv) -> int
     constexpr std::array frame_block_sizes{ std::size_t{ 256 }, std::size_t{ 1024 } };
     for (auto block_size : frame_block_sizes) {
       std::vector<std::byte> archive;
-      dacoexec::io::iterator_sink sink{ std::back_inserter(archive) };
+      dacoexec::detail::io::iterator_sink sink{ std::back_inserter(archive) };
       static_cast<void>(huffman::compress_stream(input, sink, { .block_size_ = block_size }));
       save(root / "frame_parser" / (name + "-blocks-" + std::to_string(block_size)), archive);
     }

@@ -1,4 +1,5 @@
-#include <dacoexec/huffman/block.hpp>
+#include <dacoexec/detail/huffman/block.hpp>
+#include <dacoexec/error.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -9,7 +10,7 @@
 #include <vector>
 
 namespace {
-namespace huffman = dacoexec::huffman;
+namespace huffman = dacoexec::detail::huffman;
 constexpr std::size_t input_limit = 65536;
 constexpr std::size_t output_limit = input_limit;
 
@@ -26,7 +27,7 @@ auto malformed(std::span<std::uint8_t const> input) -> void
   huffman::encoded_block block;
   block.encoding_ = static_cast<huffman::block_encoding>(take());
   block.padding_bits_ = take();
-  constexpr auto byte_bits = dacoexec::detail::bits_per_byte;
+  constexpr auto byte_bits = dacoexec::detail::support::bits_per_byte;
   for (std::size_t index = 0; index < sizeof(block.uncompressed_size_); ++index) {
     block.uncompressed_size_ |= static_cast<std::uint64_t>(take()) << (index * byte_bits);
   }
@@ -36,7 +37,7 @@ auto malformed(std::span<std::uint8_t const> input) -> void
   try {
     auto const decoded = huffman::decompress_block(std::move(block), output_limit);
     if (decoded.bytes_.size() != expected_size) { std::abort(); }
-  } catch (huffman::decode_error const &) {
+  } catch (dacoexec::huffman::decode_error const &) {
     // Documented malformed block rejection; other exceptions are failures.
   }
 }

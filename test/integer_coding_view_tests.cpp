@@ -1,12 +1,12 @@
-#include <dacoexec/bit/bit_output_iterator.hpp>
-#include <dacoexec/integer_coding/common.hpp>
-#include <dacoexec/integer_coding/delta.hpp>
-#include <dacoexec/integer_coding/gamma.hpp>
-#include <dacoexec/integer_coding/golomb.hpp>
-#include <dacoexec/integer_coding/rice.hpp>
-#include <dacoexec/views/bits.hpp>
-#include <dacoexec/views/integer_decode.hpp>
-#include <dacoexec/views/integer_encode.hpp>
+#include <dacoexec/bit.hpp>
+#include <dacoexec/detail/integer_coding/common.hpp>
+#include <dacoexec/detail/integer_coding/delta.hpp>
+#include <dacoexec/detail/integer_coding/gamma.hpp>
+#include <dacoexec/detail/integer_coding/golomb.hpp>
+#include <dacoexec/detail/integer_coding/rice.hpp>
+#include <dacoexec/detail/views/bits.hpp>
+#include <dacoexec/detail/views/integer_decode.hpp>
+#include <dacoexec/detail/views/integer_encode.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -38,7 +38,7 @@ template<std::ranges::input_range R> auto bit_string(R &&range) -> std::string
   return result;
 }
 
-namespace dv = dacoexec::views;
+namespace dv = dacoexec::detail::views;
 constexpr std::uint32_t golomb_divisor = 5;
 constexpr unsigned rice_shift = 2;
 constexpr auto maximum_integer = std::numeric_limits<std::uint64_t>::max();
@@ -77,7 +77,7 @@ TEST_CASE("all integer views round trip boundary values without packed storage",
     == nonnegative);
   REQUIRE(collect(nonnegative | dv::encode::rice(rice_shift) | dv::decode::rice(rice_shift, nonnegative.size()))
           == nonnegative);
-  constexpr unsigned wide_shift = dacoexec::integer_coding::integer_bits - 1U;
+  constexpr unsigned wide_shift = dacoexec::detail::integer_coding::integer_bits - 1U;
   std::array const extreme{ maximum_integer };
   REQUIRE(collect(extreme | dv::encode::rice(wide_shift) | dv::decode::rice(wide_shift, extreme.size()))
           == std::vector<std::uint64_t>{ maximum_integer });
@@ -99,19 +99,21 @@ TEST_CASE("integer views agree with the low-level writers and compose with packe
     REQUIRE(collect(packed | dv::bits() | decode) == values);
   };
   verify(dv::encode::gamma(), dv::decode::gamma(values.size()), [](auto &writer, std::uint64_t value) -> void {
-    dacoexec::integer_coding::write_gamma(writer, value);
+    dacoexec::detail::integer_coding::write_gamma(writer, value);
   });
   verify(dv::encode::delta(), dv::decode::delta(values.size()), [](auto &writer, std::uint64_t value) -> void {
-    dacoexec::integer_coding::write_delta(writer, value);
+    dacoexec::detail::integer_coding::write_delta(writer, value);
   });
   verify(dv::encode::golomb(golomb_divisor),
     dv::decode::golomb(golomb_divisor, values.size()),
     [](auto &writer, std::uint64_t value) -> void {
-      dacoexec::integer_coding::write_golomb(writer, value, golomb_divisor);
+      dacoexec::detail::integer_coding::write_golomb(writer, value, golomb_divisor);
     });
   verify(dv::encode::rice(rice_shift),
     dv::decode::rice(rice_shift, values.size()),
-    [](auto &writer, std::uint64_t value) -> void { dacoexec::integer_coding::write_rice(writer, value, rice_shift); });
+    [](auto &writer, std::uint64_t value) -> void {
+      dacoexec::detail::integer_coding::write_rice(writer, value, rice_shift);
+    });
 }
 
 TEST_CASE("integer views stage lazily and preserve shared cursors across moves", "[integer_coding][views]")
@@ -198,7 +200,7 @@ TEST_CASE("integer decoding defers source increments until another bit is needed
 
 TEST_CASE("integer views reject invalid parameters and terminate after malformed input", "[integer_coding][views]")
 {
-  constexpr auto invalid_shift = dacoexec::integer_coding::integer_bits;
+  constexpr auto invalid_shift = dacoexec::detail::integer_coding::integer_bits;
   REQUIRE_THROWS_AS(dv::encode::golomb(0), std::invalid_argument);
   REQUIRE_THROWS_AS(dv::decode::golomb(0, 0), std::invalid_argument);
   REQUIRE_THROWS_AS(dv::encode::rice(invalid_shift), std::invalid_argument);
@@ -214,11 +216,11 @@ TEST_CASE("integer views reject invalid parameters and terminate after malformed
   auto decoder = truncated | dv::decode::gamma(1);
   REQUIRE_THROWS_AS(decoder.begin(), std::out_of_range);
   REQUIRE(decoder.begin() == decoder.end());
-  std::vector<bool> const overflow(dacoexec::integer_coding::integer_bits, false);
+  std::vector<bool> const overflow(dacoexec::detail::integer_coding::integer_bits, false);
   auto oversized = overflow | dv::decode::gamma(1);
   REQUIRE_THROWS_AS(oversized.begin(), std::overflow_error);
   REQUIRE(oversized.begin() == oversized.end());
-  constexpr dacoexec::integer_coding::decode_limits limits{ .max_unary_bits_ = 1 };
+  constexpr dacoexec::detail::integer_coding::decode_limits limits{ .max_unary_bits_ = 1 };
   std::vector<bool> const unary{ true, true, false };
   auto rice = unary | dv::decode::rice(0, 1, limits);
   REQUIRE_THROWS_AS(rice.begin(), std::length_error);

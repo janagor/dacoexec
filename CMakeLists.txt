@@ -75,19 +75,27 @@ add_library(dacoexec::dacoexec ALIAS dacoexec)
 set_target_properties(dacoexec PROPERTIES EXPORT_NAME dacoexec)
 target_compile_features(dacoexec INTERFACE cxx_std_20)
 
+# Facades define the complete supported API. Every implementation header is installed.
+set(DACOEXEC_PUBLIC_HEADERS
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/dacoexec.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/huffman.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/ans.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/views.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/bit.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/error.hpp")
+set(DACOEXEC_EXECUTION_HEADERS "${PROJECT_SOURCE_DIR}/include/dacoexec/execution.hpp")
 file(
   GLOB_RECURSE
-  DACOEXEC_HEADERS
+  DACOEXEC_DETAIL_HEADERS
   CONFIGURE_DEPENDS
-  "${PROJECT_SOURCE_DIR}/include/dacoexec/*.hpp")
-set(DACOEXEC_EXECUTION_HEADERS
-    "${PROJECT_SOURCE_DIR}/include/dacoexec/execution/ordered_parallel.hpp"
-    "${PROJECT_SOURCE_DIR}/include/dacoexec/huffman/execution.hpp"
-    "${PROJECT_SOURCE_DIR}/include/dacoexec/ans/execution.hpp")
-list(REMOVE_ITEM DACOEXEC_HEADERS ${DACOEXEC_EXECUTION_HEADERS})
-if(NOT DACOEXEC_HEADERS)
-  message(FATAL_ERROR "No public headers found under include/dacoexec")
-endif()
+  "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/*.hpp")
+set(DACOEXEC_EXECUTION_DETAIL_HEADERS
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/execution/ordered_parallel.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/execution/ordered_sender.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/huffman/execution.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/detail/ans/execution.hpp")
+list(REMOVE_ITEM DACOEXEC_DETAIL_HEADERS ${DACOEXEC_EXECUTION_DETAIL_HEADERS})
+set(DACOEXEC_HEADERS ${DACOEXEC_PUBLIC_HEADERS} ${DACOEXEC_DETAIL_HEADERS})
 
 target_sources(
   dacoexec
@@ -119,7 +127,8 @@ if(dacoexec_BUILD_EXECUTION)
               BASE_DIRS
               "${PROJECT_SOURCE_DIR}/include"
               FILES
-              ${DACOEXEC_EXECUTION_HEADERS})
+              ${DACOEXEC_EXECUTION_HEADERS}
+              ${DACOEXEC_EXECUTION_DETAIL_HEADERS})
 endif()
 
 if(DEFINED CMAKE_CXX_STANDARD)

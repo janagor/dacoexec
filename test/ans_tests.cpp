@@ -1,20 +1,20 @@
 #include <catch2/catch_test_macros.hpp>
-#include <dacoexec/ans/binary.hpp>
-#include <dacoexec/ans/block.hpp>
-#include <dacoexec/ans/detail/state.hpp>
-#include <dacoexec/ans/encoded_block.hpp>
-#include <dacoexec/ans/format.hpp>
-#include <dacoexec/ans/model.hpp>
-#include <dacoexec/ans/rans.hpp>
-#include <dacoexec/ans/stream.hpp>
-#include <dacoexec/detail/byte.hpp>
-#include <dacoexec/detail/crc32.hpp>
-#include <dacoexec/detail/endian.hpp>
-#include <dacoexec/detail/error.hpp>
-#include <dacoexec/io/output_sink.hpp>
-#include <dacoexec/views/ans.hpp>
-#include <dacoexec/views/ans_frames.hpp>
-#include <dacoexec/views/blocks.hpp>
+#include <dacoexec/detail/ans/binary.hpp>
+#include <dacoexec/detail/ans/block.hpp>
+#include <dacoexec/detail/ans/encoded_block.hpp>
+#include <dacoexec/detail/ans/format.hpp>
+#include <dacoexec/detail/ans/model.hpp>
+#include <dacoexec/detail/ans/model_wire.hpp>
+#include <dacoexec/detail/ans/rans.hpp>
+#include <dacoexec/detail/ans/stream.hpp>
+#include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/detail/support/crc32.hpp>
+#include <dacoexec/detail/support/endian.hpp>
+#include <dacoexec/detail/views/ans.hpp>
+#include <dacoexec/detail/views/ans_frames.hpp>
+#include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/error.hpp>
 
 #include <algorithm>
 #include <array>
@@ -36,7 +36,7 @@
 #include <vector>
 
 namespace {
-namespace ans = dacoexec::ans;
+namespace ans = dacoexec::detail::ans;
 using bytes = std::vector<std::byte>;
 constexpr std::size_t block_size = 4096;
 constexpr unsigned seed = 1729;
@@ -45,7 +45,7 @@ constexpr std::size_t sequence = 42;
 auto archive(bytes const &input) -> bytes
 {
   bytes output;
-  dacoexec::io::iterator_sink sink{ std::back_inserter(output) };
+  dacoexec::detail::io::iterator_sink sink{ std::back_inserter(output) };
   auto const stats = ans::compress_stream(input, sink, { block_size });
   REQUIRE(stats.input_bytes_ == input.size());
   REQUIRE(stats.output_bytes_ == output.size());
@@ -55,7 +55,7 @@ auto archive(bytes const &input) -> bytes
 auto restore(bytes const &input, std::uint64_t limit = std::numeric_limits<std::uint64_t>::max()) -> bytes
 {
   bytes output;
-  dacoexec::io::iterator_sink sink{ std::back_inserter(output) };
+  dacoexec::detail::io::iterator_sink sink{ std::back_inserter(output) };
   auto const stats = ans::decompress_stream(input, sink, { .max_frame_size_ = block_size, .max_output_bytes_ = limit });
   REQUIRE(stats.input_bytes_ == input.size());
   REQUIRE(stats.output_bytes_ == output.size());
@@ -76,7 +76,8 @@ TEST_CASE("ANS normalization preserves support and handles full-width counts", "
   ans::frequency_table counts{};
   counts.fill(1);
   REQUIRE_THROWS_AS(ans::make_model(counts, 1), std::invalid_argument);
-  for (unsigned precision = dacoexec::detail::bits_per_byte; precision <= ans::max_precision_bits; ++precision) {
+  for (unsigned precision = dacoexec::detail::support::bits_per_byte; precision <= ans::max_precision_bits;
+    ++precision) {
     auto const normalized = ans::make_model(counts, precision);
     std::uint32_t sum = 0;
     for (std::size_t symbol = 0; symbol < counts.size(); ++symbol) {
@@ -112,18 +113,20 @@ TEST_CASE("rANS round trips byte alphabets at every supported precision", "[ans]
   std::mt19937 random{ seed };
   bytes input(block_size);
   std::ranges::generate(input, [&random]() -> std::byte { return static_cast<std::byte>(random()); });
-  for (unsigned precision = dacoexec::detail::bits_per_byte; precision <= ans::max_precision_bits; ++precision) {
+  for (unsigned precision = dacoexec::detail::support::bits_per_byte; precision <= ans::max_precision_bits;
+    ++precision) {
     auto const model = ans::make_model(ans::count_frequencies(input), precision);
     auto const encoded = ans::rans::encode_block(input, model);
     REQUIRE(ans::rans::decode_block(encoded, model, input.size()) == input);
-    REQUIRE_THROWS_AS(ans::rans::decode_block(encoded, model, input.size(), input.size() - 1), ans::decode_error);
+    REQUIRE_THROWS_AS(
+      ans::rans::decode_block(encoded, model, input.size(), input.size() - 1), dacoexec::ans::decode_error);
     for (std::size_t size = 0; size < encoded.size(); ++size) {
       REQUIRE_THROWS_AS(
-        ans::rans::decode_block(std::span(encoded).first(size), model, input.size()), ans::decode_error);
+        ans::rans::decode_block(std::span(encoded).first(size), model, input.size()), dacoexec::ans::decode_error);
     }
     auto trailing = encoded;
     trailing.push_back(std::byte{ 0 });
-    REQUIRE_THROWS_AS(ans::rans::decode_block(trailing, model, input.size()), ans::decode_error);
+    REQUIRE_THROWS_AS(ans::rans::decode_block(trailing, model, input.size()), dacoexec::ans::decode_error);
   }
 }
 
@@ -175,8 +178,8 @@ TEST_CASE("ANS adaptors consume independent owned blocks", "[ans]")
 {
   bytes input(block_size + 1, std::byte{ 'A' });
   auto model = ans::make_model(ans::count_frequencies(input));
-  auto blocks = input | dacoexec::views::blocks(block_size) | dacoexec::views::encode::rans(model)
-                | dacoexec::views::decode::rans(block_size);
+  auto blocks = input | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model)
+                | dacoexec::detail::views::decode::rans(block_size);
   bytes decoded;
   std::uint64_t next = 0;
   for (auto const &block : blocks) {
@@ -195,13 +198,13 @@ TEST_CASE("ANS rejects inconsistent normalized models and decoder states", "[ans
   auto const encoded_empty = ans::binary::encode_block(empty, model);
   REQUIRE(ans::binary::decode_block(encoded_empty, model, 0).empty());
   bytes invalid_state(sizeof(std::uint32_t), std::byte{ 0 });
-  REQUIRE_THROWS_AS(ans::binary::decode_block(invalid_state, model, 0), ans::decode_error);
+  REQUIRE_THROWS_AS(ans::binary::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
   constexpr auto all_bits_set = std::numeric_limits<unsigned char>::max();
   invalid_state.assign(sizeof(std::uint32_t), static_cast<std::byte>(all_bits_set));
-  REQUIRE_THROWS_AS(ans::binary::decode_block(invalid_state, model, 0), ans::decode_error);
+  REQUIRE_THROWS_AS(ans::binary::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
   auto wrong_terminal = encoded_empty;
   wrong_terminal.front() ^= std::byte{ 1 };
-  REQUIRE_THROWS_AS(ans::binary::decode_block(wrong_terminal, model, 0), ans::decode_error);
+  REQUIRE_THROWS_AS(ans::binary::decode_block(wrong_terminal, model, 0), dacoexec::ans::decode_error);
 }
 
 TEST_CASE("ANS block views stage once and preserve borrowed dereferences", "[ans][ranges]")
@@ -213,7 +216,7 @@ TEST_CASE("ANS block views stage once and preserve borrowed dereferences", "[ans
     ++reads;
     return value;
   });
-  auto view = source | dacoexec::views::blocks(block_size) | dacoexec::views::encode::rans(model);
+  auto view = source | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model);
   REQUIRE(reads == 0);
   auto cursor = view.begin();
   auto const staged_reads = reads;
@@ -237,8 +240,8 @@ TEST_CASE("ANS decoded views preserve the staged decoded block", "[ans][ranges]"
 {
   bytes input(block_size, std::byte{ 'A' });
   auto const model = ans::make_model(ans::count_frequencies(input));
-  auto view = input | dacoexec::views::blocks(block_size) | dacoexec::views::encode::rans(model)
-              | dacoexec::views::decode::rans(block_size);
+  auto view = input | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model)
+              | dacoexec::detail::views::decode::rans(block_size);
   auto cursor = view.begin();
   auto const *first = &*cursor;
   REQUIRE(first->bytes_ == input);
@@ -278,9 +281,9 @@ TEST_CASE("DAN1 sparse model cost includes only present symbols", "[ans]")
   frame.header_ = { .kind_ = ans::frame_kind::rans,
     .uncompressed_size_ = static_cast<std::uint32_t>(input.size()),
     .payload_size_ = static_cast<std::uint32_t>(frame.block_.payload_.size()),
-    .crc32_ = dacoexec::detail::crc32(input) };
+    .crc32_ = dacoexec::detail::support::crc32(input) };
   bytes maximum_archive;
-  dacoexec::io::iterator_sink sink{ std::back_inserter(maximum_archive) };
+  dacoexec::detail::io::iterator_sink sink{ std::back_inserter(maximum_archive) };
   ans::write_archive_header(sink);
   ans::write_frame(sink, frame);
   ans::write_frame_header(sink, {});
@@ -304,7 +307,8 @@ TEST_CASE("DAN1 sparse models require unique sorted symbols", "[ans]")
   REQUIRE_THROWS_AS(restore(unordered), dacoexec::format_error);
   auto oversized = encoded;
   auto const count_offset = model_offset + sizeof(std::uint8_t);
-  auto const invalid_count = dacoexec::detail::write_u16_le(static_cast<std::uint16_t>(ans::alphabet_size + 1));
+  auto const invalid_count =
+    dacoexec::detail::support::write_u16_le(static_cast<std::uint16_t>(ans::alphabet_size + 1));
   std::ranges::copy(invalid_count, oversized.begin() + static_cast<std::ptrdiff_t>(count_offset));
   REQUIRE_THROWS_AS(restore(oversized), dacoexec::format_error);
 }
@@ -313,7 +317,7 @@ TEST_CASE("ANS staged views leave failed passes ended", "[ans][ranges]")
 {
   bytes input(block_size, std::byte{ 'B' });
   auto const model = ans::make_model(ans::count_frequencies(bytes{ std::byte{ 'A' } }));
-  auto view = input | dacoexec::views::blocks(block_size) | dacoexec::views::encode::rans(model);
+  auto view = input | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model);
   REQUIRE_THROWS_AS(view.begin(), std::invalid_argument);
   REQUIRE(view.begin() == view.end());
 }
@@ -497,9 +501,9 @@ TEST_CASE("DAN1 serialization matches golden wire vectors", "[ans][wire]")
   frame.header_ = { .kind_ = ans::frame_kind::rans,
     .uncompressed_size_ = static_cast<std::uint32_t>(input.size()),
     .payload_size_ = static_cast<std::uint32_t>(frame.block_.payload_.size()),
-    .crc32_ = dacoexec::detail::crc32(input) };
+    .crc32_ = dacoexec::detail::support::crc32(input) };
   bytes encoded;
-  dacoexec::io::iterator_sink sink{ std::back_inserter(encoded) };
+  dacoexec::detail::io::iterator_sink sink{ std::back_inserter(encoded) };
   ans::write_archive_header(sink);
   ans::write_frame(sink, frame);
   ans::write_frame_header(sink, {});
@@ -510,7 +514,7 @@ TEST_CASE("DAN1 serialization matches golden wire vectors", "[ans][wire]")
 TEST_CASE("ANS frame dereference borrows until explicit ownership transfer", "[ans][ranges]")
 {
   auto const encoded = archive(bytes(block_size + 1, std::byte{ 'A' }));
-  auto frames = encoded | dacoexec::views::ans_frames();
+  auto frames = encoded | dacoexec::detail::views::ans_frames();
   auto cursor = frames.begin();
   auto const &first = *cursor;
   auto const *staged = &first;

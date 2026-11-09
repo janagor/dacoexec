@@ -1,17 +1,16 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <dacoexec/detail/byte.hpp>
-#include <dacoexec/detail/crc32.hpp>
-#include <dacoexec/detail/endian.hpp>
-#include <dacoexec/detail/error.hpp>
-#include <dacoexec/huffman/block.hpp>
-#include <dacoexec/huffman/canonical.hpp>
-#include <dacoexec/huffman/format.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/stream.hpp>
-#include <dacoexec/huffman/tree.hpp>
-#include <dacoexec/io/output_sink.hpp>
-#include <dacoexec/views/frames.hpp>
+#include <dacoexec/detail/huffman/block.hpp>
+#include <dacoexec/detail/huffman/format.hpp>
+#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/huffman/stream.hpp>
+#include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/detail/support/crc32.hpp>
+#include <dacoexec/detail/support/endian.hpp>
+#include <dacoexec/detail/views/frames.hpp>
+#include <dacoexec/error.hpp>
 
 #include <algorithm>
 #include <array>
@@ -35,13 +34,13 @@
 
 namespace {
 using bytes = std::vector<std::byte>;
-namespace huffman = dacoexec::huffman;
+namespace huffman = dacoexec::detail::huffman;
 constexpr std::size_t test_block_size = 1024;
 
 auto compress(bytes const &input, std::size_t block_size = test_block_size) -> bytes
 {
   bytes archive;
-  dacoexec::io::iterator_sink sink(std::back_inserter(archive));
+  dacoexec::detail::io::iterator_sink sink(std::back_inserter(archive));
   auto const statistics = huffman::compress_stream(input, sink, { block_size });
   REQUIRE(statistics.input_bytes_ == input.size());
   REQUIRE(statistics.output_bytes_ == archive.size());
@@ -51,7 +50,7 @@ auto compress(bytes const &input, std::size_t block_size = test_block_size) -> b
 auto decompress(bytes const &archive, std::uint64_t limit = std::numeric_limits<std::uint64_t>::max()) -> bytes
 {
   bytes output;
-  dacoexec::io::iterator_sink sink(std::back_inserter(output));
+  dacoexec::detail::io::iterator_sink sink(std::back_inserter(output));
   auto const statistics = huffman::decompress_stream(
     archive, sink, { .max_frame_size_ = huffman::max_frame_size, .max_output_bytes_ = limit });
   REQUIRE(statistics.input_bytes_ == archive.size());
@@ -64,7 +63,7 @@ auto manual_archive(huffman::frame_header header,
   huffman::code_length_table const &lengths = {}) -> bytes
 {
   bytes archive;
-  dacoexec::io::iterator_sink sink(std::back_inserter(archive));
+  dacoexec::detail::io::iterator_sink sink(std::back_inserter(archive));
   huffman::write_archive_header(sink);
   huffman::write_frame_header(sink, header);
   if (header.kind_ == huffman::frame_kind::huffman) {
@@ -104,15 +103,15 @@ TEST_CASE("DHF1 fixed bytes and IEEE CRC32", "[streaming]")
   REQUIRE(decompress(golden).empty());
   constexpr std::uint32_t integer = 0x78563412;
   constexpr std::array expected{ std::byte{ 0x12 }, std::byte{ 0x34 }, std::byte{ 0x56 }, std::byte{ 0x78 } };
-  REQUIRE(dacoexec::detail::write_u32_le(integer) == expected);
-  REQUIRE(dacoexec::detail::read_u32_le(expected) == integer);
+  REQUIRE(dacoexec::detail::support::write_u32_le(integer) == expected);
+  REQUIRE(dacoexec::detail::support::read_u32_le(expected) == integer);
   constexpr std::uint16_t short_integer = 0x3412;
   constexpr std::array short_expected{ std::byte{ 0x12 }, std::byte{ 0x34 } };
-  REQUIRE(dacoexec::detail::write_u16_le(short_integer) == short_expected);
-  REQUIRE(dacoexec::detail::read_u16_le(short_expected) == short_integer);
+  REQUIRE(dacoexec::detail::support::write_u16_le(short_integer) == short_expected);
+  REQUIRE(dacoexec::detail::support::read_u16_le(short_expected) == short_integer);
   bytes digits;
   for (char character : std::string_view("123456789")) { digits.push_back(static_cast<std::byte>(character)); }
-  REQUIRE(dacoexec::detail::crc32(digits) == 0xCBF43926U);
+  REQUIRE(dacoexec::detail::support::crc32(digits) == 0xCBF43926U);
 }
 
 TEST_CASE("DHF1 deterministic mixed block round trips", "[streaming]")
@@ -126,7 +125,7 @@ TEST_CASE("DHF1 deterministic mixed block round trips", "[streaming]")
     REQUIRE(compress(input) == archive);
     REQUIRE(decompress(archive) == input);
     std::size_t frames = 0;
-    for (auto frame : archive | dacoexec::views::frames()) {
+    for (auto frame : archive | dacoexec::detail::views::frames()) {
       auto const expected_kind = frames == 1 || size == 1 ? huffman::frame_kind::raw : huffman::frame_kind::huffman;
       if (frame.header_.uncompressed_size_ == test_block_size) { REQUIRE(frame.header_.kind_ == expected_kind); }
       ++frames;
@@ -163,7 +162,7 @@ TEST_CASE("DHF1 independently rejects malformed structure", "[streaming]")
   mismatch.at(huffman::archive_header_size + huffman::payload_field_offset) = std::byte{ 2 };
   REQUIRE_THROWS(decompress(mismatch));
   auto oversized = valid;
-  auto const enormous = dacoexec::detail::write_u32_le(std::numeric_limits<std::uint32_t>::max());
+  auto const enormous = dacoexec::detail::support::write_u32_le(std::numeric_limits<std::uint32_t>::max());
   std::ranges::copy(enormous,
     oversized.begin() + static_cast<std::ptrdiff_t>(huffman::archive_header_size + huffman::payload_field_offset));
   REQUIRE_THROWS(decompress(oversized));
@@ -180,12 +179,13 @@ TEST_CASE("DHF1 Huffman validation and inferred padding", "[streaming]")
   REQUIRE(decompress(valid) == input);
   constexpr auto payload_offset = huffman::archive_header_size + huffman::frame_header_size + huffman::alphabet_size;
   auto padding = valid;
-  auto const payload_size = (input.size() + dacoexec::detail::bits_per_byte - 1U) / dacoexec::detail::bits_per_byte;
+  auto const payload_size =
+    (input.size() + dacoexec::detail::support::bits_per_byte - 1U) / dacoexec::detail::support::bits_per_byte;
   padding.at(payload_offset + payload_size - 1) |= std::byte{ 1 };
   REQUIRE_THROWS(decompress(padding));
   auto extra = valid;
   extra.insert(extra.begin() + static_cast<std::ptrdiff_t>(payload_offset + payload_size), std::byte{ 0 });
-  auto const enlarged = dacoexec::detail::write_u32_le(static_cast<std::uint32_t>(payload_size + 1));
+  auto const enlarged = dacoexec::detail::support::write_u32_le(static_cast<std::uint32_t>(payload_size + 1));
   std::ranges::copy(enlarged,
     extra.begin() + static_cast<std::ptrdiff_t>(huffman::archive_header_size + huffman::payload_field_offset));
   REQUIRE_THROWS(decompress(extra));
@@ -225,7 +225,7 @@ TEST_CASE("DHF1 lazy state, move ownership, and permanent failure", "[streaming]
     ++consumed;
     return byte;
   });
-  auto frames = source | dacoexec::views::frames();
+  auto frames = source | dacoexec::detail::views::frames();
   REQUIRE(consumed == 0);
   auto cursor = frames.begin();
   REQUIRE(consumed < archive.size());
@@ -239,7 +239,7 @@ TEST_CASE("DHF1 lazy state, move ownership, and permanent failure", "[streaming]
   REQUIRE(consumed == archive.size());
   auto broken_source =
     archive | std::views::transform([](auto) -> std::byte { throw std::logic_error("source failure"); });
-  auto broken = broken_source | dacoexec::views::frames();
+  auto broken = broken_source | dacoexec::detail::views::frames();
   REQUIRE_THROWS_AS(broken.begin(), std::logic_error);
   REQUIRE(broken.begin() == broken.end());
 }
@@ -271,7 +271,7 @@ TEST_CASE("DHF1 stops on sink failures and writes incrementally", "[streaming]")
   REQUIRE_THROWS_AS(huffman::compress_stream(source, sink, { test_block_size }), std::logic_error);
   REQUIRE(consumed == test_block_size);
   std::uint64_t total = std::numeric_limits<std::uint64_t>::max();
-  REQUIRE_THROWS_AS(huffman::detail::checked_add(total, 1), std::overflow_error);
+  REQUIRE_THROWS_AS(huffman::checked_add(total, 1), std::overflow_error);
 }
 
 TEST_CASE("DHF1 independently authored binary fixtures", "[streaming]")
@@ -315,14 +315,14 @@ TEST_CASE("DHF1 accepts move-only nonsized single-pass sources", "[streaming]")
   };
 
   bytes archive;
-  dacoexec::io::iterator_sink archive_sink(std::back_inserter(archive));
+  dacoexec::detail::io::iterator_sink archive_sink(std::back_inserter(archive));
   std::string const original(test_block_size + 1, 'x');
   auto const encoded = huffman::compress_stream(source_type(original), archive_sink, { test_block_size });
   REQUIRE(encoded.input_bytes_ == original.size());
   std::string encoded_string;
   for (auto byte : archive) { encoded_string.push_back(static_cast<char>(std::to_integer<unsigned char>(byte))); }
   bytes output;
-  dacoexec::io::iterator_sink output_sink(std::back_inserter(output));
+  dacoexec::detail::io::iterator_sink output_sink(std::back_inserter(output));
   auto const decoded = huffman::decompress_stream(source_type(std::move(encoded_string)), output_sink);
   REQUIRE(decoded.output_bytes_ == original.size());
   REQUIRE(output == bytes(original.size(), std::byte{ 'x' }));
@@ -331,14 +331,14 @@ TEST_CASE("DHF1 accepts move-only nonsized single-pass sources", "[streaming]")
 TEST_CASE("DHF1 discards a failed later frame without writing it", "[streaming]")
 {
   auto archive = compress(bytes(test_block_size * 2, std::byte{ 'x' }));
-  auto frames = archive | dacoexec::views::frames();
+  auto frames = archive | dacoexec::detail::views::frames();
   auto cursor = frames.begin();
   auto first = *cursor;
   auto const second_offset =
     huffman::archive_header_size + huffman::frame_header_size + huffman::alphabet_size + first.header_.payload_size_;
   archive.at(second_offset + huffman::crc_field_offset) ^= std::byte{ 1 };
   bytes output;
-  dacoexec::io::iterator_sink sink(std::back_inserter(output));
+  dacoexec::detail::io::iterator_sink sink(std::back_inserter(output));
   REQUIRE_THROWS(huffman::decompress_stream(archive, sink));
   REQUIRE(output == bytes(test_block_size, std::byte{ 'x' }));
   std::size_t consumed = 0;
@@ -346,7 +346,7 @@ TEST_CASE("DHF1 discards a failed later frame without writing it", "[streaming]"
     if (++consumed > second_offset + huffman::frame_header_size) { throw std::logic_error("partial frame"); }
     return byte;
   });
-  auto partial = throwing | dacoexec::views::frames();
+  auto partial = throwing | dacoexec::detail::views::frames();
   auto position = partial.begin();
   REQUIRE(position != partial.end());
   REQUIRE_THROWS_AS(++position, std::logic_error);
@@ -356,7 +356,7 @@ TEST_CASE("DHF1 discards a failed later frame without writing it", "[streaming]"
 TEST_CASE("DHF1 ostream sink reports stream errors", "[streaming]")
 {
   std::ostringstream stream;
-  dacoexec::io::ostream_sink sink(stream);
+  dacoexec::detail::io::ostream_sink sink(stream);
   stream.setstate(std::ios::badbit);
   std::array const data{ std::byte{ 0 } };
   REQUIRE_THROWS_AS(sink.write(data), dacoexec::stream_error);
@@ -365,11 +365,11 @@ TEST_CASE("DHF1 ostream sink reports stream errors", "[streaming]")
 TEST_CASE("DHF1 enforces configured limits before publishing frames", "[streaming]")
 {
   auto const archive = compress(bytes(test_block_size, std::byte{ 0 }));
-  auto frames = archive | dacoexec::views::frames(test_block_size - 1);
+  auto frames = archive | dacoexec::detail::views::frames(test_block_size - 1);
   REQUIRE_THROWS_AS(frames.begin(), dacoexec::format_error);
   REQUIRE(frames.begin() == frames.end());
   bytes output;
-  dacoexec::io::iterator_sink sink(std::back_inserter(output));
+  dacoexec::detail::io::iterator_sink sink(std::back_inserter(output));
   REQUIRE_THROWS_AS(huffman::compress_stream(bytes{}, sink, { 0 }), std::invalid_argument);
   REQUIRE(output.empty());
   REQUIRE_THROWS_AS(huffman::compress_stream(bytes{}, sink, { huffman::max_frame_size + 1 }), std::invalid_argument);
@@ -411,7 +411,7 @@ TEST_CASE("DHF1 explicitly rejects unsupported kinds and codebooks", "[streaming
       archive.insert(
         archive.end(), malformed.begin() + static_cast<std::ptrdiff_t>(huffman::archive_header_size), malformed.end());
       bytes output;
-      dacoexec::io::iterator_sink sink(std::back_inserter(output));
+      dacoexec::detail::io::iterator_sink sink(std::back_inserter(output));
       REQUIRE_THROWS_AS(huffman::decompress_stream(archive, sink), dacoexec::format_error);
       REQUIRE(output == bytes{ std::byte{ 'x' } });
     }
@@ -430,7 +430,7 @@ TEST_CASE("DHF1 parsed DATA sequences survive view moves and decoding", "[stream
     input.at(index) = static_cast<std::byte>(index);
   }
   auto const archive = compress(input);
-  auto frames = archive | dacoexec::views::frames();
+  auto frames = archive | dacoexec::detail::views::frames();
   auto cursor = frames.begin();
   auto first = *cursor;
   REQUIRE(first.block_.sequence_ == first_sequence);
@@ -476,7 +476,7 @@ TEST_CASE("DHF1 propagates source failure at every archive boundary", "[streamin
         return archive.at(index);
       });
     bytes output;
-    dacoexec::io::iterator_sink sink{ std::back_inserter(output) };
+    dacoexec::detail::io::iterator_sink sink{ std::back_inserter(output) };
     REQUIRE_THROWS_AS(huffman::decompress_stream(source, sink), source_failure);
     REQUIRE(reads == boundary);
   }

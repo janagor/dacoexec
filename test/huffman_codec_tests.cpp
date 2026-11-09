@@ -1,13 +1,13 @@
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/byte.hpp>
-#include <dacoexec/huffman/block.hpp>
-#include <dacoexec/huffman/canonical.hpp>
-#include <dacoexec/huffman/decode_view.hpp>
-#include <dacoexec/huffman/encoded_block.hpp>
-#include <dacoexec/huffman/encoder.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/tree.hpp>
+#include <dacoexec/detail/huffman/block.hpp>
+#include <dacoexec/detail/huffman/encode_cost.hpp>
+#include <dacoexec/detail/huffman/encoded_block.hpp>
+#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/huffman/tree.hpp>
+#include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 #include <utility>
 #include <vector>
 
@@ -19,18 +19,18 @@
 #include <string_view>
 
 namespace {
-using dacoexec::huffman::alphabet_size;
-using dacoexec::huffman::block_encoding;
-using dacoexec::huffman::build_code_lengths;
-using dacoexec::huffman::code_length_table;
-using dacoexec::huffman::compress_block;
-using dacoexec::huffman::count_frequencies;
+using dacoexec::detail::huffman::alphabet_size;
+using dacoexec::detail::huffman::block_encoding;
+using dacoexec::detail::huffman::build_code_lengths;
+using dacoexec::detail::huffman::code_length_table;
+using dacoexec::detail::huffman::compress_block;
+using dacoexec::detail::huffman::count_frequencies;
 using dacoexec::huffman::decode_error;
-using dacoexec::huffman::decompress_block;
-using dacoexec::huffman::encoded_block;
-using dacoexec::huffman::frequency_table;
-using dacoexec::huffman::max_canonical_bits;
-namespace huffman_detail = dacoexec::huffman::detail;
+using dacoexec::detail::huffman::decompress_block;
+using dacoexec::detail::huffman::encoded_block;
+using dacoexec::detail::huffman::frequency_table;
+using dacoexec::detail::huffman::max_canonical_bits;
+namespace huffman_detail = dacoexec::detail::huffman;
 constexpr std::size_t large_block = 4096;
 constexpr std::size_t mebibyte = std::size_t{ 1024 } * 1024U;
 constexpr std::uint64_t sequence = 42;
@@ -94,7 +94,7 @@ TEST_CASE("Block codec round trips boundary sizes and binary input", "[huffman][
 // Catch assertions expand into branches; keep the related selection checks together.
 TEST_CASE("Block selection is conservative and deterministic", "[huffman][codec]")
 {
-  constexpr auto singleton_savings_bits = dacoexec::detail::bits_per_byte - 1U;
+  constexpr auto singleton_savings_bits = dacoexec::detail::support::bits_per_byte - 1U;
   constexpr auto tie_size = alphabet_size + (alphabet_size / singleton_savings_bits) + 1U;
   auto tie = compress_block({ sequence, std::vector<std::byte>(tie_size, std::byte{ 'A' }) });
   CHECK(tie.encoding_ == block_encoding::raw);
@@ -167,7 +167,7 @@ TEST_CASE("Malformed Huffman payloads never return partial output", "[huffman][c
   SECTION("output too short") { --block.uncompressed_size_; }
   SECTION("output too long") { ++block.uncompressed_size_; }
   SECTION("nonzero padding") { block.payload_.back() |= std::byte{ 1 }; }
-  SECTION("invalid padding count") { block.padding_bits_ = dacoexec::detail::bits_per_byte; }
+  SECTION("invalid padding count") { block.padding_bits_ = dacoexec::detail::support::bits_per_byte; }
   SECTION("extra complete codeword") { block.padding_bits_ = 0; }
   SECTION("extra payload byte") { block.payload_.push_back(std::byte{ 0 }); }
   SECTION("invalid singleton bit")
@@ -223,7 +223,7 @@ TEST_CASE("Block decoder accepts maximum-width codewords", "[huffman][codec]")
   }
   block.lengths_.at(max_canonical_bits - 1U) = max_canonical_bits;
   block.lengths_.at(max_canonical_bits) = max_canonical_bits;
-  constexpr auto payload_size = max_canonical_bits / dacoexec::detail::bits_per_byte;
+  constexpr auto payload_size = max_canonical_bits / dacoexec::detail::support::bits_per_byte;
   block.payload_.assign(payload_size, static_cast<std::byte>(std::numeric_limits<std::uint8_t>::max()));
   auto decoded = decompress_block(std::move(block), 1);
   CHECK(decoded.bytes_ == std::vector<std::byte>{ static_cast<std::byte>(max_canonical_bits) });
@@ -243,12 +243,12 @@ TEST_CASE("Compressible full alphabet uses the Huffman path", "[huffman][codec]"
 
 TEST_CASE("Singleton compression matches fixed canonical output", "[huffman][codec]")
 {
-  static_assert(large_block % dacoexec::detail::bits_per_byte == 0);
+  static_assert(large_block % dacoexec::detail::support::bits_per_byte == 0);
   auto encoded = compress_block({ sequence, std::vector<std::byte>(large_block, std::byte{ 'A' }) });
   REQUIRE(encoded.encoding_ == block_encoding::canonical_huffman);
   code_length_table expected_lengths{};
   expected_lengths.at(static_cast<unsigned char>('A')) = 1;
-  std::vector<std::byte> const expected_payload(large_block / dacoexec::detail::bits_per_byte, std::byte{ 0 });
+  std::vector<std::byte> const expected_payload(large_block / dacoexec::detail::support::bits_per_byte, std::byte{ 0 });
   CHECK(encoded.sequence_ == sequence);
   CHECK(encoded.uncompressed_size_ == large_block);
   CHECK(encoded.lengths_ == expected_lengths);

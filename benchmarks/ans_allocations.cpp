@@ -2,11 +2,11 @@
 #include "fixtures.hpp"
 #include <cstddef>
 #include <cstdlib>
-#include <dacoexec/ans/block.hpp>
-#include <dacoexec/ans/encoded_block.hpp>
-#include <dacoexec/huffman/block.hpp>
-#include <dacoexec/huffman/encoded_block.hpp>
-#include <dacoexec/views/blocks.hpp>
+#include <dacoexec/detail/ans/block.hpp>
+#include <dacoexec/detail/ans/encoded_block.hpp>
+#include <dacoexec/detail/huffman/block.hpp>
+#include <dacoexec/detail/huffman/encoded_block.hpp>
+#include <dacoexec/detail/views/blocks.hpp>
 #include <exception>
 #include <iostream>
 #include <new>
@@ -83,33 +83,33 @@ try {
                   << fixtures::names.at(static_cast<std::size_t>(kind)) << ',' << statistics.calls_ << ','
                   << statistics.bytes_ << '\n';
       };
-      dacoexec::ans::encoded_block ans_encoded;
-      dacoexec::huffman::encoded_block huffman_encoded;
+      dacoexec::detail::ans::encoded_block ans_encoded;
+      dacoexec::detail::huffman::encoded_block huffman_encoded;
       allocation_statistics statistics;
       {
-        dacoexec::byte_block block{ 0, input };
+        dacoexec::detail::byte_block block{ 0, input };
         measurement const guard{ statistics };
-        ans_encoded = dacoexec::ans::compress_block(std::move(block));
+        ans_encoded = dacoexec::detail::ans::compress_block(std::move(block));
       }
       report("rans", "encode", statistics);
       statistics = {};
       {
         measurement const guard{ statistics };
-        auto decoded = dacoexec::ans::decompress_block(std::move(ans_encoded), size);
+        auto decoded = dacoexec::detail::ans::decompress_block(std::move(ans_encoded), size);
         if (decoded.bytes_ != input) { return 1; }
       }
       report("rans", "decode", statistics);
       statistics = {};
       {
-        dacoexec::byte_block block{ 0, input };
+        dacoexec::detail::byte_block block{ 0, input };
         measurement const guard{ statistics };
-        huffman_encoded = dacoexec::huffman::compress_block(std::move(block));
+        huffman_encoded = dacoexec::detail::huffman::compress_block(std::move(block));
       }
       report("huffman", "encode", statistics);
       statistics = {};
       {
         measurement const guard{ statistics };
-        auto decoded = dacoexec::huffman::decompress_block(std::move(huffman_encoded), size);
+        auto decoded = dacoexec::detail::huffman::decompress_block(std::move(huffman_encoded), size);
         if (decoded.bytes_ != input) { return 1; }
       }
       report("huffman", "decode", statistics);

@@ -1,9 +1,10 @@
-#include <dacoexec/concepts.hpp>
-#include <dacoexec/views/bits.hpp>
-#include <dacoexec/views/buffered_bytes.hpp>
+#include <dacoexec/detail/bit/codeword.hpp>
+#include <dacoexec/detail/concepts.hpp>
+#include <dacoexec/detail/views/bits.hpp>
+#include <dacoexec/detail/views/buffered_bytes.hpp>
 
-#include <dacoexec/bit/bit_output_iterator.hpp>
-#include <dacoexec/views/blocks.hpp>
+#include <dacoexec/bit.hpp>
+#include <dacoexec/detail/views/blocks.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -172,10 +173,10 @@ private:
 static_assert(std::ranges::input_range<byte_source>);
 static_assert(!std::ranges::forward_range<byte_source>);
 static_assert(!std::copyable<byte_source>);
-static_assert(dacoexec::byte_input_range<byte_source>);
+static_assert(dacoexec::detail::byte_input_range<byte_source>);
 
 template<class R>
-concept can_pipe_bits = requires(R &&range) { std::forward<R>(range) | dacoexec::views::bits(); };
+concept can_pipe_bits = requires(R &&range) { std::forward<R>(range) | dacoexec::detail::views::bits(); };
 
 static_assert(can_pipe_bits<std::vector<std::byte> &>);
 static_assert(can_pipe_bits<std::vector<std::byte>>);
@@ -186,7 +187,7 @@ static_assert(!can_pipe_bits<std::vector<int> &>);
 static_assert(!can_pipe_bits<std::vector<std::uint16_t>>);
 static_assert(!can_pipe_bits<std::vector<bool> &>);
 
-using bit_range = decltype(std::declval<std::vector<std::byte> &>() | dacoexec::views::bits());
+using bit_range = decltype(std::declval<std::vector<std::byte> &>() | dacoexec::detail::views::bits());
 
 static_assert(std::ranges::view<bit_range>);
 static_assert(std::ranges::input_range<bit_range>);
@@ -612,28 +613,28 @@ private:
 };
 
 static_assert(std::input_iterator<proxy_byte_view::iterator>);
-static_assert(dacoexec::byte_input_range<proxy_byte_view>);
+static_assert(dacoexec::detail::byte_input_range<proxy_byte_view>);
 
 TEST_CASE("bits yields the MSB-first pattern of each byte", "[bits]")
 {
-  REQUIRE(collect_bits(std::vector<std::byte>{} | dacoexec::views::bits()).empty());
+  REQUIRE(collect_bits(std::vector<std::byte>{} | dacoexec::detail::views::bits()).empty());
 
   std::vector<std::byte> const zero{ std::byte{ 0x00 } };
-  REQUIRE(collect_bits(zero | dacoexec::views::bits()) == std::vector<int>(8, 0));
+  REQUIRE(collect_bits(zero | dacoexec::detail::views::bits()) == std::vector<int>(8, 0));
 
   std::vector<std::byte> const ones{ std::byte{ 0xFF } };
-  REQUIRE(collect_bits(ones | dacoexec::views::bits()) == std::vector<int>(8, 1));
+  REQUIRE(collect_bits(ones | dacoexec::detail::views::bits()) == std::vector<int>(8, 1));
 
   std::vector<std::byte> const high{ std::byte{ 0x80 } };
-  REQUIRE(collect_bits(high | dacoexec::views::bits()) == std::vector<int>{ 1, 0, 0, 0, 0, 0, 0, 0 });
+  REQUIRE(collect_bits(high | dacoexec::detail::views::bits()) == std::vector<int>{ 1, 0, 0, 0, 0, 0, 0, 0 });
 
   std::vector<std::byte> const low{ std::byte{ 0x01 } };
-  REQUIRE(collect_bits(low | dacoexec::views::bits()) == std::vector<int>{ 0, 0, 0, 0, 0, 0, 0, 1 });
+  REQUIRE(collect_bits(low | dacoexec::detail::views::bits()) == std::vector<int>{ 0, 0, 0, 0, 0, 0, 0, 1 });
 
   std::vector<std::byte> const bytes{ std::byte{ 0xB2 }, std::byte{ 0x80 } };
   std::vector<int> const expected{ 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0 };
-  REQUIRE(collect_bits(bytes | dacoexec::views::bits()) == expected);
-  REQUIRE(collect_bits(dacoexec::views::bits()(bytes)) == expected);
+  REQUIRE(collect_bits(bytes | dacoexec::detail::views::bits()) == expected);
+  REQUIRE(collect_bits(dacoexec::detail::views::bits()(bytes)) == expected);
   REQUIRE(reference_bits(bytes) == expected);
 }
 
@@ -645,7 +646,7 @@ TEST_CASE("bits preserves high bits of every byte character type", "[bits]")
     std::array<unsigned char, 5> const patterns{ 0xB2, 0x80, 0x01, 0x00, 0xFF };
     input.reserve(patterns.size());
     for (unsigned char const pattern : patterns) { input.push_back(std::bit_cast<value_type>(pattern)); }
-    auto const bits = collect_bits(input | dacoexec::views::bits());
+    auto const bits = collect_bits(input | dacoexec::detail::views::bits());
     REQUIRE(std::vector<int>(bits.begin(), bits.begin() + 8) == std::vector<int>{ 1, 0, 1, 1, 0, 0, 1, 0 });
     REQUIRE(std::vector<int>(bits.begin() + 8, bits.begin() + 16) == std::vector<int>{ 1, 0, 0, 0, 0, 0, 0, 0 });
     REQUIRE(std::vector<int>(bits.begin() + 16, bits.begin() + 24) == std::vector<int>{ 0, 0, 0, 0, 0, 0, 0, 1 });
@@ -662,28 +663,28 @@ TEST_CASE("bits preserves high bits of every byte character type", "[bits]")
 TEST_CASE("bits reads a proxy-backed byte range once per byte", "[bits]")
 {
   std::vector<std::byte> const input{ std::byte{ 0xB2 }, std::byte{ 0x0F } };
-  REQUIRE(collect_bits(proxy_byte_view{ input } | dacoexec::views::bits()) == reference_bits(input));
+  REQUIRE(collect_bits(proxy_byte_view{ input } | dacoexec::detail::views::bits()) == reference_bits(input));
 }
 
 TEST_CASE("bits accepts spans, arrays, and owning temporaries", "[bits]")
 {
   std::vector<std::byte> const expected = make_bytes(5);
-  REQUIRE(collect_bits(expected | dacoexec::views::bits()) == reference_bits(expected));
+  REQUIRE(collect_bits(expected | dacoexec::detail::views::bits()) == reference_bits(expected));
 
   std::array<std::byte, short_sample_size> array{};
   std::ranges::copy(expected, array.begin());
-  REQUIRE(collect_bits(array | dacoexec::views::bits()) == reference_bits(expected));
+  REQUIRE(collect_bits(array | dacoexec::detail::views::bits()) == reference_bits(expected));
 
   std::span<std::byte const> const span{ expected };
-  REQUIRE(collect_bits(span | dacoexec::views::bits()) == reference_bits(expected));
-  REQUIRE(collect_bits(make_bytes(5) | dacoexec::views::bits()) == reference_bits(expected));
+  REQUIRE(collect_bits(span | dacoexec::detail::views::bits()) == reference_bits(expected));
+  REQUIRE(collect_bits(make_bytes(5) | dacoexec::detail::views::bits()) == reference_bits(expected));
 }
 
 TEST_CASE("constructing a bit view reads nothing and caches one byte", "[bits]")
 {
   auto stats = std::make_shared<source_stats>();
   byte_source source{ make_bytes(4), stats };
-  auto view = std::move(source) | dacoexec::views::bits();
+  auto view = std::move(source) | dacoexec::detail::views::bits();
   REQUIRE(stats->begin_calls_ == 0);
   REQUIRE(stats->dereferences_ == 0);
   REQUIRE(stats->increments_ == 0);
@@ -712,7 +713,7 @@ TEST_CASE("constructing a bit view reads nothing and caches one byte", "[bits]")
 TEST_CASE("copied bit iterators share one single-pass position", "[bits]")
 {
   std::vector<std::byte> const input{ std::byte{ 0xB2 } };
-  auto view = input | dacoexec::views::bits();
+  auto view = input | dacoexec::detail::views::bits();
   auto cursor = view.begin();
   auto copy = cursor;
   REQUIRE(*cursor);
@@ -725,7 +726,7 @@ TEST_CASE("copied bit iterators share one single-pass position", "[bits]")
 TEST_CASE("moving a started bit view keeps the cached position", "[bits]")
 {
   std::vector<std::byte> const input{ std::byte{ 0xB2 }, std::byte{ 0x80 } };
-  auto view = input | dacoexec::views::bits();
+  auto view = input | dacoexec::detail::views::bits();
   auto cursor = view.begin();
   REQUIRE(*cursor);
   auto moved = std::move(view);
@@ -755,7 +756,7 @@ TEST_CASE("a move-only bit source is read once", "[bits]")
   constexpr std::size_t count = 10;
   std::vector<std::byte> const input = make_bytes(count);
   byte_source source{ input, stats };
-  auto const collected = collect_bits(std::move(source) | dacoexec::views::bits());
+  auto const collected = collect_bits(std::move(source) | dacoexec::detail::views::bits());
   REQUIRE(stats->begin_calls_ == 1);
   REQUIRE(stats->dereferences_ == count);
   REQUIRE(stats->increments_ == count);
@@ -767,7 +768,7 @@ TEST_CASE("an empty move-only source produces no bits", "[bits]")
 {
   auto stats = std::make_shared<source_stats>();
   byte_source source{ {}, stats };
-  auto view = std::move(source) | dacoexec::views::bits();
+  auto view = std::move(source) | dacoexec::detail::views::bits();
   REQUIRE(stats->begin_calls_ == 0);
   REQUIRE(view.begin() == std::default_sentinel);
   REQUIRE(stats->begin_calls_ == 1);
@@ -783,7 +784,7 @@ TEST_CASE("upstream bit-source failure propagates and stays failed", "[bits]")
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = 1;
     byte_source source{ input, stats };
-    auto view = std::move(source) | dacoexec::views::bits();
+    auto view = std::move(source) | dacoexec::detail::views::bits();
     std::vector<int> kept;
     REQUIRE_THROWS_AS(
       [&]() -> void {
@@ -803,7 +804,7 @@ TEST_CASE("upstream bit-source failure propagates and stays failed", "[bits]")
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = 2;
     byte_source source{ input, stats };
-    auto view = std::move(source) | dacoexec::views::bits();
+    auto view = std::move(source) | dacoexec::detail::views::bits();
     std::vector<int> kept;
     REQUIRE_THROWS_AS(
       [&]() -> void {
@@ -826,7 +827,7 @@ TEST_CASE("upstream bit-source failure propagates and stays failed", "[bits]")
     std::vector<int> kept;
     REQUIRE_THROWS_AS(
       [&]() -> void {
-        for (bool const bit : std::move(source) | dacoexec::views::bits()) { kept.push_back(bit ? 1 : 0); }
+        for (bool const bit : std::move(source) | dacoexec::detail::views::bits()) { kept.push_back(bit ? 1 : 0); }
       }(),
       std::ios_base::failure);
     REQUIRE(kept == std::vector<int>{ 1, 0, 1, 1, 0, 0, 1, 0 });
@@ -838,7 +839,7 @@ TEST_CASE("a throwing source begin leaves the bit view unusable", "[bits]")
   auto stats = std::make_shared<source_stats>();
   stats->fail_begin_ = true;
   byte_source source{ { std::byte{ sample_byte } }, stats };
-  auto view = std::move(source) | dacoexec::views::bits();
+  auto view = std::move(source) | dacoexec::detail::views::bits();
   REQUIRE(stats->begin_calls_ == 0);
   REQUIRE_THROWS_AS(view.begin(), std::ios_base::failure);
   REQUIRE(stats->begin_calls_ == 1);
@@ -859,7 +860,7 @@ TEST_CASE("a streamed bit view reads one byte at a time", "[bits]")
   auto stats = std::make_shared<source_stats>();
   std::vector<std::byte> const input = make_bytes(small);
   byte_source source{ input, stats };
-  auto view = std::move(source) | dacoexec::views::bits();
+  auto view = std::move(source) | dacoexec::detail::views::bits();
   std::size_t seen = 0;
   for (bool const bit : view) {
     ++seen;
@@ -877,7 +878,7 @@ TEST_CASE("a streamed bit view reads one byte at a time", "[bits]")
   std::vector<std::byte> const large_input = make_bytes(large);
   byte_source large_source{ large_input, large_stats };
   std::size_t large_seen = 0;
-  for (bool const bit : std::move(large_source) | dacoexec::views::bits()) {
+  for (bool const bit : std::move(large_source) | dacoexec::detail::views::bits()) {
     std::size_t const byte_index = large_seen / 8U;
     auto const bit_index = static_cast<unsigned>(large_seen % 8U);
     auto const value = std::to_integer<unsigned>(large_input.at(byte_index));
@@ -896,14 +897,14 @@ TEST_CASE("buffered bytes cross window boundaries into bits and back", "[bits][b
   std::vector<std::byte> const input = make_bytes(8);
   auto stats = std::make_shared<source_stats>();
   byte_source source{ input, stats };
-  auto view = std::move(source) | dacoexec::views::buffered_bytes(3);
+  auto view = std::move(source) | dacoexec::detail::views::buffered_bytes(3);
   REQUIRE(stats->begin_calls_ == 0);
 
   std::vector<std::byte> packed;
   dacoexec::bit_writer writer{ std::back_inserter(packed) };
   std::vector<int> collected;
   std::size_t seen = 0;
-  for (bool const bit : std::move(view) | dacoexec::views::bits()) {
+  for (bool const bit : std::move(view) | dacoexec::detail::views::bits()) {
     if (seen == 0U) { REQUIRE(stats->dereferences_ == 3U); }
     if (seen == three_byte_bit_count) { REQUIRE(stats->dereferences_ == 6U); }
     collected.push_back(bit ? 1 : 0);
@@ -924,7 +925,8 @@ TEST_CASE("buffered bytes cross window boundaries into bits and back", "[bits][b
   std::vector<std::byte> one_packed;
   dacoexec::bit_writer one_writer{ std::back_inserter(one_packed) };
   std::size_t one_seen = 0;
-  for (bool const bit : std::move(one_source) | dacoexec::views::buffered_bytes(1) | dacoexec::views::bits()) {
+  for (bool const bit :
+    std::move(one_source) | dacoexec::detail::views::buffered_bytes(1) | dacoexec::detail::views::bits()) {
     if (one_seen == 0U) { REQUIRE(one_stats->dereferences_ == 1U); }
     if (one_seen == byte_width) { REQUIRE(one_stats->dereferences_ == 2U); }
     one_writer.write_bit(bit);
@@ -939,33 +941,33 @@ TEST_CASE("buffered bytes yield the source across partial windows", "[buffered]"
 {
   std::vector<std::byte> const input = make_bytes(8);
   std::vector<std::byte> collected;
-  for (std::byte const value : input | dacoexec::views::buffered_bytes(3)) { collected.push_back(value); }
+  for (std::byte const value : input | dacoexec::detail::views::buffered_bytes(3)) { collected.push_back(value); }
   REQUIRE(collected == input);
 
   collected.clear();
-  for (std::byte const value : input | dacoexec::views::buffered_bytes(8)) { collected.push_back(value); }
+  for (std::byte const value : input | dacoexec::detail::views::buffered_bytes(8)) { collected.push_back(value); }
   REQUIRE(collected == input);
 
   collected.clear();
-  for (std::byte const value : input | dacoexec::views::buffered_bytes(64)) { collected.push_back(value); }
+  for (std::byte const value : input | dacoexec::detail::views::buffered_bytes(64)) { collected.push_back(value); }
   REQUIRE(collected == input);
 
   std::vector<std::byte> empty;
-  auto empty_view = empty | dacoexec::views::buffered_bytes(4);
+  auto empty_view = empty | dacoexec::detail::views::buffered_bytes(4);
   REQUIRE(empty_view.begin() == std::default_sentinel);
-  auto huge = empty | dacoexec::views::buffered_bytes(std::numeric_limits<std::size_t>::max());
+  auto huge = empty | dacoexec::detail::views::buffered_bytes(std::numeric_limits<std::size_t>::max());
   REQUIRE(huge.begin() == std::default_sentinel);
   std::vector<std::byte> const one{ std::byte{ 0xB2 } };
   collected.clear();
-  for (std::byte const value : one | dacoexec::views::buffered_bytes(std::numeric_limits<std::size_t>::max())) {
+  for (std::byte const value : one | dacoexec::detail::views::buffered_bytes(std::numeric_limits<std::size_t>::max())) {
     collected.push_back(value);
   }
   REQUIRE(collected == one);
-  REQUIRE_THROWS_AS(dacoexec::views::buffered_bytes(0), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::views::buffered_bytes(0), std::invalid_argument);
 
   std::vector<unsigned char> const chars{ 0x00, 0x80, 0xFF, 0xB2 };
   collected.clear();
-  for (std::byte const value : chars | dacoexec::views::buffered_bytes(2)) { collected.push_back(value); }
+  for (std::byte const value : chars | dacoexec::detail::views::buffered_bytes(2)) { collected.push_back(value); }
   REQUIRE(
     collected == std::vector<std::byte>{ std::byte{ 0x00 }, std::byte{ 0x80 }, std::byte{ 0xFF }, std::byte{ 0xB2 } });
 }
@@ -975,7 +977,7 @@ TEST_CASE("a buffered byte window stays lazy and resumes after a move", "[buffer
   std::vector<std::byte> const input = make_bytes(5);
   auto stats = std::make_shared<source_stats>();
   byte_source source{ input, stats };
-  auto view = std::move(source) | dacoexec::views::buffered_bytes(2);
+  auto view = std::move(source) | dacoexec::detail::views::buffered_bytes(2);
   REQUIRE(stats->begin_calls_ == 0);
 
   auto cursor = view.begin();
@@ -1017,7 +1019,7 @@ TEST_CASE("a buffered read failure discards the unfinished window", "[buffered]"
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = 2;
     byte_source source{ input, stats };
-    auto view = std::move(source) | dacoexec::views::buffered_bytes(3);
+    auto view = std::move(source) | dacoexec::detail::views::buffered_bytes(3);
     REQUIRE_THROWS_AS(view.begin(), std::ios_base::failure);
     std::size_t extra = 0;
     for (std::byte const value : view) {
@@ -1032,7 +1034,7 @@ TEST_CASE("a buffered read failure discards the unfinished window", "[buffered]"
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = 4;
     byte_source source{ input, stats };
-    auto view = std::move(source) | dacoexec::views::buffered_bytes(3);
+    auto view = std::move(source) | dacoexec::detail::views::buffered_bytes(3);
     std::vector<std::byte> kept;
     REQUIRE_THROWS_AS(
       [&]() -> void {
@@ -1053,18 +1055,18 @@ TEST_CASE("bit views of blocks reconstruct the original bytes", "[bits]")
 {
   std::vector<std::byte> const input = make_bytes(50);
   std::vector<int> through_blocks;
-  std::vector<dacoexec::byte_block> owned;
-  for (auto block : input | dacoexec::views::blocks(16)) { owned.push_back(std::move(block)); }
-  for (dacoexec::byte_block &block : owned) {
-    auto part = collect_bits(block.bytes_ | dacoexec::views::bits());
+  std::vector<dacoexec::detail::byte_block> owned;
+  for (auto block : input | dacoexec::detail::views::blocks(16)) { owned.push_back(std::move(block)); }
+  for (dacoexec::detail::byte_block &block : owned) {
+    auto part = collect_bits(block.bytes_ | dacoexec::detail::views::bits());
     through_blocks.insert(through_blocks.end(), part.begin(), part.end());
   }
   REQUIRE(through_blocks == reference_bits(input));
 
   std::vector<std::byte> packed;
   dacoexec::bit_writer writer{ std::back_inserter(packed) };
-  for (dacoexec::byte_block const &block : owned) {
-    std::ranges::copy(block.bytes_ | dacoexec::views::bits(), writer.output_iterator());
+  for (dacoexec::detail::byte_block const &block : owned) {
+    std::ranges::copy(block.bytes_ | dacoexec::detail::views::bits(), writer.output_iterator());
   }
   REQUIRE(writer.finish() == 0);
   REQUIRE(packed == input);
@@ -1374,10 +1376,10 @@ TEST_CASE("writing into an existing byte buffer packs in place", "[bit_writer]")
 TEST_CASE("pack of unpacked bytes is the original byte sequence", "[bit_writer]")
 {
   auto check = [](std::vector<std::byte> const &input) -> void {
-    REQUIRE(collect_bits(input | dacoexec::views::bits()).size() == input.size() * 8U);
+    REQUIRE(collect_bits(input | dacoexec::detail::views::bits()).size() == input.size() * 8U);
     std::vector<std::byte> packed;
     dacoexec::bit_writer writer{ std::back_inserter(packed) };
-    std::ranges::copy(input | dacoexec::views::bits(), writer.output_iterator());
+    std::ranges::copy(input | dacoexec::detail::views::bits(), writer.output_iterator());
     REQUIRE(writer.finish() == 0);
     REQUIRE(packed == input);
   };
@@ -1405,7 +1407,7 @@ TEST_CASE("random codewords match an independent bit packer", "[bit_writer]")
       if (width == word_width) {
         value = rng.next();
       } else if (width > 0U) {
-        value = rng.next() & dacoexec::detail::low_bit_mask(width);
+        value = rng.next() & dacoexec::detail::bit::low_bit_mask(width);
       }
       words.push_back(codeword{ .value_ = value, .width_ = width });
     }

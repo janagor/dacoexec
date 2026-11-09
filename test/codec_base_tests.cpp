@@ -1,13 +1,12 @@
-#include <dacoexec/ans/decoder.hpp>
-#include <dacoexec/ans/detail/state.hpp>
-#include <dacoexec/ans/encoded_block.hpp>
-#include <dacoexec/ans/encoder.hpp>
-#include <dacoexec/codec/decoder_base.hpp>
-#include <dacoexec/codec/encoder_base.hpp>
-#include <dacoexec/huffman/decode_view.hpp>
-#include <dacoexec/huffman/decoder.hpp>
-#include <dacoexec/huffman/encoder.hpp>
-#include <dacoexec/views/blocks.hpp>
+#include <dacoexec/detail/ans/decoder.hpp>
+#include <dacoexec/detail/ans/encoded_block.hpp>
+#include <dacoexec/detail/ans/encoder.hpp>
+#include <dacoexec/detail/codec/decoder_base.hpp>
+#include <dacoexec/detail/codec/encoder_base.hpp>
+#include <dacoexec/detail/huffman/decoder.hpp>
+#include <dacoexec/detail/huffman/encoder.hpp>
+#include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/error.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -27,25 +26,29 @@ constexpr std::size_t metadata_cost = 8;
 constexpr auto symbol = std::byte{ 'A' };
 
 // Controllable costs exercise ties and overflow without allocating huge blocks.
-struct candidate_encoder : dacoexec::codec::encoder_base<candidate_encoder, dacoexec::ans::encoded_block>
+struct candidate_encoder
+  : dacoexec::detail::codec::encoder_base<candidate_encoder, dacoexec::detail::ans::encoded_block>
 {
   candidate_encoder() = default;
 
   std::size_t metadata_ = metadata_cost;
 
-  [[nodiscard]] static auto try_encode(std::span<std::byte const> /*input*/) -> std::optional<dacoexec::ans::encoded_block>
+  [[nodiscard]] static auto try_encode(std::span<std::byte const> /*input*/)
+    -> std::optional<dacoexec::detail::ans::encoded_block>
   {
-    dacoexec::ans::encoded_block block;
-    block.encoding_ = dacoexec::ans::block_encoding::rans;
+    dacoexec::detail::ans::encoded_block block;
+    block.encoding_ = dacoexec::detail::ans::block_encoding::rans;
     block.payload_.resize(candidate_size);
     return block;
   }
 
-  [[nodiscard]] auto metadata_size(dacoexec::ans::encoded_block const & /*block*/) const -> std::size_t { return metadata_; }
+  [[nodiscard]] auto metadata_size(dacoexec::detail::ans::encoded_block const & /*block*/) const -> std::size_t
+  { return metadata_; }
 };
 
 struct short_decoder
-  : dacoexec::codec::decoder_base<short_decoder, dacoexec::ans::encoded_block, dacoexec::ans::decode_error>
+  : dacoexec::detail::codec::
+      decoder_base<short_decoder, dacoexec::detail::ans::encoded_block, dacoexec::ans::decode_error>
 {
   short_decoder() = default;
 
@@ -53,12 +56,12 @@ struct short_decoder
 
   [[nodiscard]] static auto raw_size_message() -> char const * { return "RAW size"; }
 
-  [[nodiscard]] static auto is_raw(dacoexec::ans::encoded_block const & /*block*/) -> bool { return false; }
+  [[nodiscard]] static auto is_raw(dacoexec::detail::ans::encoded_block const & /*block*/) -> bool { return false; }
 
-  static auto validate(dacoexec::ans::encoded_block const & /*block*/) -> void {}
+  static auto validate(dacoexec::detail::ans::encoded_block const & /*block*/) -> void {}
 
-  [[nodiscard]] static auto decode_compressed(dacoexec::ans::encoded_block const & /*block*/, std::size_t /*limit*/)
-    -> std::vector<std::byte>
+  [[nodiscard]] static auto decode_compressed(dacoexec::detail::ans::encoded_block const & /*block*/,
+    std::size_t /*limit*/) -> std::vector<std::byte>
   { return {}; }
 };
 
@@ -72,7 +75,7 @@ template<typename Encoder, typename Decoder, typename Error> auto check_codec() 
   CHECK(decoded.sequence_ == sequence);
   CHECK(decoded.bytes_ == std::vector<std::byte>(input_size, symbol));
 
-  dacoexec::byte_block input{ sequence, { symbol } };
+  dacoexec::detail::byte_block input{ sequence, { symbol } };
   auto const *storage = input.bytes_.data();
   auto raw = Encoder{}.encode(std::move(input));
   CHECK(raw.payload_.data() == storage);
@@ -97,25 +100,27 @@ TEST_CASE("Shared encoder rejects equal and overflowing total costs", "[codec]")
   candidate_encoder encoder;
   constexpr auto tie_size = candidate_size + metadata_cost;
   auto tie = encoder.encode({ sequence, std::vector<std::byte>(tie_size, symbol) });
-  CHECK(tie.encoding_ == dacoexec::ans::block_encoding::raw);
+  CHECK(tie.encoding_ == dacoexec::detail::ans::block_encoding::raw);
   auto smaller = encoder.encode({ sequence, std::vector<std::byte>(tie_size + 1U, symbol) });
-  CHECK(smaller.encoding_ == dacoexec::ans::block_encoding::rans);
+  CHECK(smaller.encoding_ == dacoexec::detail::ans::block_encoding::rans);
   CHECK(smaller.sequence_ == sequence);
   CHECK(smaller.uncompressed_size_ == tie_size + 1U);
   encoder.metadata_ = std::numeric_limits<std::size_t>::max();
   auto overflow = encoder.encode({ sequence, std::vector<std::byte>(input_size, symbol) });
-  CHECK(overflow.encoding_ == dacoexec::ans::block_encoding::raw);
+  CHECK(overflow.encoding_ == dacoexec::detail::ans::block_encoding::raw);
 }
 
 TEST_CASE("Shared decoder rejects incomplete codec output", "[codec]")
 {
-  dacoexec::ans::encoded_block block;
+  dacoexec::detail::ans::encoded_block block;
   block.uncompressed_size_ = input_size;
   CHECK_THROWS_AS(short_decoder{}.decode(std::move(block), input_size), dacoexec::ans::decode_error);
 }
 
 TEST_CASE("Codec classes preserve ownership, sequences, and bounds", "[codec]")
 {
-  check_codec<dacoexec::huffman::encoder, dacoexec::huffman::decoder, dacoexec::huffman::decode_error>();
-  check_codec<dacoexec::ans::encoder, dacoexec::ans::decoder, dacoexec::ans::decode_error>();
+  check_codec<dacoexec::detail::huffman::encoder,
+    dacoexec::detail::huffman::decoder,
+    dacoexec::huffman::decode_error>();
+  check_codec<dacoexec::detail::ans::encoder, dacoexec::detail::ans::decoder, dacoexec::ans::decode_error>();
 }

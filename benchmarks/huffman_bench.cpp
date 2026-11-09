@@ -1,19 +1,20 @@
 #include "fixtures.hpp"
+#include <dacoexec/detail/ans/model_wire.hpp>
 
 #include <benchmark/benchmark.h>
-#include <dacoexec/ans/block.hpp>
-#include <dacoexec/ans/encoded_block.hpp>
-#include <dacoexec/ans/execution.hpp>
-#include <dacoexec/ans/model.hpp>
-#include <dacoexec/ans/stream.hpp>
-#include <dacoexec/execution/ordered_parallel.hpp>
-#include <dacoexec/huffman/block.hpp>
-#include <dacoexec/huffman/encoded_block.hpp>
-#include <dacoexec/huffman/execution.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/stream.hpp>
-#include <dacoexec/io/output_sink.hpp>
-#include <dacoexec/views/blocks.hpp>
+#include <dacoexec/detail/ans/block.hpp>
+#include <dacoexec/detail/ans/encoded_block.hpp>
+#include <dacoexec/detail/ans/execution.hpp>
+#include <dacoexec/detail/ans/model.hpp>
+#include <dacoexec/detail/ans/stream.hpp>
+#include <dacoexec/detail/execution/ordered_parallel.hpp>
+#include <dacoexec/detail/huffman/block.hpp>
+#include <dacoexec/detail/huffman/encoded_block.hpp>
+#include <dacoexec/detail/huffman/execution.hpp>
+#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/huffman/stream.hpp>
+#include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/views/blocks.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
 
@@ -27,8 +28,8 @@
 #include <vector>
 
 namespace {
-namespace huffman = dacoexec::huffman;
-namespace ans = dacoexec::ans;
+namespace huffman = dacoexec::detail::huffman;
+namespace ans = dacoexec::detail::ans;
 using bytes = std::vector<std::byte>;
 constexpr std::int64_t representative_in_flight = 4;
 constexpr std::size_t block_parameter = 0;
@@ -68,7 +69,7 @@ auto bm_huffman_compress_block(benchmark::State &state) -> void
   for (auto iteration : state) {
     static_cast<void>(iteration);
     state.PauseTiming();
-    dacoexec::byte_block copy{ 0, input };
+    dacoexec::detail::byte_block copy{ 0, input };
     state.ResumeTiming();
     auto encoded = huffman::compress_block(std::move(copy));
     benchmark::DoNotOptimize(encoded.payload_.data());
@@ -121,7 +122,7 @@ auto bm_huffman_decompress_stream(benchmark::State &state) -> void
 {
   auto const input = fixture(state, fixtures::stream_size);
   bytes archive;
-  dacoexec::io::iterator_sink destination{ std::back_inserter(archive) };
+  dacoexec::detail::io::iterator_sink destination{ std::back_inserter(archive) };
   static_cast<void>(
     huffman::compress_stream(input, destination, { static_cast<std::size_t>(state.range(block_parameter)) }));
   for (auto iteration : state) {
@@ -156,7 +157,7 @@ auto bm_ans_compress_block(benchmark::State &state) -> void
   for (auto iteration : state) {
     static_cast<void>(iteration);
     state.PauseTiming();
-    dacoexec::byte_block copy{ 0, input };
+    dacoexec::detail::byte_block copy{ 0, input };
     state.ResumeTiming();
     auto encoded = ans::compress_block(std::move(copy));
     benchmark::DoNotOptimize(encoded.payload_.data());
@@ -206,7 +207,7 @@ auto bm_ans_decompress_stream(benchmark::State &state) -> void
 {
   auto const input = fixture(state, fixtures::stream_size);
   bytes archive;
-  dacoexec::io::iterator_sink destination{ std::back_inserter(archive) };
+  dacoexec::detail::io::iterator_sink destination{ std::back_inserter(archive) };
   static_cast<void>(
     ans::compress_stream(input, destination, { static_cast<std::size_t>(state.range(block_parameter)) }));
   for (auto iteration : state) {
@@ -227,10 +228,10 @@ auto bm_huffman_compress_parallel(benchmark::State &state) -> void
   {
     // Preflight is outside timing and releases all collected buffers before measurement.
     bytes reference;
-    dacoexec::io::iterator_sink sequential{ std::back_inserter(reference) };
+    dacoexec::detail::io::iterator_sink sequential{ std::back_inserter(reference) };
     static_cast<void>(huffman::compress_stream(input, sequential, { .block_size_ = block_size }));
     bytes parallel;
-    dacoexec::io::iterator_sink output{ std::back_inserter(parallel) };
+    dacoexec::detail::io::iterator_sink output{ std::back_inserter(parallel) };
     auto result = stdexec::sync_wait(huffman::encode_parallel_on(pool.get_scheduler(),
       input,
       output,
@@ -240,7 +241,7 @@ auto bm_huffman_compress_parallel(benchmark::State &state) -> void
       return;
     }
     bytes decoded;
-    dacoexec::io::iterator_sink plain{ std::back_inserter(decoded) };
+    dacoexec::detail::io::iterator_sink plain{ std::back_inserter(decoded) };
     static_cast<void>(huffman::decompress_stream(parallel, plain));
     if (decoded != input) {
       state.SkipWithError("Parallel archive round trip differs");
@@ -273,10 +274,10 @@ auto bm_ans_compress_parallel(benchmark::State &state) -> void
   {
     // Preflight is outside timing and releases all collected buffers before measurement.
     bytes reference;
-    dacoexec::io::iterator_sink sequential{ std::back_inserter(reference) };
+    dacoexec::detail::io::iterator_sink sequential{ std::back_inserter(reference) };
     static_cast<void>(ans::compress_stream(input, sequential, { .block_size_ = block_size }));
     bytes parallel;
-    dacoexec::io::iterator_sink output{ std::back_inserter(parallel) };
+    dacoexec::detail::io::iterator_sink output{ std::back_inserter(parallel) };
     auto result = stdexec::sync_wait(ans::encode_parallel_on(pool.get_scheduler(),
       input,
       output,
@@ -286,7 +287,7 @@ auto bm_ans_compress_parallel(benchmark::State &state) -> void
       return;
     }
     bytes decoded;
-    dacoexec::io::iterator_sink plain{ std::back_inserter(decoded) };
+    dacoexec::detail::io::iterator_sink plain{ std::back_inserter(decoded) };
     static_cast<void>(ans::decompress_stream(parallel, plain));
     if (decoded != input) {
       state.SkipWithError("Parallel archive round trip differs");
@@ -349,7 +350,7 @@ auto bm_huffman_scheduling_overhead(benchmark::State &state) -> void
     static_cast<void>(iteration);
     frequency_source source{ .input_ = input, .block_size_ = block_size };
     if (state.range(scheduled_parameter) != 0) {
-      auto result = stdexec::sync_wait(dacoexec::execution::ordered_parallel_on(
+      auto result = stdexec::sync_wait(dacoexec::detail::execution::ordered_parallel_on(
         pool.get_scheduler(), source, process, static_cast<std::size_t>(state.range(in_flight_parameter))));
       benchmark::DoNotOptimize(result);
     } else {

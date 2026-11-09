@@ -166,7 +166,7 @@ endif()
 # Each translation unit includes just one public header. Disable unity and PCH
 # so neither can conceal missing includes, even in an enclosing build.
 set(dacoexec_header_test_sources "")
-foreach(header IN LISTS DACOEXEC_HEADERS)
+foreach(header IN LISTS DACOEXEC_PUBLIC_HEADERS)
   file(
     RELATIVE_PATH
     relative_header

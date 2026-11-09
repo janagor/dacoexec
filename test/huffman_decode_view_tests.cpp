@@ -1,14 +1,16 @@
+#include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/error.hpp>
 // Catch assertion branches exceed cppcheck's normal analysis budget.
 // cppcheck-suppress-file normalCheckLevelMaxBranches
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/byte.hpp>
-#include <dacoexec/huffman/canonical.hpp>
-#include <dacoexec/huffman/decode_view.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/tree.hpp>
-#include <dacoexec/views/buffered_bytes.hpp>
+#include <dacoexec/detail/huffman/canonical.hpp>
+#include <dacoexec/detail/huffman/decode_view.hpp>
+#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/huffman/tree.hpp>
+#include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/detail/views/buffered_bytes.hpp>
 #include <iterator>
 #include <ranges>
 #include <stdexcept>
@@ -21,14 +23,14 @@
 #include <string_view>
 
 namespace {
-using dacoexec::huffman::build_code_lengths;
-using dacoexec::huffman::canonical_codebook;
-using dacoexec::huffman::code_length_table;
-using dacoexec::huffman::count_frequencies;
+using dacoexec::detail::huffman::build_code_lengths;
+using dacoexec::detail::huffman::canonical_codebook;
+using dacoexec::detail::huffman::code_length_table;
+using dacoexec::detail::huffman::count_frequencies;
 using dacoexec::huffman::decode_error;
-using dacoexec::huffman::make_canonical_codebook;
-using dacoexec::huffman::max_canonical_bits;
-namespace huffman_views = dacoexec::huffman::views;
+using dacoexec::detail::huffman::make_canonical_codebook;
+using dacoexec::detail::huffman::max_canonical_bits;
+namespace huffman_views = dacoexec::detail::huffman::views;
 constexpr std::uint64_t sample_bits = 15;
 constexpr std::string_view sample = "AAAAABBCD";
 constexpr unsigned golden_first = 0x05;
@@ -86,7 +88,7 @@ TEST_CASE("Decoder accepts a move-only single-pass source and owns its codebook"
 {
   constexpr std::size_t window = 1;
   auto decoded = (std::vector<std::byte>{ std::byte{ golden_first }, std::byte{ golden_second } }
-                   | dacoexec::views::buffered_bytes(window))
+                   | dacoexec::detail::views::buffered_bytes(window))
                  | huffman_views::decode(sample_book(), sample_bits, sample.size());
   CHECK(collect(decoded).size() == sample.size());
   auto source = std::vector<char>{ 0 };
@@ -128,7 +130,7 @@ TEST_CASE("Decoder handles maximum-width canonical codewords", "[huffman][decode
   }
   lengths.at(max_canonical_bits - 1U) = max_canonical_bits;
   lengths.at(max_canonical_bits) = max_canonical_bits;
-  constexpr auto payload_size = max_canonical_bits / dacoexec::detail::bits_per_byte;
+  constexpr auto payload_size = max_canonical_bits / dacoexec::detail::support::bits_per_byte;
   std::vector<std::byte> source(payload_size, static_cast<std::byte>(std::numeric_limits<std::uint8_t>::max()));
   auto decoded = source | huffman_views::decode(make_canonical_codebook(lengths), max_canonical_bits, 1);
   CHECK(collect(decoded) == std::vector<std::byte>{ static_cast<std::byte>(max_canonical_bits) });
@@ -204,7 +206,9 @@ TEST_CASE("Decoder propagates source initialization and advance failures", "[huf
   SECTION("begin") { source.fail_begin_ = true; }
   SECTION("increment") { source.fail_advance_ = true; }
   auto const book = make_canonical_codebook(build_code_lengths(count_frequencies(std::string_view{ "A" })));
-  auto decoded = source | huffman_views::decode(book, dacoexec::detail::bits_per_byte, dacoexec::detail::bits_per_byte);
+  auto decoded =
+    source
+    | huffman_views::decode(book, dacoexec::detail::support::bits_per_byte, dacoexec::detail::support::bits_per_byte);
   CHECK_THROWS_AS(collect(decoded), source_error);
   CHECK(decoded.begin() == decoded.end());
 }

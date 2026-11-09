@@ -1,6 +1,6 @@
-#include <dacoexec/detail/error.hpp>
-#include <dacoexec/huffman/decode_view.hpp>
-#include <dacoexec/huffman/stream.hpp>
+#include <dacoexec/detail/huffman/decode_view.hpp>
+#include <dacoexec/detail/huffman/stream.hpp>
+#include <dacoexec/error.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -9,7 +9,7 @@
 #include <span>
 
 namespace {
-namespace huffman = dacoexec::huffman;
+namespace huffman = dacoexec::detail::huffman;
 constexpr std::size_t input_limit = 65536;
 constexpr std::size_t output_limit = 256U * 1024U;
 
@@ -32,7 +32,7 @@ auto parse(std::span<std::uint8_t const> input) -> void
       huffman::decompress_stream(input, sink, { .max_frame_size_ = input_limit, .max_output_bytes_ = output_limit });
     if (statistics.input_bytes_ != input.size() || statistics.output_bytes_ != sink.count_) { std::abort(); }
   } catch (dacoexec::format_error const &) {
-  } catch (huffman::decode_error const &) {}
+  } catch (dacoexec::huffman::decode_error const &) {}
 }
 }// namespace
 

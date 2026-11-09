@@ -1,17 +1,32 @@
-#include <dacoexec/huffman/execution.hpp>
-#include <exec/static_thread_pool.hpp>
-
+#include <array>
 #include <cstddef>
+#include <dacoexec/ans.hpp>
+#include <dacoexec/execution.hpp>
+#include <dacoexec/huffman.hpp>
+#include <exec/static_thread_pool.hpp>
 #include <iterator>
+#include <sstream>
+#include <stdexec/execution.hpp>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
-auto main() -> int
+int main()
 {
-  exec::static_thread_pool pool{ 1 };
-  std::vector<std::byte> input;
+  exec::static_thread_pool pool{ 2 };
+  std::array<std::byte, 8> input{};
   std::vector<std::byte> output;
-  dacoexec::io::iterator_sink sink(std::back_inserter(output));
-  auto sender = dacoexec::huffman::encode_parallel_on(pool.get_scheduler(), std::move(input), sink);
-  return stdexec::sync_wait(std::move(sender)).has_value() ? 0 : 1;
+  auto sender = dacoexec::huffman::compress_parallel_on(
+    pool.get_scheduler(), input, std::back_inserter(output), { .block_size_ = 3, .max_in_flight_ = 2 });
+  auto result = stdexec::sync_wait(std::move(sender));
+  static_assert(
+    std::is_same_v<std::remove_cvref_t<decltype(std::get<0>(*result))>, dacoexec::huffman::stream_statistics>);
+  if (!result || dacoexec::huffman::decompress(output).size() != input.size()) { return 1; }
+  std::ostringstream stream;
+  auto ans_sender = dacoexec::ans::compress_parallel_on(pool.get_scheduler(), input, stream);
+  auto ans_result = stdexec::sync_wait(std::move(ans_sender));
+  static_assert(
+    std::is_same_v<std::remove_cvref_t<decltype(std::get<0>(*ans_result))>, dacoexec::ans::stream_statistics>);
+  auto archive = stream.str();
+  return ans_result && dacoexec::ans::decompress(archive).size() == input.size() ? 0 : 1;
 }

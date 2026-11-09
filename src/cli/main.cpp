@@ -1,6 +1,10 @@
 #include "temporary_output.hpp"
 #include <CLI/CLI.hpp>
-#include <dacoexec/dacoexec.hpp>
+#include <dacoexec/ans.hpp>
+#include <dacoexec/detail/ans/format.hpp>
+#include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
+#include <dacoexec/huffman.hpp>
 
 #include <array>
 #include <cstddef>
@@ -117,21 +121,20 @@ auto process(std::string const &input_name,
       static_cast<void>(dacoexec::huffman::compress_stream(source, output, { .block_size_ = block_size }));
     }
   } else {
-    std::array<char, dacoexec::ans::archive_header_size> prefix{};
+    std::array<char, dacoexec::detail::ans::archive_header_size> prefix{};
     input.read(prefix.data(), static_cast<std::streamsize>(prefix.size()));
     auto const is_ans = input.gcount() == static_cast<std::streamsize>(prefix.size())
-                        && std::ranges::equal(prefix,
-                          dacoexec::ans::archive_header_bytes,
-                          [](char left, std::byte right) -> bool { return dacoexec::detail::to_byte(left) == right; });
+                        && std::ranges::equal(
+                          prefix, dacoexec::detail::ans::archive_header_bytes, [](char left, std::byte right) -> bool {
+                            return dacoexec::detail::support::to_byte(left) == right;
+                          });
     input.clear();
     input.seekg(0);
     if (!input) { throw dacoexec::stream_error("Cannot rewind input file"); }
     if (is_ans) {
-      static_cast<void>(dacoexec::ans::decompress_stream(
-        source, output, { .max_frame_size_ = dacoexec::ans::max_frame_size, .max_output_bytes_ = output_limit }));
+      static_cast<void>(dacoexec::ans::decompress_stream(source, output, { .max_output_bytes_ = output_limit }));
     } else {
-      static_cast<void>(dacoexec::huffman::decompress_stream(
-        source, output, { .max_frame_size_ = dacoexec::huffman::max_frame_size, .max_output_bytes_ = output_limit }));
+      static_cast<void>(dacoexec::huffman::decompress_stream(source, output, { .max_output_bytes_ = output_limit }));
     }
   }
   if (input.bad()) { throw dacoexec::stream_error("Input read failed"); }
@@ -149,12 +152,12 @@ auto main(int argc, char **argv) -> int
   std::string output;
   std::string algorithm;
   bool force = false;
-  auto block_size = dacoexec::huffman::default_block_size;
+  auto block_size = dacoexec::huffman::stream_options{}.block_size_;
   auto output_limit = std::numeric_limits<std::uint64_t>::max();
   auto *compress = app.add_subcommand("compress", "Compress a file to DHF1 or DAN1");
   compress->add_option("--algorithm", algorithm)->required()->check(CLI::IsMember({ "huffman", "rans" }));
   compress->add_option("--block-size", block_size)
-    ->check(CLI::Range(std::size_t{ 1 }, dacoexec::huffman::max_frame_size));
+    ->check(CLI::Range(std::size_t{ 1 }, dacoexec::huffman::decode_options{}.max_frame_size_));
   compress->add_option("input", input)->required();
   compress->add_option("output", output)->required();
   compress->add_flag("--force", force);

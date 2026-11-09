@@ -1,14 +1,15 @@
 #include "huffman_test_utils.hpp"
-#include <dacoexec/concepts.hpp>
-#include <dacoexec/detail/byte.hpp>
+#include <dacoexec/detail/concepts.hpp>
+#include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/detail/support/byte.hpp>
 
-#include <dacoexec/bit/bit_output_iterator.hpp>
-#include <dacoexec/huffman/canonical.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/node_storage.hpp>
-#include <dacoexec/huffman/tree.hpp>
+#include <dacoexec/bit.hpp>
+#include <dacoexec/detail/huffman/canonical.hpp>
+#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/huffman/node_storage.hpp>
+#include <dacoexec/detail/huffman/tree.hpp>
 
-#include <dacoexec/views/blocks.hpp>
+#include <dacoexec/detail/views/blocks.hpp>
 
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -46,7 +47,7 @@ constexpr auto sample_a_count = 5;
 constexpr auto singleton_frequency = 100;
 constexpr auto heavy_frequency = 1000;
 constexpr auto frequency_scale = 7;
-constexpr auto last_symbol = dacoexec::huffman::alphabet_size - 1U;
+constexpr auto last_symbol = dacoexec::detail::huffman::alphabet_size - 1U;
 constexpr auto high_frequency_shift = limb_bits - 1U;
 constexpr auto quarter_frequency_shift = limb_bits - 2U;
 constexpr auto histogram_multiplier = 17U;
@@ -60,7 +61,8 @@ constexpr std::uint64_t histogram_seed = 0xA11CE5EEDULL;
 [[nodiscard]] constexpr auto symbol(char value) -> unsigned char { return static_cast<unsigned char>(value); }
 
 template<class R>
-concept can_count_frequencies = requires(R &&range) { dacoexec::huffman::count_frequencies(std::forward<R>(range)); };
+concept can_count_frequencies =
+  requires(R &&range) { dacoexec::detail::huffman::count_frequencies(std::forward<R>(range)); };
 
 static_assert(can_count_frequencies<std::vector<std::byte>>);
 static_assert(can_count_frequencies<std::vector<char>>);
@@ -162,7 +164,7 @@ static_assert(!std::ranges::forward_range<byte_source>);
 static_assert(!std::ranges::sized_range<byte_source>);
 static_assert(!std::copyable<byte_source>);
 static_assert(std::movable<byte_source>);
-static_assert(dacoexec::byte_input_range<byte_source>);
+static_assert(dacoexec::detail::byte_input_range<byte_source>);
 
 class splitmix64
 {
@@ -212,13 +214,13 @@ auto add_wide(wide &sum, wide const &value) -> void
 }
 
 // Kraft equality in units of 2^(-max_length). A complete code sums to 2^max_length.
-auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
-  dacoexec::huffman::code_length_table const &lengths,
+auto check_kraft(dacoexec::detail::huffman::frequency_table const &frequencies,
+  dacoexec::detail::huffman::code_length_table const &lengths,
   unsigned max_length) -> void
 {
   wide sum;
   wide const capacity = one_shifted(max_length);
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
     if (frequencies.at(index) == 0) { continue; }
     add_wide(sum, one_shifted(max_length - lengths.at(index)));
   }
@@ -228,7 +230,7 @@ auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
 // Optimal cost of a Huffman tree equals the sum of the internal-node frequencies.
 // Ties prefer the higher symbol, the opposite of the library order, so a matching
 // cost is an independent check rather than a second copy of the same merges.
-[[nodiscard]] auto reference_weighted_path_length(dacoexec::huffman::frequency_table const &frequencies)
+[[nodiscard]] auto reference_weighted_path_length(dacoexec::detail::huffman::frequency_table const &frequencies)
   -> std::uint64_t
 {
   struct item
@@ -238,7 +240,7 @@ auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
   };
 
   std::vector<item> nodes;
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
     if (frequencies.at(index) == 0) { continue; }
     nodes.push_back(item{ .frequency_ = frequencies.at(index), .sequence_ = static_cast<std::uint32_t>(index) });
   }
@@ -260,7 +262,7 @@ auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
   };
 
   std::uint64_t path = 0;
-  auto merge_id = static_cast<std::uint32_t>(dacoexec::huffman::alphabet_size);
+  auto merge_id = static_cast<std::uint32_t>(dacoexec::detail::huffman::alphabet_size);
   while (nodes.size() > 1) {
     item const left = take_lightest();
     item const right = take_lightest();
@@ -274,11 +276,11 @@ auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
   return path;
 }
 
-[[nodiscard]] auto weighted_path_length(dacoexec::huffman::frequency_table const &frequencies,
-  dacoexec::huffman::code_length_table const &lengths) -> std::uint64_t
+[[nodiscard]] auto weighted_path_length(dacoexec::detail::huffman::frequency_table const &frequencies,
+  dacoexec::detail::huffman::code_length_table const &lengths) -> std::uint64_t
 {
   std::uint64_t total = 0;
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
     std::uint64_t const weight = frequencies.at(index);
     std::uint64_t const length = lengths.at(index);
     if (weight == 0 || length == 0) { continue; }
@@ -290,29 +292,29 @@ auto check_kraft(dacoexec::huffman::frequency_table const &frequencies,
 }
 
 // Heavier symbols cannot require longer paths than lighter symbols.
-auto check_frequency_order(dacoexec::huffman::frequency_table const &frequencies,
-  dacoexec::huffman::code_length_table const &lengths) -> void
+auto check_frequency_order(dacoexec::detail::huffman::frequency_table const &frequencies,
+  dacoexec::detail::huffman::code_length_table const &lengths) -> void
 {
-  for (std::size_t left = 0; left < dacoexec::huffman::alphabet_size; ++left) {
+  for (std::size_t left = 0; left < dacoexec::detail::huffman::alphabet_size; ++left) {
     if (frequencies.at(left) == 0) { continue; }
-    for (std::size_t right = 0; right < dacoexec::huffman::alphabet_size; ++right) {
+    for (std::size_t right = 0; right < dacoexec::detail::huffman::alphabet_size; ++right) {
       if (frequencies.at(right) == 0) { continue; }
       if (frequencies.at(left) > frequencies.at(right)) { REQUIRE(lengths.at(left) <= lengths.at(right)); }
     }
   }
 }
 
-auto check_code_lengths(dacoexec::huffman::frequency_table const &frequencies) -> void
+auto check_code_lengths(dacoexec::detail::huffman::frequency_table const &frequencies) -> void
 {
   auto const original = frequencies;
-  auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
-  auto const repeated = dacoexec::huffman::build_code_lengths(frequencies);
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
+  auto const repeated = dacoexec::detail::huffman::build_code_lengths(frequencies);
   REQUIRE(frequencies == original);
   REQUIRE(lengths == repeated);
 
   unsigned present = 0;
   unsigned max_length = 0;
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
     if (frequencies.at(index) == 0) {
       REQUIRE(lengths.at(index) == 0);
       continue;
@@ -323,7 +325,7 @@ auto check_code_lengths(dacoexec::huffman::frequency_table const &frequencies) -
   }
 
   if (present == 0) {
-    REQUIRE(lengths == dacoexec::huffman::code_length_table{});
+    REQUIRE(lengths == dacoexec::detail::huffman::code_length_table{});
     REQUIRE(weighted_path_length(frequencies, lengths) == 0);
     return;
   }
@@ -331,7 +333,7 @@ auto check_code_lengths(dacoexec::huffman::frequency_table const &frequencies) -
   unsigned at_max = 0;
   unsigned length_one = 0;
   unsigned length_two = 0;
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
     if (frequencies.at(index) == 0) { continue; }
     if (lengths.at(index) == max_length) { ++at_max; }
     if (lengths.at(index) == 1) { ++length_one; }
@@ -366,14 +368,15 @@ struct histogram_limits
   std::uint64_t max_frequency_;
 };
 
-[[nodiscard]] auto random_histogram(splitmix64 &rng, histogram_limits limits) -> dacoexec::huffman::frequency_table
+[[nodiscard]] auto random_histogram(splitmix64 &rng, histogram_limits limits)
+  -> dacoexec::detail::huffman::frequency_table
 {
-  dacoexec::huffman::frequency_table frequencies{};
-  std::array<std::size_t, dacoexec::huffman::alphabet_size> symbols{};
+  dacoexec::detail::huffman::frequency_table frequencies{};
+  std::array<std::size_t, dacoexec::detail::huffman::alphabet_size> symbols{};
   for (std::size_t index = 0; index < symbols.size(); ++index) { symbols.at(index) = index; }
-  std::size_t const count = std::min(limits.active_symbols_, dacoexec::huffman::alphabet_size);
+  std::size_t const count = std::min(limits.active_symbols_, dacoexec::detail::huffman::alphabet_size);
   for (std::size_t index = 0; index < count; ++index) {
-    std::size_t const span = dacoexec::huffman::alphabet_size - index;
+    std::size_t const span = dacoexec::detail::huffman::alphabet_size - index;
     std::size_t const chosen = index + (rng.next() % span);
     std::swap(symbols.at(index), symbols.at(chosen));
     frequencies.at(symbols.at(index)) = 1 + (rng.next() % limits.max_frequency_);
@@ -381,9 +384,9 @@ struct histogram_limits
   return frequencies;
 }
 
-[[nodiscard]] auto chain_frequencies(std::size_t count) -> dacoexec::huffman::frequency_table
+[[nodiscard]] auto chain_frequencies(std::size_t count) -> dacoexec::detail::huffman::frequency_table
 {
-  dacoexec::huffman::frequency_table frequencies{};
+  dacoexec::detail::huffman::frequency_table frequencies{};
   if (count == 0) { return frequencies; }
   frequencies.at(0) = 1;
   if (count == 1) { return frequencies; }
@@ -400,7 +403,7 @@ template<class Byte> auto require_extreme_byte_counts() -> void
     std::bit_cast<Byte>(static_cast<unsigned char>(0xFF)),
   } };
   if constexpr (std::signed_integral<Byte>) { REQUIRE(input.at(2) < 0); }
-  auto const frequencies = dacoexec::huffman::count_frequencies(input);
+  auto const frequencies = dacoexec::detail::huffman::count_frequencies(input);
   REQUIRE(frequencies.at(0x00) == 1);
   REQUIRE(frequencies.at(0x80) == 1);
   REQUIRE(frequencies.at(0xFF) == 1);
@@ -476,20 +479,22 @@ private:
 };
 
 static_assert(std::input_iterator<huffman_proxy_bytes::iterator>);
-static_assert(dacoexec::byte_input_range<huffman_proxy_bytes>);
+static_assert(dacoexec::detail::byte_input_range<huffman_proxy_bytes>);
 static_assert(std::same_as<std::ranges::range_value_t<huffman_proxy_bytes>, std::byte>);
 static_assert(std::same_as<std::iter_reference_t<huffman_proxy_bytes::iterator>, huffman_byte_proxy>);
 
 TEST_CASE("empty input has an all-zero frequency table", "[huffman]")
 {
-  REQUIRE(dacoexec::huffman::count_frequencies(std::string_view{}) == dacoexec::huffman::frequency_table{});
-  REQUIRE(dacoexec::huffman::count_frequencies(std::vector<std::byte>{}) == dacoexec::huffman::frequency_table{});
+  REQUIRE(
+    dacoexec::detail::huffman::count_frequencies(std::string_view{}) == dacoexec::detail::huffman::frequency_table{});
+  REQUIRE(dacoexec::detail::huffman::count_frequencies(std::vector<std::byte>{})
+          == dacoexec::detail::huffman::frequency_table{});
 }
 
 TEST_CASE("a repeated symbol is counted", "[huffman]")
 {
   std::vector<char> const input(100, 'Q');
-  auto const frequencies = dacoexec::huffman::count_frequencies(input);
+  auto const frequencies = dacoexec::detail::huffman::count_frequencies(input);
   REQUIRE(frequencies.at(symbol('Q')) == 100);
   REQUIRE(frequencies.at(symbol('A')) == 0);
   REQUIRE(frequencies.at(0x00) == 0);
@@ -497,14 +502,14 @@ TEST_CASE("a repeated symbol is counted", "[huffman]")
 
 TEST_CASE("the full alphabet populates every counter", "[huffman]")
 {
-  std::vector<unsigned char> bytes(dacoexec::huffman::alphabet_size);
+  std::vector<unsigned char> bytes(dacoexec::detail::huffman::alphabet_size);
   for (std::size_t index = 0; index < bytes.size(); ++index) { bytes.at(index) = static_cast<unsigned char>(index); }
   bytes.push_back(0x00);
   bytes.push_back(high_bit_value);
   bytes.push_back(all_bits_value);
 
-  auto const frequencies = dacoexec::huffman::count_frequencies(bytes);
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+  auto const frequencies = dacoexec::detail::huffman::count_frequencies(bytes);
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
     std::uint64_t const expected = (index == 0x00 || index == 0x80 || index == 0xFF) ? 2 : 1;
     REQUIRE(frequencies.at(index) == expected);
   }
@@ -530,17 +535,17 @@ TEST_CASE("a move-only unsized source is read once", "[huffman]")
   auto stats = std::make_shared<source_stats>();
   byte_source source{ data, stats };
 
-  auto const frequencies = dacoexec::huffman::count_frequencies(source);
+  auto const frequencies = dacoexec::detail::huffman::count_frequencies(source);
   REQUIRE(stats->begin_calls_ == 1);
   REQUIRE(stats->dereferences_ == data.size());
   REQUIRE(stats->increments_ == data.size());
-  REQUIRE(frequencies == dacoexec::huffman::count_frequencies(data));
+  REQUIRE(frequencies == dacoexec::detail::huffman::count_frequencies(data));
   REQUIRE(frequencies.at(0x00) == 2);
   REQUIRE(frequencies.at(0x80) == 1);
   REQUIRE(frequencies.at(0xFF) == 1);
 
-  auto const remainder = dacoexec::huffman::count_frequencies(source);
-  REQUIRE(remainder == dacoexec::huffman::frequency_table{});
+  auto const remainder = dacoexec::detail::huffman::count_frequencies(source);
+  REQUIRE(remainder == dacoexec::detail::huffman::frequency_table{});
   REQUIRE(stats->begin_calls_ == 2);
   REQUIRE(stats->dereferences_ == data.size());
 }
@@ -553,7 +558,7 @@ TEST_CASE("a proxy reference is materialized as its byte value", "[huffman]")
     std::byte{ 0xFF },
     std::byte{ 0x80 },
   };
-  auto const frequencies = dacoexec::huffman::count_frequencies(huffman_proxy_bytes{ data });
+  auto const frequencies = dacoexec::detail::huffman::count_frequencies(huffman_proxy_bytes{ data });
   REQUIRE(frequencies.at(0x00) == 1);
   REQUIRE(frequencies.at(0x80) == 2);
   REQUIRE(frequencies.at(0xFF) == 1);
@@ -565,9 +570,9 @@ TEST_CASE("a throwing input iterator propagates its exception", "[huffman]")
   auto stats = std::make_shared<source_stats>();
   stats->fail_at_dereference_ = 3;
   byte_source source{ data, stats };
-  dacoexec::huffman::frequency_table frequencies{};
+  dacoexec::detail::huffman::frequency_table frequencies{};
 
-  REQUIRE_THROWS_AS(dacoexec::huffman::accumulate_frequencies(frequencies, source), injected_read_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::accumulate_frequencies(frequencies, source), injected_read_error);
   REQUIRE(frequencies.at(0x01) == 1);
   REQUIRE(frequencies.at(0x02) == 1);
   REQUIRE(frequencies.at(0x03) == 0);
@@ -577,12 +582,12 @@ TEST_CASE("a throwing input iterator propagates its exception", "[huffman]")
 
 TEST_CASE("frequency counters reject overflow and keep earlier increments", "[huffman]")
 {
-  dacoexec::huffman::frequency_table frequencies{};
+  dacoexec::detail::huffman::frequency_table frequencies{};
   frequencies.at(0x00) = std::numeric_limits<std::uint64_t>::max();
   std::array<unsigned char, 2> const input{ { 0x11, 0x00 } };
 
   try {
-    dacoexec::huffman::accumulate_frequencies(frequencies, input);
+    dacoexec::detail::huffman::accumulate_frequencies(frequencies, input);
     FAIL("expected frequency overflow");
   } catch (std::overflow_error const &error) {
     REQUIRE(std::string_view{ error.what() } == "Huffman frequency counter overflow");
@@ -594,16 +599,16 @@ TEST_CASE("frequency counters reject overflow and keep earlier increments", "[hu
 
 TEST_CASE("accumulated ranges match the concatenated input", "[huffman]")
 {
-  dacoexec::huffman::frequency_table frequencies{};
-  dacoexec::huffman::accumulate_frequencies(frequencies, std::string_view{ "ABCA" });
-  dacoexec::huffman::accumulate_frequencies(frequencies, std::string_view{ "AAB" });
-  REQUIRE(frequencies == dacoexec::huffman::count_frequencies(std::string_view{ "ABCAAAB" }));
+  dacoexec::detail::huffman::frequency_table frequencies{};
+  dacoexec::detail::huffman::accumulate_frequencies(frequencies, std::string_view{ "ABCA" });
+  dacoexec::detail::huffman::accumulate_frequencies(frequencies, std::string_view{ "AAB" });
+  REQUIRE(frequencies == dacoexec::detail::huffman::count_frequencies(std::string_view{ "ABCAAAB" }));
 }
 
 TEST_CASE("the same bytes in a different order share a histogram", "[huffman]")
 {
-  auto const forward = dacoexec::huffman::count_frequencies(std::string_view{ "AAAAABBCD" });
-  auto const reverse = dacoexec::huffman::count_frequencies(std::string_view{ "DCBBAAAAA" });
+  auto const forward = dacoexec::detail::huffman::count_frequencies(std::string_view{ "AAAAABBCD" });
+  auto const reverse = dacoexec::detail::huffman::count_frequencies(std::string_view{ "DCBBAAAAA" });
   REQUIRE(forward == reverse);
   REQUIRE(forward.at(symbol('A')) == 5);
   REQUIRE(forward.at(symbol('B')) == 2);
@@ -616,22 +621,23 @@ TEST_CASE("an owned block is counted through its byte buffer", "[huffman]")
   std::string_view const text = "AAAAABBCD";
   std::vector<std::byte> bytes;
   bytes.reserve(text.size());
-  for (char const character : text) { bytes.push_back(dacoexec::detail::to_byte(character)); }
-  dacoexec::byte_block block{ 0, bytes };
-  REQUIRE(dacoexec::huffman::count_frequencies(block.bytes_) == dacoexec::huffman::count_frequencies(text));
+  for (char const character : text) { bytes.push_back(dacoexec::detail::support::to_byte(character)); }
+  dacoexec::detail::byte_block block{ 0, bytes };
+  REQUIRE(
+    dacoexec::detail::huffman::count_frequencies(block.bytes_) == dacoexec::detail::huffman::count_frequencies(text));
 }
 
 TEST_CASE("the documented sample has the canonical fixture lengths", "[huffman]")
 {
-  auto const counted = dacoexec::huffman::count_frequencies(std::string_view{ "AAAAABBCD" });
-  dacoexec::huffman::frequency_table manual{};
+  auto const counted = dacoexec::detail::huffman::count_frequencies(std::string_view{ "AAAAABBCD" });
+  dacoexec::detail::huffman::frequency_table manual{};
   manual.at(symbol('A')) = sample_a_count;
   manual.at(symbol('B')) = 2;
   manual.at(symbol('C')) = 1;
   manual.at(symbol('D')) = 1;
   REQUIRE(counted == manual);
 
-  auto const lengths = dacoexec::huffman::build_code_lengths(manual);
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(manual);
   REQUIRE(lengths.at(symbol('A')) == 1);
   REQUIRE(lengths.at(symbol('B')) == 2);
   REQUIRE(lengths.at(symbol('C')) == 3);
@@ -640,12 +646,12 @@ TEST_CASE("the documented sample has the canonical fixture lengths", "[huffman]"
   REQUIRE(weighted_path_length(manual, lengths) == 15);
   check_code_lengths(manual);
 
-  dacoexec::huffman::frequency_table binary{};
+  dacoexec::detail::huffman::frequency_table binary{};
   binary.at(0x00) = sample_a_count;
   binary.at(0x01) = 2;
   binary.at(high_bit_value) = 1;
   binary.at(all_bits_value) = 1;
-  auto const binary_lengths = dacoexec::huffman::build_code_lengths(binary);
+  auto const binary_lengths = dacoexec::detail::huffman::build_code_lengths(binary);
   REQUIRE(binary_lengths.at(0x00) == 1);
   REQUIRE(binary_lengths.at(0x01) == 2);
   REQUIRE(binary_lengths.at(0x80) == 3);
@@ -655,23 +661,23 @@ TEST_CASE("the documented sample has the canonical fixture lengths", "[huffman]"
 
 TEST_CASE("empty, single-symbol, and two-symbol tables have reserved lengths", "[huffman]")
 {
-  dacoexec::huffman::frequency_table const empty{};
+  dacoexec::detail::huffman::frequency_table const empty{};
   check_code_lengths(empty);
 
-  dacoexec::huffman::frequency_table one{};
+  dacoexec::detail::huffman::frequency_table one{};
   one.at(symbol('A')) = singleton_frequency;
-  auto const one_lengths = dacoexec::huffman::build_code_lengths(one);
+  auto const one_lengths = dacoexec::detail::huffman::build_code_lengths(one);
   REQUIRE(one_lengths.at(symbol('A')) == 1);
   REQUIRE(one_lengths.at(symbol('B')) == 0);
   check_code_lengths(one);
 
   one.at(symbol('A')) = std::numeric_limits<std::uint64_t>::max();
-  REQUIRE(dacoexec::huffman::build_code_lengths(one).at(symbol('A')) == 1);
+  REQUIRE(dacoexec::detail::huffman::build_code_lengths(one).at(symbol('A')) == 1);
 
-  dacoexec::huffman::frequency_table two{};
+  dacoexec::detail::huffman::frequency_table two{};
   two.at(symbol('A')) = 1;
   two.at(symbol('Z')) = heavy_frequency;
-  auto const two_lengths = dacoexec::huffman::build_code_lengths(two);
+  auto const two_lengths = dacoexec::detail::huffman::build_code_lengths(two);
   REQUIRE(two_lengths.at(symbol('A')) == 1);
   REQUIRE(two_lengths.at(symbol('Z')) == 1);
   check_code_lengths(two);
@@ -679,22 +685,22 @@ TEST_CASE("empty, single-symbol, and two-symbol tables have reserved lengths", "
 
 TEST_CASE("equal frequencies use the lowest symbol as the tie break", "[huffman]")
 {
-  dacoexec::huffman::frequency_table three{};
+  dacoexec::detail::huffman::frequency_table three{};
   three.at(symbol('A')) = 1;
   three.at(symbol('B')) = 1;
   three.at(symbol('C')) = 1;
-  auto const three_lengths = dacoexec::huffman::build_code_lengths(three);
+  auto const three_lengths = dacoexec::detail::huffman::build_code_lengths(three);
   REQUIRE(three_lengths.at(symbol('A')) == 2);
   REQUIRE(three_lengths.at(symbol('B')) == 2);
   REQUIRE(three_lengths.at(symbol('C')) == 1);
   check_code_lengths(three);
 
-  dacoexec::huffman::frequency_table four{};
+  dacoexec::detail::huffman::frequency_table four{};
   four.at(symbol('A')) = 1;
   four.at(symbol('B')) = 1;
   four.at(symbol('C')) = 1;
   four.at(symbol('D')) = 1;
-  auto const four_lengths = dacoexec::huffman::build_code_lengths(four);
+  auto const four_lengths = dacoexec::detail::huffman::build_code_lengths(four);
   REQUIRE(four_lengths.at(symbol('A')) == 2);
   REQUIRE(four_lengths.at(symbol('B')) == 2);
   REQUIRE(four_lengths.at(symbol('C')) == 2);
@@ -704,24 +710,24 @@ TEST_CASE("equal frequencies use the lowest symbol as the tie break", "[huffman]
 
 TEST_CASE("a uniform alphabet receives length 8", "[huffman]")
 {
-  dacoexec::huffman::frequency_table frequencies{};
+  dacoexec::detail::huffman::frequency_table frequencies{};
   frequencies.fill(1);
-  auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
   for (std::uint8_t length : lengths) { REQUIRE(length == 8); }
   check_code_lengths(frequencies);
 
-  dacoexec::huffman::frequency_table scaled{};
+  dacoexec::detail::huffman::frequency_table scaled{};
   scaled.fill(frequency_scale);
-  REQUIRE(dacoexec::huffman::build_code_lengths(scaled) == lengths);
+  REQUIRE(dacoexec::detail::huffman::build_code_lengths(scaled) == lengths);
 }
 
 TEST_CASE("a strictly heavier symbol receives a shorter or equal code", "[huffman]")
 {
-  dacoexec::huffman::frequency_table frequencies{};
+  dacoexec::detail::huffman::frequency_table frequencies{};
   frequencies.at(0) = 1;
   frequencies.at(1) = 1;
   frequencies.at(last_symbol) = heavy_frequency;
-  auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
   REQUIRE(lengths.at(255) <= lengths.at(0));
   REQUIRE(lengths.at(255) <= lengths.at(1));
   REQUIRE(lengths.at(255) == 1);
@@ -731,7 +737,7 @@ TEST_CASE("a strictly heavier symbol receives a shorter or equal code", "[huffma
 TEST_CASE("a skewed chain keeps lengths above 32 bits", "[huffman]")
 {
   auto const small = chain_frequencies(5);
-  auto const small_lengths = dacoexec::huffman::build_code_lengths(small);
+  auto const small_lengths = dacoexec::detail::huffman::build_code_lengths(small);
   REQUIRE(small_lengths.at(0) == 4);
   REQUIRE(small_lengths.at(1) == 4);
   REQUIRE(small_lengths.at(2) == 3);
@@ -742,7 +748,7 @@ TEST_CASE("a skewed chain keeps lengths above 32 bits", "[huffman]")
 
   constexpr std::size_t chain_symbols = 40;
   auto const frequencies = chain_frequencies(chain_symbols);
-  auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
   REQUIRE(lengths.at(0) == 39);
   REQUIRE(lengths.at(1) == 39);
   REQUIRE(lengths.at(2) == 38);
@@ -754,19 +760,19 @@ TEST_CASE("a skewed chain keeps lengths above 32 bits", "[huffman]")
 
 TEST_CASE("large uint64 frequencies stay unsigned", "[huffman]")
 {
-  dacoexec::huffman::frequency_table frequencies{};
+  dacoexec::detail::huffman::frequency_table frequencies{};
   frequencies.at(0) = std::uint64_t{ 1 } << high_frequency_shift;
   frequencies.at(1) = (std::uint64_t{ 1 } << high_frequency_shift) - 1U;
-  auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
   REQUIRE(lengths.at(0) == 1);
   REQUIRE(lengths.at(1) == 1);
   check_code_lengths(frequencies);
 
-  dacoexec::huffman::frequency_table triple{};
+  dacoexec::detail::huffman::frequency_table triple{};
   triple.at(0) = std::uint64_t{ 1 } << quarter_frequency_shift;
   triple.at(1) = std::uint64_t{ 1 } << quarter_frequency_shift;
   triple.at(2) = std::uint64_t{ 1 } << quarter_frequency_shift;
-  auto const triple_lengths = dacoexec::huffman::build_code_lengths(triple);
+  auto const triple_lengths = dacoexec::detail::huffman::build_code_lengths(triple);
   REQUIRE(triple_lengths.at(0) == 2);
   REQUIRE(triple_lengths.at(1) == 2);
   REQUIRE(triple_lengths.at(2) == 1);
@@ -776,9 +782,9 @@ TEST_CASE("large uint64 frequencies stay unsigned", "[huffman]")
 
 TEST_CASE("a parent frequency that overflows uint64 is rejected", "[huffman]")
 {
-  auto require_overflow = [](dacoexec::huffman::frequency_table const &frequencies) -> void {
+  auto require_overflow = [](dacoexec::detail::huffman::frequency_table const &frequencies) -> void {
     try {
-      auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
+      auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
       static_cast<void>(lengths);
       FAIL("expected tree frequency overflow");
     } catch (std::overflow_error const &error) {
@@ -786,42 +792,42 @@ TEST_CASE("a parent frequency that overflows uint64 is rejected", "[huffman]")
     }
   };
 
-  dacoexec::huffman::frequency_table direct{};
+  dacoexec::detail::huffman::frequency_table direct{};
   direct.at(0) = std::numeric_limits<std::uint64_t>::max();
   direct.at(1) = 1;
   require_overflow(direct);
 
-  dacoexec::huffman::frequency_table indirect{};
+  dacoexec::detail::huffman::frequency_table indirect{};
   indirect.at(0) = 1;
   indirect.at(1) = 1;
   indirect.at(2) = std::numeric_limits<std::uint64_t>::max();
   require_overflow(indirect);
 
-  dacoexec::huffman::frequency_table boundary{};
+  dacoexec::detail::huffman::frequency_table boundary{};
   boundary.at(0) = std::numeric_limits<std::uint64_t>::max() - 1U;
   boundary.at(1) = 1;
-  auto const lengths = dacoexec::huffman::build_code_lengths(boundary);
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(boundary);
   REQUIRE(lengths.at(0) == 1);
   REQUIRE(lengths.at(1) == 1);
 }
 
 TEST_CASE("tree construction ignores table fill order", "[huffman]")
 {
-  dacoexec::huffman::frequency_table forward{};
-  dacoexec::huffman::frequency_table reverse{};
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+  dacoexec::detail::huffman::frequency_table forward{};
+  dacoexec::detail::huffman::frequency_table reverse{};
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
     std::uint64_t const frequency = (index * 17U) % 11U;
     forward.at(index) = frequency;
   }
-  for (std::size_t step = 0; step < dacoexec::huffman::alphabet_size; ++step) {
-    std::size_t const index = dacoexec::huffman::alphabet_size - 1U - step;
+  for (std::size_t step = 0; step < dacoexec::detail::huffman::alphabet_size; ++step) {
+    std::size_t const index = dacoexec::detail::huffman::alphabet_size - 1U - step;
     reverse.at(index) = (index * histogram_multiplier) % histogram_modulus;
   }
   REQUIRE(forward == reverse);
 
-  auto const first = dacoexec::huffman::build_code_lengths(forward);
-  auto const second = dacoexec::huffman::build_code_lengths(forward);
-  auto const third = dacoexec::huffman::build_code_lengths(reverse);
+  auto const first = dacoexec::detail::huffman::build_code_lengths(forward);
+  auto const second = dacoexec::detail::huffman::build_code_lengths(forward);
+  auto const third = dacoexec::detail::huffman::build_code_lengths(reverse);
   REQUIRE(first == second);
   REQUIRE(first == third);
   check_code_lengths(forward);
@@ -834,7 +840,7 @@ TEST_CASE("every four-symbol histogram in 0..3 has the optimal cost", "[huffman]
       for (std::uint64_t third = 0; third < 4; ++third) {
         for (std::uint64_t fourth = 0; fourth < 4; ++fourth) {
           INFO(first << " " << second << " " << third << " " << fourth);
-          dacoexec::huffman::frequency_table frequencies{};
+          dacoexec::detail::huffman::frequency_table frequencies{};
           frequencies.at(0) = first;
           frequencies.at(1) = second;
           frequencies.at(2) = third;
@@ -869,100 +875,112 @@ TEST_CASE("canonical codebooks reconstruct deterministic fixtures", "[huffman][c
     std::string_view{ "AAAAABBCD" },
     std::string_view{ "ABCD" } };
   for (auto const input : samples) {
-    auto const lengths = dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input));
-    auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
+    auto const lengths =
+      dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input));
+    auto const book = dacoexec::detail::huffman::make_canonical_codebook(lengths);
     auto const saved = book.lengths();
-    auto const rebuilt = dacoexec::huffman::make_canonical_codebook(saved);
+    auto const rebuilt = dacoexec::detail::huffman::make_canonical_codebook(saved);
     REQUIRE(saved == lengths);
-    for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
+    for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
       auto const byte = static_cast<std::uint8_t>(index);
       REQUIRE(test_detail::canonical_word(book, byte) == test_detail::canonical_word(rebuilt, byte));
       REQUIRE(test_detail::canonical_word(book, byte).length_ == lengths.at(index));
     }
   }
-  auto const singleton = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "A" })));
+  auto const singleton =
+    dacoexec::detail::huffman::make_canonical_codebook(dacoexec::detail::huffman::build_code_lengths(
+      dacoexec::detail::huffman::count_frequencies(std::string_view{ "A" })));
+  REQUIRE(test_detail::canonical_word(singleton, symbol('A'))
+          == dacoexec::detail::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
+  auto const pair = dacoexec::detail::huffman::make_canonical_codebook(dacoexec::detail::huffman::build_code_lengths(
+    dacoexec::detail::huffman::count_frequencies(std::string_view{ "BA" })));
   REQUIRE(
-    test_detail::canonical_word(singleton, symbol('A')) == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
-  auto const pair = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "BA" })));
-  REQUIRE(test_detail::canonical_word(pair, symbol('A')) == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
-  REQUIRE(test_detail::canonical_word(pair, symbol('B')) == dacoexec::huffman::codeword{ .bits_ = 1U, .length_ = 1 });
-  auto const book = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "AAAAABBCD" })));
-  REQUIRE(test_detail::canonical_word(book, symbol('A')) == dacoexec::huffman::codeword{ .bits_ = 0b0U, .length_ = 1 });
+    test_detail::canonical_word(pair, symbol('A')) == dacoexec::detail::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
   REQUIRE(
-    test_detail::canonical_word(book, symbol('B')) == dacoexec::huffman::codeword{ .bits_ = 0b10U, .length_ = 2 });
-  REQUIRE(
-    test_detail::canonical_word(book, symbol('C')) == dacoexec::huffman::codeword{ .bits_ = 0b110U, .length_ = 3 });
-  REQUIRE(
-    test_detail::canonical_word(book, symbol('D')) == dacoexec::huffman::codeword{ .bits_ = 0b111U, .length_ = 3 });
-  auto const equal = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(std::string_view{ "DCBA" })));
+    test_detail::canonical_word(pair, symbol('B')) == dacoexec::detail::huffman::codeword{ .bits_ = 1U, .length_ = 1 });
+  auto const book = dacoexec::detail::huffman::make_canonical_codebook(dacoexec::detail::huffman::build_code_lengths(
+    dacoexec::detail::huffman::count_frequencies(std::string_view{ "AAAAABBCD" })));
+  REQUIRE(test_detail::canonical_word(book, symbol('A'))
+          == dacoexec::detail::huffman::codeword{ .bits_ = 0b0U, .length_ = 1 });
+  REQUIRE(test_detail::canonical_word(book, symbol('B'))
+          == dacoexec::detail::huffman::codeword{ .bits_ = 0b10U, .length_ = 2 });
+  REQUIRE(test_detail::canonical_word(book, symbol('C'))
+          == dacoexec::detail::huffman::codeword{ .bits_ = 0b110U, .length_ = 3 });
+  REQUIRE(test_detail::canonical_word(book, symbol('D'))
+          == dacoexec::detail::huffman::codeword{ .bits_ = 0b111U, .length_ = 3 });
+  auto const equal = dacoexec::detail::huffman::make_canonical_codebook(dacoexec::detail::huffman::build_code_lengths(
+    dacoexec::detail::huffman::count_frequencies(std::string_view{ "DCBA" })));
   constexpr unsigned equal_length = 2;
   constexpr std::uint8_t equal_symbols = 4;
   for (std::uint8_t index = 0; index < equal_symbols; ++index) {
     REQUIRE(test_detail::canonical_word(equal, static_cast<std::uint8_t>(symbol('A') + index))
-            == dacoexec::huffman::codeword{ .bits_ = index, .length_ = equal_length });
+            == dacoexec::detail::huffman::codeword{ .bits_ = index, .length_ = equal_length });
   }
 }
 
 TEST_CASE("canonical validation rejects invalid trees and reports unsupported widths", "[huffman][canonical]")
 {
-  dacoexec::huffman::code_length_table lengths{};
+  dacoexec::detail::huffman::code_length_table lengths{};
   lengths.at(0) = 2;
-  REQUIRE_THROWS_AS(dacoexec::huffman::make_canonical_codebook(lengths), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
   lengths.at(1) = 2;
-  REQUIRE_THROWS_AS(dacoexec::huffman::make_canonical_codebook(lengths), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
   lengths.at(0) = 1;
   lengths.at(1) = 1;
   lengths.at(2) = 1;
-  REQUIRE_THROWS_AS(dacoexec::huffman::make_canonical_codebook(lengths), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
   constexpr std::size_t unsupported_chain_symbols = 40;
-  auto const deep = dacoexec::huffman::build_code_lengths(chain_frequencies(unsupported_chain_symbols));
+  auto const deep = dacoexec::detail::huffman::build_code_lengths(chain_frequencies(unsupported_chain_symbols));
   REQUIRE(*std::ranges::max_element(deep) == unsupported_chain_symbols - 1U);
-  REQUIRE_FALSE(dacoexec::huffman::try_make_canonical_codebook(deep).has_value());
-  REQUIRE_THROWS_AS(dacoexec::huffman::make_canonical_codebook(deep), std::length_error);
+  REQUIRE_FALSE(dacoexec::detail::huffman::try_make_canonical_codebook(deep).has_value());
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(deep), std::length_error);
 }
 
 TEST_CASE("canonical codes preserve all unsigned byte indexes", "[huffman][canonical]")
 {
-  dacoexec::huffman::code_length_table lengths{};
+  dacoexec::detail::huffman::code_length_table lengths{};
   constexpr std::uint8_t byte_width = 8;
   lengths.fill(byte_width);
-  auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
-  for (std::size_t index = 0; index < dacoexec::huffman::alphabet_size; ++index) {
-    REQUIRE(test_detail::canonical_word(book, static_cast<std::uint8_t>(index))
-            == dacoexec::huffman::codeword{ .bits_ = static_cast<std::uint32_t>(index), .length_ = byte_width });
+  auto const book = dacoexec::detail::huffman::make_canonical_codebook(lengths);
+  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
+    REQUIRE(
+      test_detail::canonical_word(book, static_cast<std::uint8_t>(index))
+      == dacoexec::detail::huffman::codeword{ .bits_ = static_cast<std::uint32_t>(index), .length_ = byte_width });
   }
   constexpr std::array<unsigned char, 3> extremes{ 0x00, 0x80, 0xFF };
-  auto const sparse = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(extremes)));
-  REQUIRE(test_detail::canonical_word(sparse, 0x00) == dacoexec::huffman::codeword{ .bits_ = 0b10U, .length_ = 2 });
-  REQUIRE(test_detail::canonical_word(sparse, 0x80) == dacoexec::huffman::codeword{ .bits_ = 0b11U, .length_ = 2 });
-  REQUIRE(test_detail::canonical_word(sparse, 0xFF) == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
+  auto const sparse = dacoexec::detail::huffman::make_canonical_codebook(
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(extremes)));
+  REQUIRE(
+    test_detail::canonical_word(sparse, 0x00) == dacoexec::detail::huffman::codeword{ .bits_ = 0b10U, .length_ = 2 });
+  REQUIRE(
+    test_detail::canonical_word(sparse, 0x80) == dacoexec::detail::huffman::codeword{ .bits_ = 0b11U, .length_ = 2 });
+  REQUIRE(
+    test_detail::canonical_word(sparse, 0xFF) == dacoexec::detail::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
 }
 
 TEST_CASE("canonical assignment reaches the full 32-bit boundary", "[huffman][canonical]")
 {
-  dacoexec::huffman::code_length_table lengths{};
-  for (unsigned length = 1; length < dacoexec::huffman::max_canonical_bits; ++length) {
+  dacoexec::detail::huffman::code_length_table lengths{};
+  for (unsigned length = 1; length < dacoexec::detail::huffman::max_canonical_bits; ++length) {
     lengths.at(length - 1U) = static_cast<std::uint8_t>(length);
   }
-  lengths.at(dacoexec::huffman::max_canonical_bits - 1U) = dacoexec::huffman::max_canonical_bits;
-  lengths.at(dacoexec::huffman::max_canonical_bits) = dacoexec::huffman::max_canonical_bits;
-  auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
-  REQUIRE(test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits - 1U)
-          == dacoexec::huffman::codeword{ .bits_ = 0xFFFFFFFEU, .length_ = dacoexec::huffman::max_canonical_bits });
-  REQUIRE(test_detail::canonical_word(book, dacoexec::huffman::max_canonical_bits)
-          == dacoexec::huffman::codeword{ .bits_ = 0xFFFFFFFFU, .length_ = dacoexec::huffman::max_canonical_bits });
+  lengths.at(dacoexec::detail::huffman::max_canonical_bits - 1U) = dacoexec::detail::huffman::max_canonical_bits;
+  lengths.at(dacoexec::detail::huffman::max_canonical_bits) = dacoexec::detail::huffman::max_canonical_bits;
+  auto const book = dacoexec::detail::huffman::make_canonical_codebook(lengths);
+  REQUIRE(test_detail::canonical_word(book, dacoexec::detail::huffman::max_canonical_bits - 1U)
+          == dacoexec::detail::huffman::codeword{
+            .bits_ = 0xFFFFFFFEU, .length_ = dacoexec::detail::huffman::max_canonical_bits });
+  REQUIRE(test_detail::canonical_word(book, dacoexec::detail::huffman::max_canonical_bits)
+          == dacoexec::detail::huffman::codeword{
+            .bits_ = 0xFFFFFFFFU, .length_ = dacoexec::detail::huffman::max_canonical_bits });
 
   std::vector<std::byte> output;
   dacoexec::bit_writer writer{ std::back_inserter(output) };
-  for (auto const symbol : { dacoexec::huffman::max_canonical_bits - 1U, dacoexec::huffman::max_canonical_bits }) {
+  for (auto const symbol :
+    { dacoexec::detail::huffman::max_canonical_bits - 1U, dacoexec::detail::huffman::max_canonical_bits }) {
     auto const word = test_detail::canonical_word(book, static_cast<std::uint8_t>(symbol));
     writer.write_bits({ .value_ = word.bits_, .bit_count_ = word.length_ });
   }
@@ -986,23 +1004,24 @@ TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", 
   splitmix64 rng{ histogram_seed };
   for (std::size_t index = 0; index < case_count; ++index) {
     auto const frequencies = random_histogram(rng,
-      { .active_symbols_ = rng.next() % (dacoexec::huffman::alphabet_size + 1U), .max_frequency_ = frequency_limit });
-    auto const lengths = dacoexec::huffman::build_code_lengths(frequencies);
-    auto const candidate = dacoexec::huffman::try_make_canonical_codebook(lengths);
+      { .active_symbols_ = rng.next() % (dacoexec::detail::huffman::alphabet_size + 1U),
+        .max_frequency_ = frequency_limit });
+    auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
+    auto const candidate = dacoexec::detail::huffman::try_make_canonical_codebook(lengths);
     if (!candidate.has_value()) {
       FAIL("Seeded Huffman lengths must fit the supported codeword width");
       continue;
     }
     auto const &book = candidate.value();
-    auto const rebuilt = dacoexec::huffman::make_canonical_codebook(book.lengths());
-    for (std::size_t left = 0; left < dacoexec::huffman::alphabet_size; ++left) {
+    auto const rebuilt = dacoexec::detail::huffman::make_canonical_codebook(book.lengths());
+    for (std::size_t left = 0; left < dacoexec::detail::huffman::alphabet_size; ++left) {
       auto const word = test_detail::canonical_word(book, static_cast<std::uint8_t>(left));
       REQUIRE(word == test_detail::canonical_word(rebuilt, static_cast<std::uint8_t>(left)));
       REQUIRE(word.length_ == lengths.at(left));
       REQUIRE((word.length_ == 0) == (frequencies.at(left) == 0));
       REQUIRE((static_cast<std::uint64_t>(word.bits_) >> word.length_) == 0);
       if (word.length_ == 0) { continue; }
-      for (std::size_t right = left + 1U; right < dacoexec::huffman::alphabet_size; ++right) {
+      for (std::size_t right = left + 1U; right < dacoexec::detail::huffman::alphabet_size; ++right) {
         auto const other = test_detail::canonical_word(book, static_cast<std::uint8_t>(right));
         if (other.length_ == 0) { continue; }
         if (word.length_ == other.length_) { REQUIRE(word.bits_ < other.bits_); }
@@ -1017,15 +1036,15 @@ TEST_CASE("seeded canonical codes are ordered prefix-free and reconstructible", 
 
 TEST_CASE("unsupported canonical widths take precedence over invalid tree structure", "[huffman][canonical]")
 {
-  dacoexec::huffman::code_length_table lengths{};
+  dacoexec::detail::huffman::code_length_table lengths{};
   lengths.at(0) = 1;
   lengths.at(1) = 1;
   lengths.at(2) = 1;
-  REQUIRE_THROWS_AS(dacoexec::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
   // Keep the unsupported symbol last so earlier counts already oversubscribe.
-  lengths.back() = static_cast<std::uint8_t>(dacoexec::huffman::max_canonical_bits + 1U);
-  REQUIRE_FALSE(dacoexec::huffman::try_make_canonical_codebook(lengths).has_value());
-  REQUIRE_THROWS_AS(dacoexec::huffman::make_canonical_codebook(lengths), std::length_error);
+  lengths.back() = static_cast<std::uint8_t>(dacoexec::detail::huffman::max_canonical_bits + 1U);
+  REQUIRE_FALSE(dacoexec::detail::huffman::try_make_canonical_codebook(lengths).has_value());
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::length_error);
 }
 
 namespace {
@@ -1065,36 +1084,36 @@ TEST_CASE("typed tree storage preserves deterministic lengths", "[huffman][alloc
     std::string_view{ "AAAAABBCD" },
     std::string_view{ "ABCD" } };
   for (auto const sample : samples) {
-    auto const frequencies = dacoexec::huffman::count_frequencies(sample);
-    dacoexec::huffman::static_tree_arena arena;
-    dacoexec::huffman::dynamic_tree_allocator<> dynamic;
-    auto const expected = dacoexec::huffman::build_code_lengths(frequencies);
-    REQUIRE(dacoexec::huffman::build_code_lengths(frequencies, arena) == expected);
-    REQUIRE(dacoexec::huffman::build_code_lengths(frequencies, dynamic) == expected);
+    auto const frequencies = dacoexec::detail::huffman::count_frequencies(sample);
+    dacoexec::detail::huffman::static_tree_arena arena;
+    dacoexec::detail::huffman::dynamic_tree_allocator<> dynamic;
+    auto const expected = dacoexec::detail::huffman::build_code_lengths(frequencies);
+    REQUIRE(dacoexec::detail::huffman::build_code_lengths(frequencies, arena) == expected);
+    REQUIRE(dacoexec::detail::huffman::build_code_lengths(frequencies, dynamic) == expected);
     REQUIRE(arena.size() == dynamic.size());
   }
 
-  dacoexec::huffman::frequency_table uniform{};
+  dacoexec::detail::huffman::frequency_table uniform{};
   uniform.fill(1);
-  dacoexec::huffman::static_tree_arena arena;
-  dacoexec::huffman::dynamic_tree_allocator<> dynamic;
-  REQUIRE(
-    dacoexec::huffman::build_code_lengths(uniform, dynamic) == dacoexec::huffman::build_code_lengths(uniform, arena));
-  constexpr auto full_tree_nodes = (dacoexec::huffman::alphabet_size * 2U) - 1U;
+  dacoexec::detail::huffman::static_tree_arena arena;
+  dacoexec::detail::huffman::dynamic_tree_allocator<> dynamic;
+  REQUIRE(dacoexec::detail::huffman::build_code_lengths(uniform, dynamic)
+          == dacoexec::detail::huffman::build_code_lengths(uniform, arena));
+  constexpr auto full_tree_nodes = (dacoexec::detail::huffman::alphabet_size * 2U) - 1U;
   REQUIRE(arena.size() == full_tree_nodes);
   REQUIRE(dynamic.size() == full_tree_nodes);
 }
 
 TEST_CASE("typed node arenas reject exhaustion without invalidating nodes", "[huffman][allocation]")
 {
-  using node = dacoexec::huffman::static_tree_arena::value_type;
+  using node = dacoexec::detail::huffman::static_tree_arena::value_type;
   constexpr std::size_t leaf_capacity = 2;
-  dacoexec::huffman::static_node_arena<node, leaf_capacity> arena;
-  auto const frequencies = dacoexec::huffman::count_frequencies(std::string_view{ "AB" });
-  REQUIRE_THROWS_AS(dacoexec::huffman::build_code_lengths(frequencies, arena), std::length_error);
+  dacoexec::detail::huffman::static_node_arena<node, leaf_capacity> arena;
+  auto const frequencies = dacoexec::detail::huffman::count_frequencies(std::string_view{ "AB" });
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::build_code_lengths(frequencies, arena), std::length_error);
   REQUIRE(arena.size() == leaf_capacity);
 
-  dacoexec::huffman::static_node_arena<node, leaf_capacity> linked;
+  dacoexec::detail::huffman::static_node_arena<node, leaf_capacity> linked;
   auto const *leaf = linked.create(node{});
   auto const *parent = linked.create(node{ .left_ = leaf, .right_ = leaf });
   REQUIRE_THROWS_AS(linked.create(node{}), std::length_error);
@@ -1102,30 +1121,30 @@ TEST_CASE("typed node arenas reject exhaustion without invalidating nodes", "[hu
   REQUIRE(parent->right_ == leaf);
   REQUIRE(leaf->is_leaf());
 
-  dacoexec::huffman::static_node_arena<node, 0> empty;
-  REQUIRE(dacoexec::huffman::build_code_lengths({}, empty) == dacoexec::huffman::code_length_table{});
+  dacoexec::detail::huffman::static_node_arena<node, 0> empty;
+  REQUIRE(dacoexec::detail::huffman::build_code_lengths({}, empty) == dacoexec::detail::huffman::code_length_table{});
   REQUIRE_THROWS_AS(empty.create(node{}), std::length_error);
 }
 
 TEST_CASE("dynamic tree storage releases PMR nodes after success and overflow", "[huffman][allocation]")
 {
-  using node = dacoexec::huffman::static_tree_arena::value_type;
+  using node = dacoexec::detail::huffman::static_tree_arena::value_type;
   using allocator = std::pmr::polymorphic_allocator<node>;
   counting_node_resource resource;
   {
-    dacoexec::huffman::dynamic_tree_allocator<allocator> storage{ allocator{ &resource } };
-    auto const frequencies = dacoexec::huffman::count_frequencies(std::string_view{ "AAAAABBCD" });
-    REQUIRE(dacoexec::huffman::build_code_lengths(frequencies, storage)
-            == dacoexec::huffman::build_code_lengths(frequencies));
+    dacoexec::detail::huffman::dynamic_tree_allocator<allocator> storage{ allocator{ &resource } };
+    auto const frequencies = dacoexec::detail::huffman::count_frequencies(std::string_view{ "AAAAABBCD" });
+    REQUIRE(dacoexec::detail::huffman::build_code_lengths(frequencies, storage)
+            == dacoexec::detail::huffman::build_code_lengths(frequencies));
     REQUIRE(resource.outstanding() == storage.size());
   }
   REQUIRE(resource.outstanding() == 0);
   {
-    dacoexec::huffman::dynamic_tree_allocator<allocator> storage{ allocator{ &resource } };
-    dacoexec::huffman::frequency_table frequencies{};
+    dacoexec::detail::huffman::dynamic_tree_allocator<allocator> storage{ allocator{ &resource } };
+    dacoexec::detail::huffman::frequency_table frequencies{};
     frequencies.at(0) = std::numeric_limits<std::uint64_t>::max();
     frequencies.at(1) = 1;
-    REQUIRE_THROWS_AS(dacoexec::huffman::build_code_lengths(frequencies, storage), std::overflow_error);
+    REQUIRE_THROWS_AS(dacoexec::detail::huffman::build_code_lengths(frequencies, storage), std::overflow_error);
     REQUIRE(resource.outstanding() == storage.size());
   }
   REQUIRE(resource.outstanding() == 0);

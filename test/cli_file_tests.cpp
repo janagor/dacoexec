@@ -1,7 +1,7 @@
 #include "../src/cli/temporary_output.hpp"
 #include <catch2/catch_test_macros.hpp>
 
-#include <dacoexec/detail/error.hpp>
+#include <dacoexec/error.hpp>
 
 #include <array>
 #include <cstddef>

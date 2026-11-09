@@ -1,12 +1,13 @@
 #include "huffman_test_utils.hpp"
-#include <dacoexec/bit/bit_output_iterator.hpp>
-#include <dacoexec/concepts.hpp>
-#include <dacoexec/detail/buffer.hpp>
-#include <dacoexec/huffman/canonical.hpp>
-#include <dacoexec/huffman/codewords_view.hpp>
-#include <dacoexec/huffman/frequency.hpp>
-#include <dacoexec/huffman/tree.hpp>
-#include <dacoexec/views/blocks.hpp>
+#include <dacoexec/bit.hpp>
+#include <dacoexec/detail/concepts.hpp>
+#include <dacoexec/detail/huffman/canonical.hpp>
+#include <dacoexec/detail/huffman/codewords_view.hpp>
+#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/huffman/tree.hpp>
+#include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/detail/support/buffer.hpp>
+#include <dacoexec/detail/views/blocks.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -139,18 +140,19 @@ static_assert(std::ranges::input_range<byte_source>);
 static_assert(!std::ranges::forward_range<byte_source>);
 static_assert(!std::ranges::sized_range<byte_source>);
 static_assert(!std::copyable<byte_source>);
-static_assert(dacoexec::byte_input_range<byte_source>);
-static_assert(dacoexec::byte_input_range<std::vector<std::byte>>);
-static_assert(dacoexec::byte_input_range<std::array<std::byte, 1>>);
-static_assert(dacoexec::byte_input_range<std::span<std::byte const>>);
-static_assert(dacoexec::byte_input_range<std::vector<unsigned char>>);
-static_assert(dacoexec::byte_input_range<std::vector<char>>);
-static_assert(dacoexec::byte_input_range<std::vector<signed char>>);
-static_assert(dacoexec::byte_input_range<std::vector<char8_t>>);
-static_assert(!dacoexec::byte_input_range<std::vector<int>>);
+static_assert(dacoexec::detail::byte_input_range<byte_source>);
+static_assert(dacoexec::detail::byte_input_range<std::vector<std::byte>>);
+static_assert(dacoexec::detail::byte_input_range<std::array<std::byte, 1>>);
+static_assert(dacoexec::detail::byte_input_range<std::span<std::byte const>>);
+static_assert(dacoexec::detail::byte_input_range<std::vector<unsigned char>>);
+static_assert(dacoexec::detail::byte_input_range<std::vector<char>>);
+static_assert(dacoexec::detail::byte_input_range<std::vector<signed char>>);
+static_assert(dacoexec::detail::byte_input_range<std::vector<char8_t>>);
+static_assert(!dacoexec::detail::byte_input_range<std::vector<int>>);
 
 template<class R>
-concept can_pipe_blocks = requires(R &&range) { std::forward<R>(range) | dacoexec::views::blocks(std::size_t{ 4 }); };
+concept can_pipe_blocks =
+  requires(R &&range) { std::forward<R>(range) | dacoexec::detail::views::blocks(std::size_t{ 4 }); };
 
 static_assert(can_pipe_blocks<std::vector<std::byte> &>);
 static_assert(can_pipe_blocks<std::vector<std::byte>>);
@@ -158,26 +160,29 @@ static_assert(can_pipe_blocks<byte_source>);
 static_assert(!can_pipe_blocks<byte_source &>);
 static_assert(!can_pipe_blocks<std::vector<int> &>);
 
-using block_range = decltype(std::declval<std::vector<std::byte> &>() | dacoexec::views::blocks(std::size_t{ 4 }));
+using block_range =
+  decltype(std::declval<std::vector<std::byte> &>() | dacoexec::detail::views::blocks(std::size_t{ 4 }));
 
 static_assert(std::ranges::view<block_range>);
 static_assert(std::ranges::input_range<block_range>);
 static_assert(!std::ranges::forward_range<block_range>);
 static_assert(!std::ranges::borrowed_range<block_range>);
-static_assert(std::same_as<std::ranges::range_value_t<block_range>, dacoexec::byte_block>);
-static_assert(std::same_as<std::iter_reference_t<std::ranges::iterator_t<block_range>>, dacoexec::byte_block &&>);
+static_assert(std::same_as<std::ranges::range_value_t<block_range>, dacoexec::detail::byte_block>);
+static_assert(
+  std::same_as<std::iter_reference_t<std::ranges::iterator_t<block_range>>, dacoexec::detail::byte_block &&>);
 static_assert(std::input_iterator<std::ranges::iterator_t<block_range>>);
-static_assert(std::movable<dacoexec::byte_block>);
-static_assert(!std::copyable<dacoexec::byte_block>);
-static_assert(std::is_nothrow_move_constructible_v<dacoexec::byte_block>);
-static_assert(std::is_nothrow_move_assignable_v<dacoexec::byte_block>);
+static_assert(std::movable<dacoexec::detail::byte_block>);
+static_assert(!std::copyable<dacoexec::detail::byte_block>);
+static_assert(std::is_nothrow_move_constructible_v<dacoexec::detail::byte_block>);
+static_assert(std::is_nothrow_move_assignable_v<dacoexec::detail::byte_block>);
 static_assert(std::movable<block_range>);
 static_assert(!std::copyable<block_range>);
-static_assert(std::same_as<decltype(dacoexec::byte_block::sequence_), std::uint64_t>);
-static_assert(dacoexec::detail::next_block_capacity(0, std::numeric_limits<std::size_t>::max()) == initial_capacity);
-static_assert(dacoexec::detail::next_block_capacity(initial_capacity, capacity_limit) == doubled_capacity);
-static_assert(dacoexec::detail::next_block_capacity(doubled_capacity, capacity_limit) == capacity_limit);
-static_assert(dacoexec::detail::next_block_capacity((std::numeric_limits<std::size_t>::max() / 2) + 1,
+static_assert(std::same_as<decltype(dacoexec::detail::byte_block::sequence_), std::uint64_t>);
+static_assert(
+  dacoexec::detail::support::next_block_capacity(0, std::numeric_limits<std::size_t>::max()) == initial_capacity);
+static_assert(dacoexec::detail::support::next_block_capacity(initial_capacity, capacity_limit) == doubled_capacity);
+static_assert(dacoexec::detail::support::next_block_capacity(doubled_capacity, capacity_limit) == capacity_limit);
+static_assert(dacoexec::detail::support::next_block_capacity((std::numeric_limits<std::size_t>::max() / 2) + 1,
                 std::numeric_limits<std::size_t>::max())
               == std::numeric_limits<std::size_t>::max());
 
@@ -190,10 +195,12 @@ static_assert(dacoexec::detail::next_block_capacity((std::numeric_limits<std::si
   return bytes;
 }
 
-[[nodiscard]] auto flatten(std::vector<dacoexec::byte_block> const &blocks) -> std::vector<std::byte>
+[[nodiscard]] auto flatten(std::vector<dacoexec::detail::byte_block> const &blocks) -> std::vector<std::byte>
 {
   std::vector<std::byte> out;
-  for (dacoexec::byte_block const &block : blocks) { out.insert(out.end(), block.bytes_.begin(), block.bytes_.end()); }
+  for (dacoexec::detail::byte_block const &block : blocks) {
+    out.insert(out.end(), block.bytes_.begin(), block.bytes_.end());
+  }
   return out;
 }
 
@@ -211,7 +218,7 @@ auto check_partition(partition_case const &test_case) -> void
   std::vector<std::size_t> sizes;
   std::vector<std::byte> flattened;
   std::uint64_t sequence = 0;
-  for (auto block : input | dacoexec::views::blocks(test_case.block_size_)) {
+  for (auto block : input | dacoexec::detail::views::blocks(test_case.block_size_)) {
     REQUIRE(block.sequence_ == sequence);
     ++sequence;
     sizes.push_back(block.bytes_.size());
@@ -295,7 +302,7 @@ private:
 
 static_assert(std::input_iterator<proxy_bytes::iterator>);
 static_assert(std::ranges::input_range<proxy_bytes>);
-static_assert(dacoexec::byte_input_range<proxy_bytes>);
+static_assert(dacoexec::detail::byte_input_range<proxy_bytes>);
 static_assert(std::same_as<std::ranges::range_value_t<proxy_bytes>, std::byte>);
 static_assert(std::same_as<std::iter_reference_t<proxy_bytes::iterator>, byte_proxy>);
 
@@ -305,7 +312,7 @@ TEST_CASE("blocks reads a proxy-backed byte range", "[blocks]")
   std::vector<std::size_t> sizes;
   std::vector<std::byte> flattened;
   std::uint64_t sequence = 0;
-  for (auto block : proxy_bytes{ expected } | dacoexec::views::blocks(4)) {
+  for (auto block : proxy_bytes{ expected } | dacoexec::detail::views::blocks(4)) {
     REQUIRE(block.sequence_ == sequence);
     ++sequence;
     sizes.push_back(block.bytes_.size());
@@ -341,8 +348,8 @@ TEST_CASE("blocks accepts standard ranges, call syntax, and owning rvalues", "[b
 
   {
     std::vector<std::byte> input = expected;
-    std::vector<dacoexec::byte_block> blocks;
-    for (auto block : dacoexec::views::blocks(4)(input)) { blocks.push_back(std::move(block)); }
+    std::vector<dacoexec::detail::byte_block> blocks;
+    for (auto block : dacoexec::detail::views::blocks(4)(input)) { blocks.push_back(std::move(block)); }
     REQUIRE(blocks.size() == 2);
     REQUIRE(blocks.at(0).bytes_.size() == 4);
     REQUIRE(blocks.at(1).bytes_.size() == 1);
@@ -354,7 +361,7 @@ TEST_CASE("blocks accepts standard ranges, call syntax, and owning rvalues", "[b
     std::ranges::copy(expected, input.begin());
     std::vector<std::byte> flattened;
     std::uint64_t sequence = 0;
-    for (auto block : input | dacoexec::views::blocks(4)) {
+    for (auto block : input | dacoexec::detail::views::blocks(4)) {
       REQUIRE(block.sequence_ == sequence);
       ++sequence;
       flattened.insert(flattened.end(), block.bytes_.begin(), block.bytes_.end());
@@ -366,15 +373,15 @@ TEST_CASE("blocks accepts standard ranges, call syntax, and owning rvalues", "[b
     std::vector<std::byte> storage = expected;
     std::span<std::byte const> const input{ storage };
     std::vector<std::byte> flattened;
-    for (auto block : input | dacoexec::views::blocks(2)) {
+    for (auto block : input | dacoexec::detail::views::blocks(2)) {
       flattened.insert(flattened.end(), block.bytes_.begin(), block.bytes_.end());
     }
     REQUIRE(flattened == expected);
   }
 
   {
-    std::vector<dacoexec::byte_block> blocks;
-    for (auto block : make_bytes(5) | dacoexec::views::blocks(4)) { blocks.push_back(std::move(block)); }
+    std::vector<dacoexec::detail::byte_block> blocks;
+    for (auto block : make_bytes(5) | dacoexec::detail::views::blocks(4)) { blocks.push_back(std::move(block)); }
     REQUIRE(flatten(blocks) == expected);
   }
 }
@@ -383,7 +390,7 @@ TEST_CASE("blocks converts character bytes and preserves high bits", "[blocks]")
 {
   std::vector<unsigned char> const raw{ 0x00, 0x7F, 0x80, 0xFF, 0x01 };
   std::vector<std::byte> flattened;
-  for (auto block : raw | dacoexec::views::blocks(3)) {
+  for (auto block : raw | dacoexec::detail::views::blocks(3)) {
     flattened.insert(flattened.end(), block.bytes_.begin(), block.bytes_.end());
   }
   REQUIRE(flattened.size() == raw.size());
@@ -392,7 +399,7 @@ TEST_CASE("blocks converts character bytes and preserves high bits", "[blocks]")
   }
 
   std::vector<char> chars{ static_cast<char>(-1) };
-  auto view = chars | dacoexec::views::blocks(1);
+  auto view = chars | dacoexec::detail::views::blocks(1);
   auto block = std::move(*view.begin());
   REQUIRE(block.bytes_.size() == 1);
   REQUIRE(block.bytes_.at(0) == std::byte{ 0xFF });
@@ -405,7 +412,7 @@ TEST_CASE("blocks reads a move-only single-pass source once", "[blocks]")
   byte_source source{ make_bytes(count), stats };
   std::vector<std::byte> flattened;
   std::uint64_t sequence = 0;
-  for (auto block : std::move(source) | dacoexec::views::blocks(3)) {
+  for (auto block : std::move(source) | dacoexec::detail::views::blocks(3)) {
     REQUIRE(block.sequence_ == sequence);
     ++sequence;
     flattened.insert(flattened.end(), block.bytes_.begin(), block.bytes_.end());
@@ -421,7 +428,7 @@ TEST_CASE("constructing a block view reads nothing and each step reads one block
   constexpr std::size_t count = 32;
   constexpr std::size_t block_size = 4;
   byte_source source{ make_bytes(count), stats };
-  auto view = std::move(source) | dacoexec::views::blocks(block_size);
+  auto view = std::move(source) | dacoexec::detail::views::blocks(block_size);
 
   REQUIRE(stats->begin_calls_ == 0);
   REQUIRE(stats->dereferences_ == 0);
@@ -452,11 +459,11 @@ TEST_CASE("constructing a block view reads nothing and each step reads one block
 
 TEST_CASE("moved blocks outlive the source and the view", "[blocks]")
 {
-  std::vector<dacoexec::byte_block> collected;
+  std::vector<dacoexec::detail::byte_block> collected;
   {
     std::vector<std::byte> input = make_bytes(multi_block_input_size);
     {
-      auto view = input | dacoexec::views::blocks(4);
+      auto view = input | dacoexec::detail::views::blocks(4);
       for (auto block : view) { collected.push_back(std::move(block)); }
     }
   }
@@ -474,7 +481,7 @@ TEST_CASE("moved blocks outlive the source and the view", "[blocks]")
 TEST_CASE("a moved-out block stays intact when the iterator advances", "[blocks]")
 {
   std::vector<std::byte> input = make_bytes(two_block_input_size);
-  auto view = input | dacoexec::views::blocks(4);
+  auto view = input | dacoexec::detail::views::blocks(4);
   auto cursor = view.begin();
 
   auto block = std::move(*cursor);
@@ -499,8 +506,8 @@ TEST_CASE("a moved-out block stays intact when the iterator advances", "[blocks]
 
 TEST_CASE("move assignment transfers an unstarted owning view", "[blocks]")
 {
-  auto source = make_bytes(short_input_size) | dacoexec::views::blocks(4);
-  auto destination = make_bytes(1) | dacoexec::views::blocks(1);
+  auto source = make_bytes(short_input_size) | dacoexec::detail::views::blocks(4);
+  auto destination = make_bytes(1) | dacoexec::detail::views::blocks(1);
   destination = std::move(source);
 
   std::size_t from_source = 0;
@@ -517,7 +524,7 @@ TEST_CASE("move assignment transfers an unstarted owning view", "[blocks]")
 TEST_CASE("moving an unstarted view keeps the unread source", "[blocks]")
 {
   std::vector<std::byte> input = make_bytes(short_input_size);
-  auto view = input | dacoexec::views::blocks(4);
+  auto view = input | dacoexec::detail::views::blocks(4);
   auto moved = std::move(view);
 
   std::size_t from_source = 0;
@@ -535,7 +542,7 @@ TEST_CASE("moving a started view keeps the staged block and the unread tail", "[
 {
   std::vector<std::byte> const expected = make_bytes(10);
   std::vector<std::byte> input = expected;
-  auto view = input | dacoexec::views::blocks(4);
+  auto view = input | dacoexec::detail::views::blocks(4);
   auto cursor = view.begin();
   REQUIRE((*cursor).sequence_ == 0);
   REQUIRE((*cursor).bytes_.size() == 4);
@@ -551,7 +558,7 @@ TEST_CASE("moving a started view keeps the staged block and the unread tail", "[
   for (auto block : moved) { flattened.insert(flattened.end(), block.bytes_.begin(), block.bytes_.end()); }
   REQUIRE(flattened == expected);
 
-  auto tail_view = input | dacoexec::views::blocks(4);
+  auto tail_view = input | dacoexec::detail::views::blocks(4);
   auto tail_cursor = tail_view.begin();
   auto first = std::move(*tail_cursor);
   std::vector<std::byte> const first_bytes = first.bytes_;
@@ -575,17 +582,17 @@ TEST_CASE("zero block size is rejected and a short input does not reserve the wh
 {
   auto stats = std::make_shared<source_stats>();
   byte_source const source{ make_bytes(4), stats };
-  REQUIRE_THROWS_AS(dacoexec::views::blocks(0), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::views::blocks(0), std::invalid_argument);
   REQUIRE(stats->dereferences_ == 0);
   REQUIRE(stats->begin_calls_ == 0);
 
   std::vector<std::byte> input = make_bytes(1);
-  REQUIRE_THROWS_AS(dacoexec::blocks_view(std::views::all(input), std::size_t{ 0 }), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::blocks_view(std::views::all(input), std::size_t{ 0 }), std::invalid_argument);
 
   constexpr std::size_t short_size = 100;
   std::vector<std::byte> short_input = make_bytes(short_size);
-  std::vector<dacoexec::byte_block> huge;
-  for (auto block : short_input | dacoexec::views::blocks(std::numeric_limits<std::size_t>::max())) {
+  std::vector<dacoexec::detail::byte_block> huge;
+  for (auto block : short_input | dacoexec::detail::views::blocks(std::numeric_limits<std::size_t>::max())) {
     huge.push_back(std::move(block));
   }
   REQUIRE(huge.size() == 1);
@@ -595,7 +602,7 @@ TEST_CASE("zero block size is rejected and a short input does not reserve the wh
   constexpr std::size_t wide_size = 10000;
   constexpr std::size_t partial = 5000;
   std::vector<std::byte> wide_input = make_bytes(partial);
-  auto wide = std::move(*(wide_input | dacoexec::views::blocks(wide_size)).begin());
+  auto wide = std::move(*(wide_input | dacoexec::detail::views::blocks(wide_size)).begin());
   REQUIRE(wide.sequence_ == 0);
   REQUIRE(wide.bytes_.size() == partial);
   REQUIRE(wide.bytes_ == wide_input);
@@ -609,8 +616,8 @@ TEST_CASE("upstream failure discards a partial block and stays failed", "[blocks
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = 1;
     byte_source source{ make_bytes(two_block_input_size), stats };
-    auto view = std::move(source) | dacoexec::views::blocks(block_size);
-    std::vector<dacoexec::byte_block> kept;
+    auto view = std::move(source) | dacoexec::detail::views::blocks(block_size);
+    std::vector<dacoexec::detail::byte_block> kept;
     REQUIRE_THROWS_AS(
       [&]() -> void {
         for (auto block : view) { kept.push_back(std::move(block)); }
@@ -631,10 +638,12 @@ TEST_CASE("upstream failure discards a partial block and stays failed", "[blocks
     // First block consumes 4 reads. The next read fails inside the second block.
     stats->fail_at_dereference_ = block_size + 1U;
     byte_source source{ make_bytes(two_block_input_size), stats };
-    std::vector<dacoexec::byte_block> kept;
+    std::vector<dacoexec::detail::byte_block> kept;
     REQUIRE_THROWS_AS(
       [&]() -> void {
-        for (auto block : std::move(source) | dacoexec::views::blocks(block_size)) { kept.push_back(std::move(block)); }
+        for (auto block : std::move(source) | dacoexec::detail::views::blocks(block_size)) {
+          kept.push_back(std::move(block));
+        }
       }(),
       std::ios_base::failure);
     REQUIRE(kept.size() == 1);
@@ -648,8 +657,8 @@ TEST_CASE("upstream failure discards a partial block and stays failed", "[blocks
     // One byte of the second block is read, then the source fails.
     stats->fail_at_dereference_ = second_block_failure_read;
     byte_source source{ make_bytes(two_block_input_size), stats };
-    auto view = std::move(source) | dacoexec::views::blocks(block_size);
-    std::vector<dacoexec::byte_block> kept;
+    auto view = std::move(source) | dacoexec::detail::views::blocks(block_size);
+    std::vector<dacoexec::detail::byte_block> kept;
     REQUIRE_THROWS_AS(
       [&]() -> void {
         for (auto block : view) { kept.push_back(std::move(block)); }
@@ -674,7 +683,7 @@ TEST_CASE("exact multiples end cleanly without an empty block", "[blocks]")
   constexpr std::size_t block_size = 4;
   byte_source source{ make_bytes(count), stats };
   std::size_t blocks = 0;
-  for (auto block : std::move(source) | dacoexec::views::blocks(block_size)) {
+  for (auto block : std::move(source) | dacoexec::detail::views::blocks(block_size)) {
     REQUIRE(block.bytes_.size() == block_size);
     ++blocks;
   }
@@ -690,7 +699,7 @@ TEST_CASE("streaming keeps one block of storage and does not read ahead", "[bloc
   constexpr std::size_t count = block_size * blocks;
   auto stats = std::make_shared<source_stats>();
   byte_source source{ make_bytes(count), stats };
-  auto view = std::move(source) | dacoexec::views::blocks(block_size);
+  auto view = std::move(source) | dacoexec::detail::views::blocks(block_size);
 
   REQUIRE(stats->dereferences_ == 0);
 
@@ -709,24 +718,24 @@ TEST_CASE("streaming keeps one block of storage and does not read ahead", "[bloc
   REQUIRE(stats->begin_calls_ == 1);
 }
 
-using codeword_range =
-  decltype(std::declval<std::vector<std::byte> &>()
-           | dacoexec::huffman::views::codewords(std::declval<dacoexec::huffman::canonical_codebook>()));
-static_assert(std::copyable<dacoexec::huffman::canonical_codebook>);
-static_assert(std::movable<dacoexec::huffman::canonical_codebook>);
-static_assert(std::same_as<decltype(std::declval<dacoexec::huffman::canonical_codebook &>().lengths()),
-  dacoexec::huffman::code_length_table const &>);
+using codeword_range = decltype(std::declval<std::vector<std::byte> &>()
+                                | dacoexec::detail::huffman::views::codewords(
+                                  std::declval<dacoexec::detail::huffman::canonical_codebook>()));
+static_assert(std::copyable<dacoexec::detail::huffman::canonical_codebook>);
+static_assert(std::movable<dacoexec::detail::huffman::canonical_codebook>);
+static_assert(std::same_as<decltype(std::declval<dacoexec::detail::huffman::canonical_codebook &>().lengths()),
+  dacoexec::detail::huffman::code_length_table const &>);
 static_assert(std::ranges::view<codeword_range>);
 static_assert(std::ranges::input_range<codeword_range>);
 static_assert(!std::ranges::forward_range<codeword_range>);
 static_assert(!std::ranges::borrowed_range<codeword_range>);
 static_assert(std::movable<codeword_range>);
 static_assert(!std::copyable<codeword_range>);
-static_assert(std::same_as<std::ranges::range_reference_t<codeword_range>, dacoexec::huffman::codeword>);
+static_assert(std::same_as<std::ranges::range_reference_t<codeword_range>, dacoexec::detail::huffman::codeword>);
 
 template<class R>
-concept can_adapt_codewords = requires(R &&input, dacoexec::huffman::canonical_codebook book) {
-  std::forward<R>(input) | dacoexec::huffman::views::codewords(book);
+concept can_adapt_codewords = requires(R &&input, dacoexec::detail::huffman::canonical_codebook book) {
+  std::forward<R>(input) | dacoexec::detail::huffman::views::codewords(book);
 };
 static_assert(can_adapt_codewords<std::vector<std::byte> &>);
 static_assert(can_adapt_codewords<std::vector<char> &>);
@@ -742,11 +751,12 @@ static_assert(!can_adapt_codewords<std::vector<std::uint16_t> &>);
 TEST_CASE("codewords stages once and preserves single-pass state across moves", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const lengths = dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input));
-  auto const expected = dacoexec::huffman::make_canonical_codebook(lengths);
+  auto const lengths =
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input));
+  auto const expected = dacoexec::detail::huffman::make_canonical_codebook(lengths);
   auto stats = std::make_shared<source_stats>();
-  auto view = byte_source{ input, stats }
-              | dacoexec::huffman::views::codewords(dacoexec::huffman::make_canonical_codebook(lengths));
+  auto view = byte_source{ input,
+    stats } | dacoexec::detail::huffman::views::codewords(dacoexec::detail::huffman::make_canonical_codebook(lengths));
   REQUIRE(stats->begin_calls_ == 0);
   REQUIRE(stats->dereferences_ == 0);
   REQUIRE(stats->increments_ == 0);
@@ -777,9 +787,9 @@ TEST_CASE("codewords stages once and preserves single-pass state across moves", 
 TEST_CASE("codewords closures own independent codebooks and accept proxy bytes", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const book = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
-  auto closure = dacoexec::huffman::views::codewords(book);
+  auto const book = dacoexec::detail::huffman::make_canonical_codebook(
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
+  auto closure = dacoexec::detail::huffman::views::codewords(book);
   auto copy = closure;
   auto first = closure(input);
   auto second = proxy_bytes{ input } | copy;
@@ -809,12 +819,12 @@ TEST_CASE("codewords closures own independent codebooks and accept proxy bytes",
 TEST_CASE("codewords failures are terminal without emitting absent symbols", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const book = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
+  auto const book = dacoexec::detail::huffman::make_canonical_codebook(
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
   for (std::size_t failure_read : { std::size_t{ 1 }, std::size_t{ 2 } }) {
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = failure_read;
-    auto view = byte_source{ input, stats } | dacoexec::huffman::views::codewords(book);
+    auto view = byte_source{ input, stats } | dacoexec::detail::huffman::views::codewords(book);
     if (failure_read == 1) {
       REQUIRE_THROWS_AS(view.begin(), std::ios_base::failure);
     } else {
@@ -828,18 +838,18 @@ TEST_CASE("codewords failures are terminal without emitting absent symbols", "[h
     REQUIRE(stats->dereferences_ == reads);
   }
   std::vector<std::byte> const absent{ std::byte{ 0xFF } };
-  auto missing_first = absent | dacoexec::huffman::views::codewords(book);
+  auto missing_first = absent | dacoexec::detail::huffman::views::codewords(book);
   REQUIRE_THROWS_AS(missing_first.begin(), std::invalid_argument);
   REQUIRE(missing_first.begin() == missing_first.end());
   std::vector<std::byte> const tail{ input.front(), absent.front() };
-  auto missing_tail = tail | dacoexec::huffman::views::codewords(book);
+  auto missing_tail = tail | dacoexec::detail::huffman::views::codewords(book);
   auto cursor = missing_tail.begin();
   REQUIRE(*cursor == test_detail::canonical_word(book, 0));
   REQUIRE_THROWS_AS(++cursor, std::invalid_argument);
   REQUIRE(cursor == missing_tail.end());
   REQUIRE(missing_tail.begin() == missing_tail.end());
-  auto empty =
-    std::vector<std::byte>{} | dacoexec::huffman::views::codewords(dacoexec::huffman::make_canonical_codebook({}));
+  auto empty = std::vector<std::byte>{}
+               | dacoexec::detail::huffman::views::codewords(dacoexec::detail::huffman::make_canonical_codebook({}));
   REQUIRE(empty.begin() == empty.end());
 }
 
@@ -848,14 +858,15 @@ TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bi
   std::vector<char> const input{ 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'D' };
   constexpr unsigned expected_padding = 1;
   std::vector<std::byte> const expected{ std::byte{ 0x05 }, std::byte{ 0x6E } };
-  for (auto block : input | dacoexec::views::blocks(input.size())) {
-    auto const lengths = dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(block.bytes_));
-    auto const book = dacoexec::huffman::make_canonical_codebook(lengths);
+  for (auto block : input | dacoexec::detail::views::blocks(input.size())) {
+    auto const lengths =
+      dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(block.bytes_));
+    auto const book = dacoexec::detail::huffman::make_canonical_codebook(lengths);
     auto const saved = book.lengths();
-    for (auto const &candidate : { book, dacoexec::huffman::make_canonical_codebook(saved) }) {
+    for (auto const &candidate : { book, dacoexec::detail::huffman::make_canonical_codebook(saved) }) {
       std::vector<std::byte> output;
       dacoexec::bit_writer writer{ std::back_inserter(output) };
-      for (auto const word : block.bytes_ | dacoexec::huffman::views::codewords(candidate)) {
+      for (auto const word : block.bytes_ | dacoexec::detail::huffman::views::codewords(candidate)) {
         writer.write_bits({ .value_ = word.bits_, .bit_count_ = word.length_ });
       }
       REQUIRE(writer.finish() == expected_padding);
@@ -869,14 +880,14 @@ TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bi
 TEST_CASE("codewords source begin and increment failures permanently end iteration", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const book = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
+  auto const book = dacoexec::detail::huffman::make_canonical_codebook(
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
 
   SECTION("begin failure")
   {
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_begin_ = true;
-    auto view = byte_source{ input, stats } | dacoexec::huffman::views::codewords(book);
+    auto view = byte_source{ input, stats } | dacoexec::detail::huffman::views::codewords(book);
     REQUIRE_THROWS_AS(view.begin(), std::ios_base::failure);
     stats->fail_at_begin_ = false;
     REQUIRE(view.begin() == view.end());
@@ -889,7 +900,7 @@ TEST_CASE("codewords source begin and increment failures permanently end iterati
   {
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_increment_ = 1;
-    auto view = byte_source{ input, stats } | dacoexec::huffman::views::codewords(book);
+    auto view = byte_source{ input, stats } | dacoexec::detail::huffman::views::codewords(book);
     auto cursor = view.begin();
     auto alias = cursor;
     REQUIRE(*cursor == test_detail::canonical_word(book, 0));
@@ -912,14 +923,14 @@ TEST_CASE("codewords preserves negative signed character byte values", "[huffman
   std::array<signed char, 2> const input{ std::bit_cast<signed char>(high_bit), std::bit_cast<signed char>(all_bits) };
   REQUIRE(input.front() < 0);
   REQUIRE(input.back() < 0);
-  auto const book = dacoexec::huffman::make_canonical_codebook(
-    dacoexec::huffman::build_code_lengths(dacoexec::huffman::count_frequencies(input)));
-  auto view = input | dacoexec::huffman::views::codewords(book);
+  auto const book = dacoexec::detail::huffman::make_canonical_codebook(
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
+  auto view = input | dacoexec::detail::huffman::views::codewords(book);
   auto cursor = view.begin();
-  REQUIRE(*cursor == dacoexec::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
+  REQUIRE(*cursor == dacoexec::detail::huffman::codeword{ .bits_ = 0U, .length_ = 1 });
   REQUIRE(*cursor == test_detail::canonical_word(book, high_bit));
   ++cursor;
-  REQUIRE(*cursor == dacoexec::huffman::codeword{ .bits_ = 1U, .length_ = 1 });
+  REQUIRE(*cursor == dacoexec::detail::huffman::codeword{ .bits_ = 1U, .length_ = 1 });
   REQUIRE(*cursor == test_detail::canonical_word(book, all_bits));
   ++cursor;
   REQUIRE(cursor == view.end());

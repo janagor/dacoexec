@@ -1,7 +1,7 @@
 #include "fixtures.hpp"
 
-#include <dacoexec/ans/execution.hpp>
-#include <dacoexec/ans/format.hpp>
+#include <dacoexec/detail/ans/execution.hpp>
+#include <dacoexec/detail/ans/format.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
 
@@ -47,14 +47,15 @@ auto main(int argc, char **argv) -> int
       });
     counting_sink sink;
     exec::static_thread_pool pool{ workers };
-    auto result = stdexec::sync_wait(dacoexec::ans::encode_parallel_on(
+    auto result = stdexec::sync_wait(dacoexec::detail::ans::encode_parallel_on(
       pool.get_scheduler(), source, sink, { .block_size_ = block_size, .max_in_flight_ = in_flight }));
     if (!result) { throw std::runtime_error("Incomplete memory probe"); }
     auto const &[statistics] = *result;
     if (statistics.input_bytes_ != size) { throw std::runtime_error("Incomplete memory probe"); }
     if (uniform) {
-      auto const raw_archive_size = size + (statistics.frames_ * dacoexec::ans::frame_header_size)
-                                    + dacoexec::ans::archive_header_size + dacoexec::ans::frame_header_size;
+      auto const raw_archive_size = size + (statistics.frames_ * dacoexec::detail::ans::frame_header_size)
+                                    + dacoexec::detail::ans::archive_header_size
+                                    + dacoexec::detail::ans::frame_header_size;
       if (sink.size_ != raw_archive_size) {
         throw std::runtime_error("Uniform memory probe did not use RAW throughout");
       }

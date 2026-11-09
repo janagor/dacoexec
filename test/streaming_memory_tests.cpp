@@ -1,6 +1,6 @@
-#include <dacoexec/huffman/format.hpp>
-#include <dacoexec/huffman/stream.hpp>
-#include <dacoexec/io/output_sink.hpp>
+#include <dacoexec/detail/huffman/format.hpp>
+#include <dacoexec/detail/huffman/stream.hpp>
+#include <dacoexec/detail/io/output_sink.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -107,7 +107,7 @@ auto operator delete[](void *pointer,
 { deallocate(pointer); }
 
 namespace {
-namespace huffman = dacoexec::huffman;
+namespace huffman = dacoexec::detail::huffman;
 
 struct checking_sink
 {
@@ -119,7 +119,7 @@ struct checking_sink
     if (check_zero_ && std::ranges::any_of(bytes, [](auto byte) -> bool { return byte != std::byte{ 0 }; })) {
       throw std::logic_error("Decoded content mismatch");
     }
-    huffman::detail::checked_add(count_, bytes.size());
+    huffman::checked_add(count_, bytes.size());
   }
 };
 
@@ -140,7 +140,7 @@ auto exercise(std::uint64_t size) -> std::size_t
   auto make_frame = [](std::size_t length) -> std::vector<std::byte> {
     auto frame = huffman::encode_frame({ 0, std::vector<std::byte>(length, std::byte{ 0 }) });
     std::vector<std::byte> bytes;
-    dacoexec::io::iterator_sink sink(std::back_inserter(bytes));
+    dacoexec::detail::io::iterator_sink sink(std::back_inserter(bytes));
     huffman::write_frame(sink, frame);
     return bytes;
   };

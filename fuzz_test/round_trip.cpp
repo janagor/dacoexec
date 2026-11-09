@@ -1,6 +1,6 @@
-#include <dacoexec/huffman/block.hpp>
-#include <dacoexec/huffman/stream.hpp>
-#include <dacoexec/io/output_sink.hpp>
+#include <dacoexec/detail/huffman/block.hpp>
+#include <dacoexec/detail/huffman/stream.hpp>
+#include <dacoexec/detail/io/output_sink.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace {
-namespace huffman = dacoexec::huffman;
+namespace huffman = dacoexec::detail::huffman;
 constexpr std::size_t input_limit = 65536;
 constexpr std::size_t output_limit = input_limit;
 constexpr std::size_t stream_block_size = 1024;
@@ -35,10 +35,10 @@ auto round_trip(std::span<std::uint8_t const> input) -> void
 auto stream_round_trip(std::span<std::uint8_t const> input) -> void
 {
   std::vector<std::byte> archive;
-  dacoexec::io::iterator_sink sink{ std::back_inserter(archive) };
+  dacoexec::detail::io::iterator_sink sink{ std::back_inserter(archive) };
   auto const compressed = huffman::compress_stream(input, sink, { .block_size_ = stream_block_size });
   std::vector<std::byte> decoded;
-  dacoexec::io::iterator_sink output{ std::back_inserter(decoded) };
+  dacoexec::detail::io::iterator_sink output{ std::back_inserter(decoded) };
   auto const statistics = huffman::decompress_stream(
     archive, output, { .max_frame_size_ = stream_block_size, .max_output_bytes_ = output_limit });
   if (statistics.output_bytes_ != input.size() || compressed.output_bytes_ != archive.size()

@@ -1,7 +1,7 @@
 #ifndef DACOEXEC_CLI_TEMPORARY_OUTPUT_HPP
 #define DACOEXEC_CLI_TEMPORARY_OUTPUT_HPP
 
-#include <dacoexec/detail/error.hpp>
+#include <dacoexec/error.hpp>
 
 #include <cstddef>
 #include <cstdio>

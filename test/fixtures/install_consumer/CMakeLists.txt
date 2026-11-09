@@ -103,12 +103,49 @@ endif()
 add_executable(
   consumer
   main.cpp
-  canonical_header.cpp
-  codewords_header.cpp
-  block_header.cpp
-  decode_header.cpp
-  stream_header.cpp)
+  error_header.cpp
+  huffman_header.cpp
+  ans_header.cpp
+  views_header.cpp
+  bit_header.cpp)
 target_link_libraries(consumer PRIVATE dacoexec::dacoexec)
 
 enable_testing()
 add_test(NAME consumer.runs COMMAND consumer)
+
+# Imported targets supply only installed include directories. No PCH or unity
+# compilation can hide missing dependencies in these single-header units.
+set(standalone_header_sources "")
+file(
+  GENERATE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/dacoexec_hpp.cpp"
+  CONTENT "#include <dacoexec/dacoexec.hpp>\n")
+list(APPEND standalone_header_sources "${CMAKE_CURRENT_BINARY_DIR}/dacoexec_hpp.cpp")
+file(
+  GENERATE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/huffman_hpp.cpp"
+  CONTENT "#include <dacoexec/huffman.hpp>\n")
+list(APPEND standalone_header_sources "${CMAKE_CURRENT_BINARY_DIR}/huffman_hpp.cpp")
+file(
+  GENERATE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ans_hpp.cpp"
+  CONTENT "#include <dacoexec/ans.hpp>\n")
+list(APPEND standalone_header_sources "${CMAKE_CURRENT_BINARY_DIR}/ans_hpp.cpp")
+file(
+  GENERATE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/views_hpp.cpp"
+  CONTENT "#include <dacoexec/views.hpp>\n")
+list(APPEND standalone_header_sources "${CMAKE_CURRENT_BINARY_DIR}/views_hpp.cpp")
+file(
+  GENERATE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bit_hpp.cpp"
+  CONTENT "#include <dacoexec/bit.hpp>\n")
+list(APPEND standalone_header_sources "${CMAKE_CURRENT_BINARY_DIR}/bit_hpp.cpp")
+file(
+  GENERATE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/error_hpp.cpp"
+  CONTENT "#include <dacoexec/error.hpp>\n")
+list(APPEND standalone_header_sources "${CMAKE_CURRENT_BINARY_DIR}/error_hpp.cpp")
+add_library(installed_public_headers OBJECT ${standalone_header_sources})
+target_link_libraries(installed_public_headers PRIVATE dacoexec::dacoexec)
+set_target_properties(installed_public_headers PROPERTIES UNITY_BUILD OFF DISABLE_PRECOMPILE_HEADERS ON)

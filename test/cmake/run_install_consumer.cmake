@@ -36,13 +36,21 @@ endif()
 if(NOT EXISTS "${prefix_a}/include/dacoexec/dacoexec.hpp")
   message(FATAL_ERROR "Installed public header is missing from ${prefix_a}")
 endif()
-if(NOT EXISTS "${prefix_a}/include/dacoexec/huffman/frequency.hpp"
-   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/tree.hpp"
-   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/canonical.hpp"
-   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/codewords_view.hpp"
-   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/block.hpp"
-   OR NOT EXISTS "${prefix_a}/include/dacoexec/huffman/decode_view.hpp")
-  message(FATAL_ERROR "Installed Huffman headers are missing from ${prefix_a}")
+foreach(
+  header
+  huffman.hpp
+  ans.hpp
+  views.hpp
+  bit.hpp
+  error.hpp
+  detail/huffman/tree.hpp
+  detail/ans/format.hpp)
+  if(NOT EXISTS "${prefix_a}/include/dacoexec/${header}")
+    message(FATAL_ERROR "Installed facade or implementation dependency is missing: ${header}")
+  endif()
+endforeach()
+if(EXISTS "${prefix_a}/include/dacoexec/huffman/tree.hpp")
+  message(FATAL_ERROR "Legacy non-facade header was installed outside detail")
 endif()
 if(EXISTS "${prefix_a}/include/dacoexec/sample_library.hpp" OR EXISTS
                                                                "${prefix_a}/include/dacoexec/sample_library_export.hpp")
