@@ -3,6 +3,7 @@
 #define DACOEXEC_HUFFMAN_DETAIL_TREE_BUILDER_HPP
 
 #include <algorithm>
+#include <dacoexec/detail/adt/static_priority_queue.hpp>
 #include <dacoexec/detail/huffman/types.hpp>
 #include <iterator>
 #include <stdexcept>
@@ -55,29 +56,7 @@ struct heap_order
 
 // C++20 std::priority_queue is not constexpr. Fixed storage also preserves
 // allocation-free construction; the forest never exceeds alphabet_size entries.
-class tree_priority_queue
-{
-public:
-  [[nodiscard]] constexpr auto size() const noexcept -> std::size_t { return size_; }
-
-  constexpr auto push(heap_entry const &entry) -> void
-  {
-    entries_.at(size_) = entry;
-    ++size_;
-    std::push_heap(entries_.begin(), std::next(entries_.begin(), static_cast<std::ptrdiff_t>(size_)), heap_order{});
-  }
-
-  [[nodiscard]] constexpr auto pop() -> heap_entry
-  {
-    std::pop_heap(entries_.begin(), std::next(entries_.begin(), static_cast<std::ptrdiff_t>(size_)), heap_order{});
-    --size_;
-    return entries_.at(size_);
-  }
-
-private:
-  std::array<heap_entry, alphabet_size> entries_{};
-  std::size_t size_ = 0;
-};
+using tree_priority_queue = adt::static_priority_queue<heap_entry, alphabet_size, heap_order>;
 
 // Builds a Huffman forest in caller-owned storage for one length computation.
 template<class NodeStorage> class length_builder

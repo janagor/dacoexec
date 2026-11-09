@@ -44,6 +44,7 @@ add_executable(
   ans_tests.cpp
   tans_tests.cpp
   codec_base_tests.cpp
+  codec_infrastructure_tests.cpp
   ranges_tests.cpp
   bit_tests.cpp
   integer_coding_tests.cpp
