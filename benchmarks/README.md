@@ -92,6 +92,68 @@ sequential encoding before timing. `dacoexec_ans_stream_memory` accepts the same
 arguments as `dacoexec_stream_memory` for separate-process peak-RSS comparisons.
 No benchmark results are claimed until these executables have been built and run.
 
+`dacoexec_arithmetic_benchmarks` provides a common static-range/Huffman/rANS/tANS
+archive comparison and isolated static-range stages. Run it with:
+
+```sh
+taskset -c 2 out/build/unixlike-clang-bench/benchmarks/dacoexec_arithmetic_benchmarks \
+  --benchmark_min_time=0.5s --benchmark_repetitions=7 \
+  --benchmark_out=results/arithmetic.json --benchmark_out_format=json
+```
+
+Choose a CPU allowed by `taskset -pc $$`; CPU 2 is an example. On platforms
+without `taskset`, use the platform's affinity tool and record the selection.
+Frequency scaling can still introduce noise; compare variation as well as
+medians. Use short runs only for correctness smoke checks.
+
+Synthetic cases use the shared fixtures (including `binary_skewed`), seed 1729,
+and 64 KiB or 1 MiB of original input. The second numeric argument is the dataset
+index in `fixtures.hpp`; the JSON label also names it. Archive cases use one
+frame of that size and the default codec precision/options. The additional
+`archive/*_multi_*` matrix uses 1 MiB inputs and a fixed 64 KiB block size
+(16 data frames). Dataset 7, labeled `mixed`, cycles uniform, repeated,
+alternating, and skewed 64 KiB blocks; it is measured with both single-frame
+and multi-frame settings. This exercises changing models, serialization sizes,
+and RAW/compressed decisions. `input_bytes`, `block_bytes`, and `frames` make
+the archive configuration explicit in JSON. Before timing, each
+archive is checked for deterministic encoding and a full round trip. Encoding
+and decoding both report `archive_bytes` and `ratio` (complete archive bytes
+divided by original bytes), including model serialization, framing, checksums,
+END, and RAW fallback. Thus incompressible archives measure the selected codec's
+fallback path. They are not payload-only comparisons.
+
+The `micro/*` cases separately measure histogram counting, 12-bit normalization,
+range encoding, range decoding, and model serialization. Counts, models, and
+payloads needed by a stage are prepared outside timing; every range block is
+round-trip checked before timing. Micro encoding/decoding bypass RAW fallback.
+`model_bytes` and `payload_bytes` describe the candidate compressed block even
+when a complete archive would select RAW. Allocations and destruction inside
+each operation remain timed. Normalization and serialization process a fixed
+256-symbol table: they report `items_per_second` (one model per item) and
+nanoseconds per operation, with no `bytes_per_second` counter. Only histogram
+counting and range encoding/decoding report byte throughput.
+
+Byte-processing cases report wall-time throughput in original bytes, with CPU
+time retained in JSON. Fixture generation, correctness checks, and archive precompression are
+outside timing. Use the same executable and machine for all four codecs and
+avoid concurrent build/test workloads. These are sequential in-memory timings;
+the existing execution tests cover ordered parallel arithmetic streams. Initial
+measurements and limitations are recorded in
+[the static range report](../docs/static-range-benchmarks.md).
+
+To add real data, set `DACOEXEC_BENCHMARK_CORPUS` to a directory containing four
+nonempty files named `text`, `source`, `binary`, and `structured`. Their bytes
+and natural lengths are used directly; files are neither resampled nor repeated.
+Keep each file at most 16 MiB for the single-frame configuration. The optional
+`archive_real/*` cases cover every codec, encode/decode, and single/fixed-64-KiB
+blocks (64 cases). Files smaller than 64 KiB still have one frame in both modes.
+File I/O occurs before timing. Missing, empty, or unreadable files fail the
+benchmark preflight. Record source paths, sizes, and SHA-256 hashes with the run;
+an executable's exact bytes depend on the compiler and build configuration.
+Without the environment variable, only the 254 synthetic cases are registered.
+The [longer pinned baseline](../docs/static-range-baseline.md) includes a corpus
+manifest and keeps real-file results separate from synthetic distributions.
+
 `bm_ans_normalize` isolates integer model normalization from counting and payload
 coding. `dacoexec_ans_allocations` prints CSV allocation counts and total requested
 bytes for both codecs over the same matrix, excluding input copies. Its private
