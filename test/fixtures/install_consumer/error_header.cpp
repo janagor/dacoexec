@@ -1,7 +1,7 @@
 #include <dacoexec/error.hpp>
-#include <stdexcept>
+#include <system_error>
 #include <type_traits>
-static_assert(std::is_base_of_v<std::runtime_error, dacoexec::format_error>);
-static_assert(std::is_base_of_v<std::runtime_error, dacoexec::stream_error>);
-static_assert(std::is_base_of_v<std::runtime_error, dacoexec::huffman::decode_error>);
-static_assert(std::is_base_of_v<std::runtime_error, dacoexec::ans::decode_error>);
+static_assert(std::is_base_of_v<std::system_error, dacoexec::exception>);
+static_assert(std::is_error_code_enum_v<dacoexec::errc>);
+
+auto installed_error_code() -> std::error_code { return dacoexec::errc::invalid_archive; }
