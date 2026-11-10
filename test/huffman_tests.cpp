@@ -6,6 +6,7 @@
 #include <dacoexec/error.hpp>
 
 #include <dacoexec/bit.hpp>
+#include <dacoexec/detail/adt/huffman_tree.hpp>
 #include <dacoexec/detail/huffman/canonical.hpp>
 #include <dacoexec/detail/huffman/tree.hpp>
 #include <dacoexec/detail/memory/node_storage.hpp>
@@ -1084,8 +1085,8 @@ TEST_CASE("typed tree storage preserves deterministic lengths", "[huffman][alloc
     std::string_view{ "ABCD" } };
   for (auto const sample : samples) {
     auto const frequencies = dacoexec::detail::model::count_frequencies(sample);
-    dacoexec::detail::huffman::static_tree_arena arena;
-    dacoexec::detail::huffman::dynamic_tree_allocator<> dynamic;
+    dacoexec::detail::adt::static_huffman_tree_arena arena;
+    dacoexec::detail::adt::dynamic_huffman_tree_allocator<> dynamic;
     auto const expected = dacoexec::detail::huffman::build_code_lengths(frequencies);
     REQUIRE(dacoexec::detail::huffman::build_code_lengths(frequencies, arena) == expected);
     REQUIRE(dacoexec::detail::huffman::build_code_lengths(frequencies, dynamic) == expected);
@@ -1094,8 +1095,8 @@ TEST_CASE("typed tree storage preserves deterministic lengths", "[huffman][alloc
 
   dacoexec::detail::model::frequency_table uniform{};
   uniform.fill(1);
-  dacoexec::detail::huffman::static_tree_arena arena;
-  dacoexec::detail::huffman::dynamic_tree_allocator<> dynamic;
+  dacoexec::detail::adt::static_huffman_tree_arena arena;
+  dacoexec::detail::adt::dynamic_huffman_tree_allocator<> dynamic;
   REQUIRE(dacoexec::detail::huffman::build_code_lengths(uniform, dynamic)
           == dacoexec::detail::huffman::build_code_lengths(uniform, arena));
   constexpr auto full_tree_nodes = (dacoexec::detail::model::alphabet_size * 2U) - 1U;
@@ -1105,7 +1106,7 @@ TEST_CASE("typed tree storage preserves deterministic lengths", "[huffman][alloc
 
 TEST_CASE("typed node arenas reject exhaustion without invalidating nodes", "[huffman][allocation]")
 {
-  using node = dacoexec::detail::huffman::static_tree_arena::value_type;
+  using node = dacoexec::detail::adt::static_huffman_tree_arena::value_type;
   constexpr std::size_t leaf_capacity = 2;
   dacoexec::detail::memory::static_node_arena<node, leaf_capacity> arena;
   auto const frequencies = dacoexec::detail::model::count_frequencies(std::string_view{ "AB" });
@@ -1131,11 +1132,11 @@ TEST_CASE("typed node arenas reject exhaustion without invalidating nodes", "[hu
 
 TEST_CASE("dynamic tree storage releases PMR nodes after success and overflow", "[huffman][allocation]")
 {
-  using node = dacoexec::detail::huffman::static_tree_arena::value_type;
+  using node = dacoexec::detail::adt::static_huffman_tree_arena::value_type;
   using allocator = std::pmr::polymorphic_allocator<node>;
   counting_node_resource resource;
   {
-    dacoexec::detail::huffman::dynamic_tree_allocator<allocator> storage{ allocator{ &resource } };
+    dacoexec::detail::adt::dynamic_huffman_tree_allocator<allocator> storage{ allocator{ &resource } };
     auto const frequencies = dacoexec::detail::model::count_frequencies(std::string_view{ "AAAAABBCD" });
     REQUIRE(dacoexec::detail::huffman::build_code_lengths(frequencies, storage)
             == dacoexec::detail::huffman::build_code_lengths(frequencies));
@@ -1143,7 +1144,7 @@ TEST_CASE("dynamic tree storage releases PMR nodes after success and overflow", 
   }
   REQUIRE(resource.outstanding() == 0);
   {
-    dacoexec::detail::huffman::dynamic_tree_allocator<allocator> storage{ allocator{ &resource } };
+    dacoexec::detail::adt::dynamic_huffman_tree_allocator<allocator> storage{ allocator{ &resource } };
     dacoexec::detail::model::frequency_table frequencies{};
     frequencies.at(0) = std::numeric_limits<std::uint64_t>::max();
     frequencies.at(1) = 1;

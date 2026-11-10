@@ -43,6 +43,7 @@ foreach(
   views.hpp
   bit.hpp
   error.hpp
+  detail/adt/huffman_tree.hpp
   detail/huffman/tree.hpp
   detail/ans/format.hpp)
   if(NOT EXISTS "${prefix_a}/include/dacoexec/${header}")

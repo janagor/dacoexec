@@ -122,9 +122,10 @@ loop, reserves cumulative output limits before scheduling, and commits verified
 batches in input order. Shared parallel sources live in `detail/codec/parallel_execution.hpp`;
 codec-specific scheduler adapters live in `detail/{ans,huffman}/parallel_execution.hpp`.
 Frame views retain their individual iterator ownership semantics.
-The constexpr fixed-capacity priority queue lives in `detail/adt/`. Typed node ownership lives
-in `detail/memory/`; it has no codec dependency. Huffman keeps its tree-specific
-storage aliases beside tree construction. Byte-frequency counting, normalized frequency
+The constexpr fixed-capacity priority queue and Huffman tree structure live in `detail/adt/`.
+The tree header defines its node, capacity, and typed storage aliases. Typed node ownership lives
+in `detail/memory/`; it has no codec dependency. Huffman code-length construction stays in
+`detail/huffman/`. Byte-frequency counting, normalized frequency
 models, and normalization helpers live in `detail/model/` under `dacoexec::detail::model`.
 Huffman builds code lengths from the shared raw counts; ANS normalizes those counts
 to a power-of-two total. Codec-specific validation and wire formats (including ANS

@@ -4,18 +4,10 @@
 #ifndef DACOEXEC_HUFFMAN_TREE_HPP
 #define DACOEXEC_HUFFMAN_TREE_HPP
 
+#include <dacoexec/detail/adt/huffman_tree.hpp>
 #include <dacoexec/detail/huffman/tree_builder.hpp>
-#include <dacoexec/detail/memory/node_storage.hpp>
+#include <dacoexec/detail/huffman/types.hpp>
 #include <dacoexec/detail/model/frequency.hpp>
-
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <iterator>
-#include <limits>
-#include <memory>
-#include <stdexcept>
 
 namespace dacoexec::detail::huffman {
 
@@ -42,15 +34,6 @@ namespace dacoexec::detail::huffman {
  */
 [[nodiscard]] constexpr auto build_code_lengths(model::frequency_table const &frequencies) -> code_length_table;
 
-
-/** Fixed-capacity typed storage for one complete Huffman tree. */
-using static_tree_arena =
-  memory::static_node_arena<::dacoexec::detail::huffman::tree_node, ::dacoexec::detail::huffman::max_tree_nodes>;
-
-/** Dynamically owned nodes; a runtime allocator such as PMR can be supplied. */
-template<class Allocator = std::allocator<::dacoexec::detail::huffman::tree_node>>
-using dynamic_tree_allocator = memory::dynamic_node_allocator<::dacoexec::detail::huffman::tree_node, Allocator>;
-
 /**
  * Build with caller-owned typed storage. Existing nodes remain alive; new nodes
  * are appended. Storage must keep node addresses stable until this call returns.
@@ -63,7 +46,7 @@ template<class NodeStorage>
 
 [[nodiscard]] constexpr auto build_code_lengths(model::frequency_table const &frequencies) -> code_length_table
 {
-  static_tree_arena storage;
+  adt::static_huffman_tree_arena storage;
   return build_code_lengths(frequencies, storage);
 }
 

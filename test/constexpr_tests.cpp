@@ -12,6 +12,7 @@
 
 #include <dacoexec/detail/model/frequency.hpp>
 
+#include <dacoexec/detail/adt/huffman_tree.hpp>
 #include <dacoexec/detail/huffman/tree.hpp>
 
 #include <dacoexec/bit.hpp>
@@ -313,8 +314,8 @@ static_assert(
 
 constexpr auto typed_tree_storage_matches() -> bool
 {
-  dacoexec::detail::huffman::static_tree_arena arena;
-  dacoexec::detail::huffman::dynamic_tree_allocator<> dynamic;
+  dacoexec::detail::adt::static_huffman_tree_arena arena;
+  dacoexec::detail::adt::dynamic_huffman_tree_allocator<> dynamic;
   auto const expected = dacoexec::detail::huffman::build_code_lengths(huffman_frequencies);
   return dacoexec::detail::huffman::build_code_lengths(huffman_frequencies, arena) == expected
          && dacoexec::detail::huffman::build_code_lengths(huffman_frequencies, dynamic) == expected
@@ -322,9 +323,9 @@ constexpr auto typed_tree_storage_matches() -> bool
 }
 
 static_assert(typed_tree_storage_matches());
-static_assert(!std::is_copy_constructible_v<dacoexec::detail::huffman::static_tree_arena>);
-static_assert(!std::is_move_constructible_v<dacoexec::detail::huffman::static_tree_arena>);
-static_assert(!std::is_copy_constructible_v<dacoexec::detail::huffman::dynamic_tree_allocator<>>);
-static_assert(!std::is_move_constructible_v<dacoexec::detail::huffman::dynamic_tree_allocator<>>);
+static_assert(!std::is_copy_constructible_v<dacoexec::detail::adt::static_huffman_tree_arena>);
+static_assert(!std::is_move_constructible_v<dacoexec::detail::adt::static_huffman_tree_arena>);
+static_assert(!std::is_copy_constructible_v<dacoexec::detail::adt::dynamic_huffman_tree_allocator<>>);
+static_assert(!std::is_move_constructible_v<dacoexec::detail::adt::dynamic_huffman_tree_allocator<>>);
 
 auto main() -> int { return 0; }

@@ -3,37 +3,15 @@
 #define DACOEXEC_HUFFMAN_DETAIL_TREE_BUILDER_HPP
 
 #include <algorithm>
+#include <array>
+#include <dacoexec/detail/adt/huffman_tree.hpp>
 #include <dacoexec/detail/adt/static_priority_queue.hpp>
 #include <dacoexec/detail/huffman/types.hpp>
 #include <dacoexec/error.hpp>
-#include <iterator>
-#include <stdexcept>
+#include <limits>
 
 namespace dacoexec::detail::huffman {
 
-
-// 256 leaves plus at most 255 internal nodes.
-inline constexpr std::size_t max_tree_nodes = (model::alphabet_size * 2U) - 1U;
-
-// An internal node has no symbol.
-inline constexpr std::uint16_t invalid_symbol = std::numeric_limits<std::uint16_t>::max();
-
-inline constexpr std::size_t expected_tree_nodes = 511U;
-static_assert(max_tree_nodes == expected_tree_nodes);
-static_assert(max_tree_nodes < invalid_symbol);
-static_assert(model::alphabet_size - 1U <= std::numeric_limits<std::uint8_t>::max());
-
-// Temporary node used only while deriving code lengths.
-struct tree_node
-{
-  std::uint64_t frequency_ = 0;
-  std::uint16_t min_symbol_ = 0;
-  tree_node const *left_ = nullptr;
-  tree_node const *right_ = nullptr;
-  std::uint16_t symbol_ = invalid_symbol;
-
-  [[nodiscard]] constexpr auto is_leaf() const noexcept -> bool { return left_ == nullptr && right_ == nullptr; }
-};
 
 // Min-heap key. Lower frequency, then lower min_symbol, then lower node_index.
 struct heap_entry
@@ -41,7 +19,7 @@ struct heap_entry
   std::uint64_t frequency_ = 0;
   std::uint16_t min_symbol_ = 0;
   std::uint16_t node_index_ = 0;
-  tree_node const *node_ = nullptr;
+  adt::huffman_tree_node const *node_ = nullptr;
 };
 
 // Inverted comparison so the priority queue keeps the minimum key at the front.
@@ -79,7 +57,7 @@ private:
   constexpr auto add_leaf(std::uint16_t symbol, std::uint64_t frequency) -> void
   {
     auto const index = node_count_;
-    auto const *node = nodes_->create(tree_node{
+    auto const *node = nodes_->create(adt::huffman_tree_node{
       .frequency_ = frequency,
       .min_symbol_ = symbol,
       .left_ = nullptr,
@@ -103,33 +81,33 @@ private:
     std::uint16_t const min_symbol = std::min(first.node_->min_symbol_, second.node_->min_symbol_);
     auto const index = node_count_;
     // The first popped node is the left child and the second is the right child.
-    auto const *node = nodes_->create(tree_node{
+    auto const *node = nodes_->create(adt::huffman_tree_node{
       .frequency_ = frequency,
       .min_symbol_ = min_symbol,
       .left_ = first.node_,
       .right_ = second.node_,
-      .symbol_ = invalid_symbol,
+      .symbol_ = adt::invalid_huffman_symbol,
     });
     ++node_count_;
     queue_.push(heap_entry{ .frequency_ = frequency, .min_symbol_ = min_symbol, .node_index_ = index, .node_ = node });
   }
 
-  [[nodiscard]] static constexpr auto depths_from(tree_node const *root) -> code_length_table
+  [[nodiscard]] static constexpr auto depths_from(adt::huffman_tree_node const *root) -> code_length_table
   {
     struct frame
     {
-      tree_node const *node_ = nullptr;
+      adt::huffman_tree_node const *node_ = nullptr;
       std::uint16_t depth_ = 0;
     };
 
     code_length_table lengths{};
-    std::array<frame, max_tree_nodes> stack{};
+    std::array<frame, adt::max_huffman_tree_nodes> stack{};
     std::size_t top = 1;
     stack.at(0) = frame{ .node_ = root, .depth_ = 0 };
     while (top != 0) {
       frame const current = stack.at(top - 1);
       --top;
-      tree_node const &node = *current.node_;
+      adt::huffman_tree_node const &node = *current.node_;
       if (node.is_leaf()) {
         lengths.at(node.symbol_) = static_cast<std::uint8_t>(current.depth_);
         continue;
