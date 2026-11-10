@@ -1,5 +1,60 @@
 # Reproducible codec measurements
 
+`dacoexec_arithmetic_adaptive_model_benchmarks` compares the cumulative-array
+and Fenwick-tree models at 64 KiB and 1 MiB. Its four deterministic inputs are repeated
+`0x00`, repeated `0xFF`, uniform bytes, and skewed bytes (zero except for a
+1/16 chance of a uniformly selected byte). Generation uses mt19937 seed 1729.
+
+Each representation has five operations, registered as
+`array|fenwick/operation/distribution/size` (80 cases total):
+
+- `updates`: update frequencies, including automatic rescaling.
+- `lookup`: find a symbol in a frozen, fully trained model.
+- `interval_lookup`: retrieve cumulative, frequency and total using the common
+  `interval_for(symbol)` interface on that frozen model.
+- `encode_transition`: retrieve the current interval, then update the symbol.
+- `decode_transition`: find the symbol, retrieve its interval, then update it.
+
+Mutable operations reset to a fresh model with timing paused each iteration.
+Input generation, frozen-model training, trace allocation and correctness checks
+are outside timing. Seed 42 samples cumulative slots within the reference
+array model's intervals. Frozen lookup uses its final state; the decoding
+transition uses its changing state before every update. Both strategies thus
+receive identical valid slots, including through rescaling. Every candidate's
+intervals, symbols and final frequencies are checked against the reference
+before timing. Checksums keep retrieved values observable. These are model-only
+costs; they exclude integer range coding, framing and model initialization.
+
+Use `encode_transition` and `decode_transition` as the primary model-selection
+metrics. Frozen `interval_lookup` is supplementary sustained-throughput data,
+not individual API-call latency: the compiler can hoist invariants, vectorize
+the loop and overlap independent work. Sub-nanosecond per-symbol results can
+reflect those optimizations. Complete adaptive range and archive measurements
+are still needed before choosing the production representation.
+
+The `seconds_per_symbol` counter displays SI units (for example, `18ns`) in the
+console; multiply its JSON value by 1e9 for nanoseconds per symbol. It uses CPU
+time and equals the reciprocal of `items_per_second`. Batch CPU/real times are
+also retained. Compare the same distribution and batch size between strategies.
+
+```sh
+cmake --preset unixlike-clang-bench
+cmake --build out/build/unixlike-clang-bench --target dacoexec_arithmetic_adaptive_model_benchmarks
+taskset -c 2 out/build/unixlike-clang-bench/benchmarks/dacoexec_arithmetic_adaptive_model_benchmarks \
+  --benchmark_min_time=0.5s --benchmark_repetitions=7 \
+  --benchmark_enable_random_interleaving=true \
+  --benchmark_out=results/adaptive-model.json --benchmark_out_format=json
+```
+
+Create `results` first and select an allowed CPU as described below. Initial
+array-model measurements are recorded in [the adaptive model report](../docs/adaptive-model-benchmarks.md);
+the expanded matrix is in [the representation comparison](../docs/adaptive-model-comparison.md).
+Random interleaving mixes repetitions of both representations to reduce
+systematic drift from execution order. Retain individual repetitions in JSON,
+record CPU scaling and other workloads, and compare variability as well as
+medians. The existing report used the shorter, noninterleaved command documented
+there; its measurements have not been replaced by this recommended longer run.
+
 Use `nix develop .#clang`, then:
 
 ```sh

@@ -73,6 +73,46 @@ and decoding with bounded in-flight work.
 The stage and complete-archive benchmark methodology and initial cross-codec
 results are in [static range measurements](static-range-benchmarks.md).
 
+## Adaptive order-0 model
+
+`detail/arithmetic/adaptive_model.hpp` supplies a separate mutable model for
+the same range engine. Construct a fresh `adaptive_model` at each frame boundary.
+Its 256 byte frequencies start at one (total 256); no histogram is needed.
+`frequencies()`, `cumulative()`, and `total()` expose the current intervals,
+and `find_symbol(model, slot)` finds the byte containing a cumulative slot.
+An out-of-range slot reports `invalid_argument`.
+
+Encode or decode using the current interval, then call `update(symbol)` exactly
+once. This increments the symbol frequency and total. A total equal to 32768
+does not trigger rescaling; an update reaching 32769 does. Rescaling replaces
+every frequency with `(frequency + 1) / 2`, then rebuilds cumulative frequencies
+and the total. All frequencies remain positive, including previously unseen
+bytes. The fixed threshold is below the engine's total bound. No floating-point
+arithmetic or serialized initial model is involved. `rescale()` also exposes
+that deterministic operation directly; both sides must apply it identically.
+
+The model owns fixed-size tables and allocates no memory. Updates adjust the
+cumulative entries after the changed symbol; lookup uses binary search. Tests
+check exact threshold behavior, odd and even rounding, repeated rescaling against
+an independent frequency history, and synchronization through the existing range
+engine. This internal model does not yet enable the adaptive public selector or
+define its archive payload adapter.
+
+`fenwick_adaptive_model.hpp` provides an alternative representation with the
+same initialization, updates and rescaling. Both expose `interval_for(symbol)`
+(cumulative, frequency, total) and member `find_symbol(slot)`, so callers need
+not depend on cumulative-table storage. The original array accessors and free
+`find_symbol` overloads remain available for internal compatibility.
+
+The tree stores one-based partial sums: prefix queries and updates take
+O(log 256), and symbol lookup uses binary lifting rather than repeated prefix
+queries. Rescaling rebuilds the tree in O(256). It shares the frequency-halving
+rule and threshold with the array model. Tests run the same model checks for
+both representations, compare arbitrary slots and every slot at checkpoints,
+and require identical encoded range payloads through repeated rescaling.
+The [model comparison](adaptive-model-comparison.md) measures isolated and
+combined transitions; the array remains the default internal model.
+
 ## Static order-0 model
 
 `detail/arithmetic/static_model.hpp` reuses the shared 256-symbol
