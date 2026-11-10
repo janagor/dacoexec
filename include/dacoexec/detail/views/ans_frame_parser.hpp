@@ -16,6 +16,8 @@ namespace dacoexec::detail::support {
 struct ans_frame_format
 {
   using frame_type = ans::encoded_frame;
+  static constexpr auto max_frame_size = ans::max_frame_size;
+  static constexpr auto limit_message = "Invalid DAN1 frame limit";
   static constexpr auto archive_header_size = ans::archive_header_size;
   static constexpr auto frame_header_size = ans::frame_header_size;
   static constexpr auto cursor_message = "DAN1 input cursor is not initialized";
