@@ -304,7 +304,7 @@ TEST_CASE("DAC1 rejects corrupt framing models and payloads", "[arithmetic][arch
   broken = valid;
   broken.push_back(std::byte{ 0 });
   REQUIRE_THROWS_MATCHES(decompress(broken), exception, error_is(errc::invalid_archive));
-  for (auto tag : { 2, 3, 4, 5 }) {
+  for (auto tag : { 3, 4, 5 }) {
     broken = valid;
     broken.at(8) = static_cast<std::byte>(tag);
     REQUIRE_THROWS_MATCHES(
@@ -348,8 +348,7 @@ TEST_CASE("DAC1 enforces output bounds and supported options before publication"
       decompress(valid, { .max_frame_size_ = limit }), exception, error_is(errc::invalid_argument));
     REQUIRE_THROWS_MATCHES(compress({}, { .block_size_ = limit }), exception, error_is(errc::invalid_argument));
   }
-  for (auto coder : { arithmetic::entropy_coder::adaptive_range,
-         arithmetic::entropy_coder::binary,
+  for (auto coder : { arithmetic::entropy_coder::binary,
          arithmetic::entropy_coder::context_binary,
          static_cast<arithmetic::entropy_coder>(255) }) {
     recording_sink sink;

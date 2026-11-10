@@ -28,13 +28,13 @@ struct encoded_block
   block_encoding encoding_ = block_encoding::raw;
   std::uint64_t uncompressed_size_ = 0;
   std::vector<std::byte> payload_;
-  //! Metadata for static_range only; future variants define their own metadata.
+  //! Metadata for static_range only; adaptive_range has no transmitted model.
   std::optional<static_model> model_;
 };
 
 [[nodiscard]] inline auto model_metadata_size(encoded_block const &block) -> std::size_t
 {
-  if (block.encoding_ == block_encoding::raw) { return 0; }
+  if (block.encoding_ == block_encoding::raw || block.encoding_ == block_encoding::adaptive_range) { return 0; }
   if (block.encoding_ != block_encoding::static_range) {
     throw ::dacoexec::exception(::dacoexec::errc::unsupported_coder, "Unsupported arithmetic entropy coder");
   }

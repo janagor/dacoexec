@@ -13,7 +13,7 @@ using ::dacoexec::arithmetic::entropy_coder;
 
 inline auto validate_coder(entropy_coder coder) -> void
 {
-  if (coder != entropy_coder::static_range) {
+  if (coder != entropy_coder::static_range && coder != entropy_coder::adaptive_range) {
     throw ::dacoexec::exception(::dacoexec::errc::unsupported_coder, "Unsupported arithmetic entropy coder");
   }
 }

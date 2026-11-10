@@ -1,10 +1,12 @@
 //! \file
 //! DAC1: eight-byte magic (DAC1 and four zero bytes), followed by frames.
 //! Each frame has a tag and little-endian uint32 output size, payload size,
-//! and uncompressed IEEE CRC32. RAW=0, static range=1, reserved variants=2..4,
+//! and uncompressed IEEE CRC32. RAW=0, static range=1, adaptive range=2, reserved variants=3..4,
 //! END=255. END fields are zero and no bytes follow. Static range stores a
 //! precision byte, LE uint16 entry count, and sorted (symbol, LE uint16
 //! frequency-minus-one) entries before the payload, excluded from payload size.
+//! Adaptive range has no model metadata: all 256 frequencies start at one,
+//! update after each symbol, and rescale above 32768 by rounding halves upward.
 //! Range payloads use the five-byte initialization/finalization contract of the
 //! range engine. Both sizes are bounded to 16 MiB; models reset at each frame.
 
@@ -84,11 +86,11 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
     }
     return;
   }
-  if (header.kind_ == frame_kind::adaptive_range || header.kind_ == frame_kind::binary
-      || header.kind_ == frame_kind::context_binary) {
+  if (header.kind_ == frame_kind::binary || header.kind_ == frame_kind::context_binary) {
     throw ::dacoexec::exception(::dacoexec::errc::unsupported_coder, "Unsupported arithmetic entropy coder");
   }
-  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::static_range) {
+  if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::static_range
+      && header.kind_ != frame_kind::adaptive_range) {
     throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Unknown frame type");
   }
   if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > max_frame_size
@@ -98,7 +100,8 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
   if (header.uncompressed_size_ > limit || header.payload_size_ > limit) {
     throw ::dacoexec::exception(::dacoexec::errc::output_limit_exceeded, "Frame exceeds configured size limit");
   }
-  if (header.kind_ == frame_kind::static_range && header.payload_size_ < range_flush_bytes) {
+  if ((header.kind_ == frame_kind::static_range || header.kind_ == frame_kind::adaptive_range)
+      && header.payload_size_ < range_flush_bytes) {
     throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Truncated range state");
   }
   if (header.kind_ == frame_kind::raw && header.payload_size_ != header.uncompressed_size_) {
@@ -141,7 +144,7 @@ template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame 
       || block.encoding_ != (static_cast<block_encoding>(frame.header_.kind_))) {
     throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Inconsistent encoded frame");
   }
-  if ((block.encoding_ != block_encoding::raw) != block.model_.has_value()) {
+  if ((block.encoding_ == block_encoding::static_range) != block.model_.has_value()) {
     throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Inconsistent arithmetic model metadata");
   }
   write_frame_header(sink, frame.header_);

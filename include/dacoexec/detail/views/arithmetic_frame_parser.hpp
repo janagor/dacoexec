@@ -29,7 +29,8 @@ struct arithmetic_frame_format
 
   template<class Reader> static auto read_metadata(Reader &reader, frame_type &frame) -> void
   {
-    if (frame.header_.kind_ == arithmetic::frame_kind::raw) { return; }
+    frame.block_.encoding_ = static_cast<arithmetic::block_encoding>(frame.header_.kind_);
+    if (frame.header_.kind_ != arithmetic::frame_kind::static_range) { return; }
     auto const prefix = reader.template read_array<3>();
     auto const count = read_u16_le(std::span<std::byte const, 2>{ prefix.data() + 1, 2 });
     if (count == 0 || count > model::alphabet_size) {
