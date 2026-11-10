@@ -1,7 +1,7 @@
 //! \file
 //! Block acquisition and ordered archive writes for parallel codec execution.
-#ifndef DACOEXEC_CODEC_PARALLEL_SOURCE_HPP
-#define DACOEXEC_CODEC_PARALLEL_SOURCE_HPP
+#ifndef DACOEXEC_CODEC_PARALLEL_EXECUTION_HPP
+#define DACOEXEC_CODEC_PARALLEL_EXECUTION_HPP
 
 #include <cstddef>
 #include <dacoexec/detail/codec/stream_statistics.hpp>
@@ -81,4 +81,4 @@ template<std::ranges::view V, io::byte_output_sink Sink, class Format> struct pa
 };
 
 }// namespace dacoexec::detail::codec
-#endif// DACOEXEC_CODEC_PARALLEL_SOURCE_HPP
+#endif// DACOEXEC_CODEC_PARALLEL_EXECUTION_HPP

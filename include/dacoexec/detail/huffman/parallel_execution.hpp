@@ -1,10 +1,10 @@
 //! \file
 //! Optional scheduled parallel compression with ordered frame writes.
 
-#ifndef DACOEXEC_HUFFMAN_PARALLEL_COMPRESSION_HPP
-#define DACOEXEC_HUFFMAN_PARALLEL_COMPRESSION_HPP
+#ifndef DACOEXEC_HUFFMAN_PARALLEL_EXECUTION_HPP
+#define DACOEXEC_HUFFMAN_PARALLEL_EXECUTION_HPP
 
-#include <dacoexec/detail/codec/parallel_source.hpp>
+#include <dacoexec/detail/codec/parallel_execution.hpp>
 #include <dacoexec/detail/execution/ordered_parallel.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 
@@ -75,4 +75,4 @@ template<stdexec::scheduler Scheduler, std::ranges::viewable_range R, io::byte_o
 
 }// namespace dacoexec::detail::huffman
 
-#endif// DACOEXEC_HUFFMAN_PARALLEL_COMPRESSION_HPP
+#endif// DACOEXEC_HUFFMAN_PARALLEL_EXECUTION_HPP

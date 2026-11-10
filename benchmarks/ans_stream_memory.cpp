@@ -1,7 +1,7 @@
 #include "fixtures.hpp"
 
 #include <dacoexec/detail/ans/format.hpp>
-#include <dacoexec/detail/ans/parallel_compression.hpp>
+#include <dacoexec/detail/ans/parallel_execution.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
 
