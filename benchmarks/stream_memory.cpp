@@ -1,7 +1,7 @@
 #include "fixtures.hpp"
 
-#include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/detail/huffman/format.hpp>
+#include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
 
