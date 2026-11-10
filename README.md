@@ -18,6 +18,7 @@ Only declarations documented in these facade headers are supported:
 | `<dacoexec/dacoexec.hpp>` | All dependency-free facades below |
 | `<dacoexec/huffman.hpp>` | Huffman archive compression and decompression |
 | `<dacoexec/ans.hpp>` | ANS archive compression and decompression |
+| `<dacoexec/arithmetic.hpp>` | Static order-0 range archive compression and decompression |
 | `<dacoexec/views.hpp>` | Archive, bit, and integer adaptors |
 | `<dacoexec/bit.hpp>` | MSB-first bit reader, writer, and output iterator |
 | `<dacoexec/error.hpp>` | Archive, I/O, and codec exceptions |
@@ -41,10 +42,11 @@ auto compressed = dacoexec::huffman::compress(input);
 auto restored = dacoexec::huffman::decompress(compressed); // vector<byte>
 ```
 
-`ans::compress` and `ans::decompress` have the same interface. They read and
+`ans::compress` / `ans::decompress` and `arithmetic::compress` /
+`arithmetic::decompress` have the same interface. They read and
 write complete archives, including empty archives, and estimate models
 automatically. Custom ANS probability distributions are not currently public.
-Huffman uses DHF1; ANS uses DAN1. Existing archive bytes and checksum validation
+Huffman uses DHF1, ANS uses DAN1, and arithmetic uses DAC1. Existing archive bytes and checksum validation
 are preserved. Decompression requires the matching codec.
 
 Inputs are viewable ranges of `std::byte`, `char`, `signed char`, `unsigned char`,
@@ -53,7 +55,7 @@ adaptors, move a move-only view when transferring ownership. Convenience
 operations return `std::vector<std::byte>` and materialize the complete result.
 
 For incremental output, use `compress_stream(input, destination, options)` or
-`decompress_stream(archive, destination, options)` in either codec namespace.
+`decompress_stream(archive, destination, options)` in any codec namespace.
 Destinations can be output iterators accepting `std::byte`, `std::ostream`
 objects, or lvalue sink objects providing `void write(std::span<std::byte const>)`.
 
@@ -368,3 +370,31 @@ The ANS facade also supports `dacoexec::ans::entropy_coder::tans` through
 `stream_options::coder_`; the CLI accepts `--algorithm tans`. rANS remains the
 default. See [tANS format and options](docs/tans.md) for table-log limits,
 bitstream details, and compatibility with older DAN1 readers.
+
+Arithmetic coding uses the DAC1 archive format and a static order-0 integer range
+coder. Include `<dacoexec/arithmetic.hpp>` for `arithmetic::compress`,
+`decompress`, `compress_stream`, and `decompress_stream`. Options, byte range
+support, sink types, statistics, and verification follow the Huffman and ANS
+conventions. `stream_options::coder_` defaults to `entropy_coder::static_range`;
+reserved adaptive and binary selectors report `errc::unsupported_coder`.
+
+```cpp
+auto archive = dacoexec::arithmetic::compress(input, { .block_size_ = 65536 });
+auto restored = dacoexec::arithmetic::decompress(archive);
+auto lazy = input | dacoexec::views::encode::arithmetic()
+                  | dacoexec::views::decode::arithmetic();
+```
+
+With `<dacoexec/execution.hpp>` and `dacoexec::execution`, arithmetic also exposes
+`compress_parallel_on` and `decompress_parallel_on`. They use bounded batches,
+ordered output, and the same lifetime and verification contracts as the other
+codecs. Parallel compression produces the same archive bytes as sequential
+compression with the same block size.
+
+```sh
+dacoexec compress --algorithm arithmetic input.bin output.dac
+dacoexec decompress output.dac restored.bin
+```
+
+The CLI detects DAC1 automatically and applies `--max-output-size` and atomic
+output publication in the same way as its other archive formats.
