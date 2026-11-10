@@ -1,6 +1,7 @@
 #include "error_policy.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/detail/arithmetic/adaptive_range_codec.hpp>
 #include <dacoexec/detail/arithmetic/archive_format.hpp>
 #include <dacoexec/detail/codec/stream.hpp>
 #include <span>
@@ -55,6 +56,16 @@ extern "C" auto LLVMFuzzerTestOneInput(std::uint8_t const *data, std::size_t siz
     static_cast<void>(arithmetic::decode_block(bytes, probabilities, 256, output_limit));
   } catch (dacoexec::exception const &error) {
     if (error.code() != dacoexec::errc::invalid_payload) { throw; }
+  }
+  // Direct adaptive seeds use a LE uint16 symbol count followed by the payload.
+  // The full count range stays below output_limit and can cross rescaling.
+  if (bytes.size() >= 2) {
+    auto const count = std::to_integer<std::size_t>(bytes[0]) | (std::to_integer<std::size_t>(bytes[1]) << 8U);
+    try {
+      static_cast<void>(arithmetic::decode_adaptive_block(bytes.subspan(2), count, output_limit));
+    } catch (dacoexec::exception const &error) {
+      if (error.code() != dacoexec::errc::invalid_payload) { throw; }
+    }
   }
   return 0;
 }

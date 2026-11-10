@@ -48,6 +48,7 @@ add_executable(
   arithmetic_range_tests.cpp
   arithmetic_static_tests.cpp
   arithmetic_adaptive_model_tests.cpp
+  arithmetic_adaptive_tests.cpp
   arithmetic_archive_tests.cpp
   arithmetic_facade_tests.cpp
   model_tests.cpp
@@ -218,11 +219,8 @@ if(dacoexec_BUILD_EXECUTION)
                  TRUE)
   endif()
 
-  add_executable(
-    dacoexec_execution_tests
-    execution_tests.cpp
-    parallel_decompression_tests.cpp
-    arithmetic_execution_tests.cpp)
+  add_executable(dacoexec_execution_tests execution_tests.cpp parallel_decompression_tests.cpp
+                                          arithmetic_execution_tests.cpp)
   dacoexec_suppress_stdexec_stack_escape(dacoexec_execution_tests)
   target_link_libraries(
     dacoexec_execution_tests

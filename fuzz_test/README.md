@@ -68,12 +68,23 @@ limited to 64 KiB so malformed declarations cannot request unbounded allocations
 
 `arithmetic_decoder` exercises bounded DAC1 archive decompression, standalone
 frame headers, static model deserialization, and arbitrary range payloads with a
-fixed valid binary-symbol model. Both per-frame and total decoded output are
+fixed valid binary-symbol model. It also directly decodes adaptive payloads:
+the first two bytes are a little-endian uint16 symbol count, followed by range
+payload bytes. Counts up to 65535 stay within the output limit and allow
+mutations to exercise rescaling without constructing an archive. Both per-frame
+and total decoded output are
 limited to 64 KiB. Archive rejections include reserved variant tags; argument
 errors are unexpected and fail the run. Seeds include independent empty, RAW,
 and complete static golden archives, truncated archives and range payloads,
 standalone headers, and valid and invalid model precision boundaries. The corpus
 utility also generates multi-frame DAC1 seeds from each dataset.
+
+The adaptive corpus contains complete tag `02` archives and direct-payload
+envelopes for 64 repeated bytes and 40000 bytes that cross the first rescale,
+then introduce every previously unseen symbol. These four seeds were calculated
+with an independent Python arbitrary-width range implementation and checked
+against the corpus utility. The complete 67-byte repeated-symbol archive is also
+frozen as a Catch2 golden fixture, including CRC32 and END.
 
 Run just this target with:
 

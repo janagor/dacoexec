@@ -212,18 +212,49 @@ endforeach()
 
 set(arithmetic_archive "${WORK_DIR}/output.dac")
 set(arithmetic_restored "${WORK_DIR}/arithmetic-restored.bin")
-run_success(compress --algorithm arithmetic --block-size 4096 --force "${input}" "${arithmetic_archive}")
-run_success(decompress --force "${arithmetic_archive}" "${arithmetic_restored}")
+run_success(
+  compress
+  --algorithm
+  arithmetic
+  --block-size
+  4096
+  --force
+  "${input}"
+  "${arithmetic_archive}")
+run_success(
+  decompress
+  --force
+  "${arithmetic_archive}"
+  "${arithmetic_restored}")
 file(SHA256 "${arithmetic_restored}" arithmetic_actual)
-if(NOT expected STREQUAL arithmetic_actual)
+if(NOT
+   expected
+   STREQUAL
+   arithmetic_actual)
   message(FATAL_ERROR "Arithmetic CLI round trip differs")
 endif()
-run_failure(decompress --force --max-output-size 0 "${arithmetic_archive}" "${arithmetic_restored}")
+run_failure(
+  decompress
+  --force
+  --max-output-size
+  0
+  "${arithmetic_archive}"
+  "${arithmetic_restored}")
 file(SHA256 "${arithmetic_restored}" arithmetic_preserved)
-if(NOT expected STREQUAL arithmetic_preserved)
+if(NOT
+   expected
+   STREQUAL
+   arithmetic_preserved)
   message(FATAL_ERROR "Failed arithmetic operation replaced existing output")
 endif()
-file(READ "${arithmetic_archive}" arithmetic_bytes HEX)
-if(NOT arithmetic_bytes MATCHES "^44414331")
+file(
+  READ
+  "${arithmetic_archive}"
+  arithmetic_bytes
+  HEX)
+if(NOT
+   arithmetic_bytes
+   MATCHES
+   "^44414331")
   message(FATAL_ERROR "Arithmetic CLI did not write DAC1")
 endif()

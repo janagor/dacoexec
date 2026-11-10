@@ -67,5 +67,29 @@ auto main(int argc, char **argv) -> int
       save(root / "arithmetic_decoder" / (name + "-blocks-" + std::to_string(block_size) + ".dac"), archive);
     }
   }
+  namespace arithmetic = dacoexec::detail::arithmetic;
+  // Keep these counts in uint16 range for the direct-payload fuzz envelope.
+  for (auto count : { std::size_t{ 64 }, std::size_t{ 40000 } }) {
+    std::vector<std::byte> input(count, std::byte{ 'A' });
+    // After the first rescale, introduce every previously unseen symbol.
+    for (std::size_t index = 32513; index < count; ++index) { input[index] = static_cast<std::byte>(index % 256); }
+    auto const name = count == 64 ? "adaptive-repeated" : "adaptive-rescale-unseen";
+    std::vector<std::byte> archive;
+    dacoexec::detail::io::iterator_sink sink{ std::back_inserter(archive) };
+    static_cast<void>(dacoexec::detail::codec::compress_stream<arithmetic::stream_format>(
+      input, sink, { .coder_ = arithmetic::entropy_coder::adaptive_range }));
+    if (archive.size() <= arithmetic::archive_header_size
+        || archive.at(arithmetic::archive_header_size) != std::byte{ 0x02 }) {
+      throw std::runtime_error("Expected adaptive DAC1 frame");
+    }
+    save(root / "arithmetic_decoder" / (std::string(name) + ".dac"), archive);
+    auto const payload = arithmetic::encode_adaptive_block(input);
+    if (arithmetic::decode_adaptive_block(payload, count, count) != input) {
+      throw std::runtime_error("Invalid adaptive fuzz seed");
+    }
+    std::vector<std::byte> envelope{ static_cast<std::byte>(count & 255U), static_cast<std::byte>(count >> 8U) };
+    envelope.insert(envelope.end(), payload.begin(), payload.end());
+    save(root / "arithmetic_decoder" / (std::string(name) + ".payload"), envelope);
+  }
   return 0;
 }
