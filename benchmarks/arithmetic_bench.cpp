@@ -2,6 +2,7 @@
 #include <benchmark/benchmark.h>
 #include <dacoexec/ans.hpp>
 #include <dacoexec/arithmetic.hpp>
+#include <dacoexec/detail/arithmetic/fenwick_adaptive_model.hpp>
 #include <dacoexec/detail/arithmetic/static_range_codec.hpp>
 #include <dacoexec/huffman.hpp>
 
@@ -21,7 +22,7 @@ namespace {
 namespace arithmetic = dacoexec::detail::arithmetic;
 namespace model = dacoexec::detail::model;
 enum class stage { histogram, normalization, encode, decode, serialize };
-enum class codec { static_range, huffman, rans, tans };
+enum class codec { static_range, huffman, rans, tans, adaptive_range };
 using bytes = std::vector<std::byte>;
 
 auto compress(bytes const &input, codec coder, std::size_t block_size) -> bytes
@@ -29,6 +30,9 @@ auto compress(bytes const &input, codec coder, std::size_t block_size) -> bytes
   switch (coder) {
   case codec::static_range:
     return dacoexec::arithmetic::compress(input, { .block_size_ = block_size });
+  case codec::adaptive_range:
+    return dacoexec::arithmetic::compress(
+      input, { .block_size_ = block_size, .coder_ = dacoexec::arithmetic::entropy_coder::adaptive_range });
   case codec::huffman:
     return dacoexec::huffman::compress(input, { .block_size_ = block_size });
   case codec::rans:
@@ -44,6 +48,7 @@ auto decompress(bytes const &archive, codec coder) -> bytes
 {
   switch (coder) {
   case codec::static_range:
+  case codec::adaptive_range:
     return dacoexec::arithmetic::decompress(archive);
   case codec::huffman:
     return dacoexec::huffman::decompress(archive);
@@ -108,6 +113,27 @@ void micro(benchmark::State &state, stage operation)
   state.counters["payload_bytes"] = static_cast<double>(payload.size());
 }
 
+template<class Model> void adaptive_micro(benchmark::State &state, bool decoding)
+{
+  auto const input =
+    fixtures::make(static_cast<std::size_t>(state.range(0)), static_cast<fixtures::dataset>(state.range(1)));
+  auto const payload = arithmetic::encode_adaptive_block<Model>(input);
+  if (payload != arithmetic::encode_adaptive_block(input)
+      || arithmetic::decode_adaptive_block<Model>(payload, input.size(), input.size()) != input) {
+    state.SkipWithError("Adaptive range model compatibility or round trip failed");
+    return;
+  }
+  for (auto unused : state) {
+    auto output = decoding ? arithmetic::decode_adaptive_block<Model>(payload, input.size(), input.size())
+                           : arithmetic::encode_adaptive_block<Model>(input);
+    benchmark::DoNotOptimize(output);
+  }
+  throughput(state, input.size());
+  state.SetLabel(std::string{ fixtures::names.at(static_cast<std::size_t>(state.range(1))) });
+  state.counters["model_bytes"] = 0;
+  state.counters["payload_bytes"] = static_cast<double>(payload.size());
+}
+
 void run_archive(benchmark::State &state, bytes const &input, codec coder, bool decoding, std::size_t block_size)
 {
   auto const encoded = compress(input, coder, block_size);
@@ -146,6 +172,16 @@ void archive(benchmark::State &state, codec coder, bool decoding, bool multi)
     state.SetLabel(std::string{ fixtures::names.at(dataset) });
   }
   run_archive(state, input, coder, decoding, multi ? fixtures::block_sizes.front() : size);
+}
+
+void changing_archive(benchmark::State &state, codec coder, bool decoding)
+{
+  bytes input;
+  for (unsigned symbol = 0; symbol < 8; ++symbol) {
+    input.insert(input.end(), fixtures::block_sizes.front(), static_cast<std::byte>(symbol));
+  }
+  state.SetLabel("changing_distribution");
+  run_archive(state, input, coder, decoding, input.size());
 }
 
 void real_archive(benchmark::State &state, codec coder, bool decoding, bool multi, std::filesystem::path const &path)
@@ -192,6 +228,14 @@ void multi_matrix(benchmark::Benchmark *benchmark)
   benchmark->UseRealTime();
 }
 
+BENCHMARK_CAPTURE(changing_archive, static_range_encode, codec::static_range, false)->UseRealTime();
+BENCHMARK_CAPTURE(changing_archive, static_range_decode, codec::static_range, true)->UseRealTime();
+BENCHMARK_CAPTURE(changing_archive, adaptive_range_encode, codec::adaptive_range, false)->UseRealTime();
+BENCHMARK_CAPTURE(changing_archive, adaptive_range_decode, codec::adaptive_range, true)->UseRealTime();
+BENCHMARK_CAPTURE(adaptive_micro<arithmetic::adaptive_model>, range_encode, false)->Apply(matrix);
+BENCHMARK_CAPTURE(adaptive_micro<arithmetic::adaptive_model>, range_decode, true)->Apply(matrix);
+BENCHMARK_CAPTURE(adaptive_micro<arithmetic::fenwick_adaptive_model>, fenwick_range_encode, false)->Apply(matrix);
+BENCHMARK_CAPTURE(adaptive_micro<arithmetic::fenwick_adaptive_model>, fenwick_range_decode, true)->Apply(matrix);
 BENCHMARK_CAPTURE(micro, histogram, stage::histogram)->Apply(matrix);
 BENCHMARK_CAPTURE(micro, normalization, stage::normalization)->Apply(matrix);
 BENCHMARK_CAPTURE(micro, range_encode, stage::encode)->Apply(matrix);
@@ -199,6 +243,10 @@ BENCHMARK_CAPTURE(micro, range_decode, stage::decode)->Apply(matrix);
 BENCHMARK_CAPTURE(micro, model_serialization, stage::serialize)->Apply(matrix);
 BENCHMARK_CAPTURE(archive, static_range_encode, codec::static_range, false, false)->Apply(archive_matrix);
 BENCHMARK_CAPTURE(archive, static_range_decode, codec::static_range, true, false)->Apply(archive_matrix);
+BENCHMARK_CAPTURE(archive, adaptive_range_encode, codec::adaptive_range, false, false)->Apply(archive_matrix);
+BENCHMARK_CAPTURE(archive, adaptive_range_decode, codec::adaptive_range, true, false)->Apply(archive_matrix);
+BENCHMARK_CAPTURE(archive, adaptive_range_multi_encode, codec::adaptive_range, false, true)->Apply(multi_matrix);
+BENCHMARK_CAPTURE(archive, adaptive_range_multi_decode, codec::adaptive_range, true, true)->Apply(multi_matrix);
 BENCHMARK_CAPTURE(archive, huffman_encode, codec::huffman, false, false)->Apply(archive_matrix);
 BENCHMARK_CAPTURE(archive, huffman_decode, codec::huffman, true, false)->Apply(archive_matrix);
 BENCHMARK_CAPTURE(archive, rans_encode, codec::rans, false, false)->Apply(archive_matrix);
@@ -220,7 +268,7 @@ int main(int argc, char **argv)
   // Corpus files retain their natural order and length. Register them only
   // when requested so an ordinary synthetic run needs no external files.
   if (auto const *directory = std::getenv("DACOEXEC_BENCHMARK_CORPUS")) {
-    constexpr std::array names{ "static_range", "huffman", "rans", "tans" };
+    constexpr std::array names{ "static_range", "huffman", "rans", "tans", "adaptive_range" };
     for (std::size_t index = 0; index < names.size(); ++index) {
       for (auto const *dataset : { "text", "source", "binary", "structured" }) {
         for (bool decoding : { false, true }) {
