@@ -59,7 +59,7 @@ valid when the view is moved. Any parse failure ends the pass permanently.
 The parser validates canonical lengths but leaves payload decoding to the codec.
 Parsed DATA frames receive consecutive `block_.sequence_` values starting at
 zero, independent of their RAW or HUFFMAN encoding. END has no sequence number.
-After sequence 2^64-1, another DATA frame throws `std::overflow_error`; END is
+After sequence 2^64-1, another DATA frame throws `dacoexec::exception` with `errc::numeric_overflow`; END is
 still accepted. Moving the view preserves this counter along with the cursor.
 
 `encode_frame` and `write_frame` expose computation and serialization separately

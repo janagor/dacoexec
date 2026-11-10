@@ -8,7 +8,8 @@ rANS remains the default and its encoding is unchanged.
 `tANS` accepts table logs 8 through 12, with default 10. The setting is ignored
 for rANS in the C++ API. The CLI rejects an explicit `--table-log` unless
 `--algorithm tans` is selected. Invalid tANS table logs are rejected before writing the archive header.
-Unsupported `entropy_coder` values also throw `std::invalid_argument` before writing.
+Invalid table logs throw `dacoexec::exception` with `errc::invalid_argument`.
+Unsupported `entropy_coder` values throw it with `errc::unsupported_coder` before writing.
 RAW fallback includes model and payload costs.
 
 DAN1 tag 2 extends the existing format; older readers reject this tag. Tags 0,

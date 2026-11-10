@@ -80,10 +80,47 @@ Streaming stages data per frame. Decoding verifies each frame before publishing
 it. Source and destination exceptions propagate, and earlier accepted writes
 remain after a later failure.
 
-Catch `dacoexec::format_error` for framing, checksum, and output-limit failures,
-`dacoexec::stream_error` for library-reported I/O failures, and
-`dacoexec::huffman::decode_error` or `dacoexec::ans::decode_error` for malformed
-codec payloads. Invalid options throw `std::invalid_argument`.
+Library-detected failures throw `dacoexec::exception`, derived from
+`std::system_error`. Compare `code()` with the stable `dacoexec::errc` values:
+
+```cpp
+#include <dacoexec/error.hpp>
+
+try {
+    auto output = dacoexec::ans::decompress(archive);
+} catch (dacoexec::exception const& error) {
+    if (error.code() == dacoexec::errc::checksum_mismatch) {
+        // A frame failed verification; its output was not published.
+    } else {
+        throw;
+    }
+}
+```
+
+All library error codes use `dacoexec::category()`, named `"dacoexec"`.
+`invalid_archive`, `truncated_archive`, and `invalid_frame` describe framing;
+`invalid_payload` describes malformed codec blocks; `checksum_mismatch` and
+`output_limit_exceeded` identify verification and resource failures. Invalid
+options use `invalid_argument` or `unsupported_coder`; invalid utility state,
+counter overflow, and reported I/O failures use `invalid_state`,
+`numeric_overflow`, and `io_error`. Fixed queues and arenas use
+`capacity_exceeded`; exhausted bit or integer input uses `truncated_input`.
+A configured unary-prefix bound uses `codeword_limit_exceeded`, independently
+of decoded-output limits.
+Allocation failures, stream exceptions enabled by the caller, and exceptions from client ranges, iterators, and sinks propagate
+unchanged. Parallel errors retain their codes through `std::exception_ptr`;
+cancellation remains a stopped completion.
+
+This replaces the former `format_error`, `stream_error`, codec `decode_error`,
+and library-generated standard validation exceptions. Update handlers for those
+types to catch `dacoexec::exception` and inspect `code()`. Generic
+`std::runtime_error` handlers still work. When catching `std::system_error`,
+check the category before switching on the numeric value.
+
+The header-only category has one identity across translation units within a
+linked program. Identity across independently loaded shared libraries or DLLs
+is not guaranteed; cross-module error-code comparison is not a supported ABI
+contract without a shared category provider.
 
 ## Views and bit I/O
 
