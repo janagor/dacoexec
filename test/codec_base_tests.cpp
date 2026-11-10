@@ -2,11 +2,12 @@
 #include <dacoexec/detail/ans/decoder.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
 #include <dacoexec/detail/ans/encoder.hpp>
+#include <dacoexec/detail/byte_block.hpp>
+#include <dacoexec/detail/codec/concepts.hpp>
 #include <dacoexec/detail/codec/decoder_base.hpp>
 #include <dacoexec/detail/codec/encoder_base.hpp>
 #include <dacoexec/detail/huffman/decoder.hpp>
 #include <dacoexec/detail/huffman/encoder.hpp>
-#include <dacoexec/detail/views/blocks.hpp>
 #include <dacoexec/error.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -20,6 +21,21 @@
 #include <vector>
 
 namespace {
+static_assert(dacoexec::detail::codec::encoded_block<dacoexec::detail::huffman::encoded_block>);
+static_assert(dacoexec::detail::codec::encoded_block<dacoexec::detail::ans::encoded_block>);
+static_assert(!dacoexec::detail::codec::encoded_block<dacoexec::detail::byte_block>);
+static_assert(!dacoexec::detail::codec::encoded_block<dacoexec::detail::ans::encoded_block const>);
+static_assert(!dacoexec::detail::codec::encoded_block<dacoexec::detail::ans::encoded_block &>);
+
+struct borrowed_payload_block
+{
+  std::uint64_t sequence_ = 0;
+  std::uint64_t uncompressed_size_ = 0;
+  std::span<std::byte> payload_;
+};
+
+static_assert(!dacoexec::detail::codec::encoded_block<borrowed_payload_block>);
+
 constexpr std::uint64_t sequence = 42;
 constexpr std::size_t input_size = 4096;
 constexpr std::size_t candidate_size = 16;

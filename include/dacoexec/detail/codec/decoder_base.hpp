@@ -4,7 +4,8 @@
 #define DACOEXEC_CODEC_DECODER_BASE_HPP
 
 #include <cstddef>
-#include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/detail/byte_block.hpp>
+#include <dacoexec/detail/codec/concepts.hpp>
 #include <dacoexec/error.hpp>
 #include <utility>
 
@@ -13,7 +14,7 @@ namespace dacoexec::detail::codec {
 // Derived validates metadata before allocation, identifies RAW, and decodes
 // compressed payloads. Extra arguments are available to validation and decoding.
 // Message hooks preserve codec-specific limit and RAW diagnostics.
-template<typename Derived, typename Block> class decoder_base
+template<typename Derived, encoded_block Block> class decoder_base
 {
 public:
   template<typename... Args>

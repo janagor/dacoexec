@@ -3,7 +3,8 @@
 #ifndef DACOEXEC_CODEC_ENCODER_BASE_HPP
 #define DACOEXEC_CODEC_ENCODER_BASE_HPP
 
-#include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/detail/byte_block.hpp>
+#include <dacoexec/detail/codec/concepts.hpp>
 #include <utility>
 
 namespace dacoexec::detail::codec {
@@ -11,7 +12,7 @@ namespace dacoexec::detail::codec {
 // Derived supplies try_encode(span<byte const>) and metadata_size(Block const &).
 // Candidates contain codec metadata and payload; the base sets source identity.
 // A default-constructed Block must describe RAW with empty codec metadata.
-template<typename Derived, typename Block> class encoder_base
+template<typename Derived, encoded_block Block> class encoder_base
 {
 public:
   [[nodiscard]] auto encode(byte_block block) const -> Block
