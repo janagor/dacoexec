@@ -3,9 +3,10 @@
 #include <dacoexec/detail/integer_coding/common.hpp>
 #include <dacoexec/detail/integer_coding/delta.hpp>
 #include <dacoexec/detail/integer_coding/golomb.hpp>
+#include <dacoexec/detail/integer_coding/positive.hpp>
 #include <dacoexec/detail/integer_coding/rice.hpp>
 #include <dacoexec/detail/integer_coding/sequence.hpp>
-#include <dacoexec/detail/numeric/mapping.hpp>
+#include <dacoexec/detail/integer_coding/zigzag.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 #include <dacoexec/error.hpp>
 
@@ -50,12 +51,13 @@ static_assert(!std::ranges::forward_range<single_pass_numbers>);
 static_assert(!std::copy_constructible<single_pass_numbers>);
 static_assert(!dacoexec::detail::integer_coding::unsigned_integer_range<std::array<std::int64_t, 1>>);
 static_assert(!dacoexec::detail::integer_coding::unsigned_integer_range<std::array<bool, 1>>);
-static_assert(dacoexec::detail::numeric::zigzag_encode(signed_minimum) == unsigned_maximum);
-static_assert(dacoexec::detail::numeric::zigzag_decode(unsigned_maximum) == signed_minimum);
+static_assert(dacoexec::detail::integer_coding::zigzag_encode(signed_minimum) == unsigned_maximum);
+static_assert(dacoexec::detail::integer_coding::zigzag_decode(unsigned_maximum) == signed_minimum);
 static_assert(
-  dacoexec::detail::numeric::zigzag_decode(dacoexec::detail::numeric::zigzag_encode(signed_maximum)) == signed_maximum);
-static_assert(dacoexec::detail::numeric::to_positive(0U) == 1U);
-static_assert(dacoexec::detail::numeric::from_positive(unsigned_maximum) == unsigned_maximum - 1U);
+  dacoexec::detail::integer_coding::zigzag_decode(dacoexec::detail::integer_coding::zigzag_encode(signed_maximum))
+  == signed_maximum);
+static_assert(dacoexec::detail::integer_coding::to_positive(0U) == 1U);
+static_assert(dacoexec::detail::integer_coding::from_positive(unsigned_maximum) == unsigned_maximum - 1U);
 
 constexpr auto constexpr_sequence() -> bool
 {
@@ -115,14 +117,16 @@ TEST_CASE("signed mappings compose with integer coding sequences", "[integer_cod
 {
   constexpr std::array<std::int64_t, 5> signed_values{ 0, -1, 1, -2, signed_maximum };
   for (auto const value : signed_values) {
-    REQUIRE(dacoexec::detail::numeric::zigzag_decode(dacoexec::detail::numeric::zigzag_encode(value)) == value);
+    REQUIRE(
+      dacoexec::detail::integer_coding::zigzag_decode(dacoexec::detail::integer_coding::zigzag_encode(value)) == value);
   }
-  REQUIRE_THROWS_AS(dacoexec::detail::numeric::to_positive(dacoexec::detail::numeric::zigzag_encode(signed_minimum)),
+  REQUIRE_THROWS_AS(
+    dacoexec::detail::integer_coding::to_positive(dacoexec::detail::integer_coding::zigzag_encode(signed_minimum)),
     dacoexec::exception);
-  REQUIRE_THROWS_AS(dacoexec::detail::numeric::from_positive(0U), dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::from_positive(0U), dacoexec::exception);
 
   auto mapped = signed_values | std::views::transform([](std::int64_t value) -> std::uint64_t {
-    return dacoexec::detail::numeric::to_positive(dacoexec::detail::numeric::zigzag_encode(value));
+    return dacoexec::detail::integer_coding::to_positive(dacoexec::detail::integer_coding::zigzag_encode(value));
   });
   std::vector<std::byte> bytes;
   dacoexec::bit_writer writer{ std::back_inserter(bytes) };
@@ -132,10 +136,11 @@ TEST_CASE("signed mappings compose with integer coding sequences", "[integer_cod
   std::vector<std::uint64_t> decoded;
   dacoexec::detail::integer_coding::read_sequence(
     reader, signed_values.size(), std::back_inserter(decoded), [](dacoexec::bit_reader &input_reader) -> std::uint64_t {
-      return dacoexec::detail::numeric::from_positive(dacoexec::detail::integer_coding::read_delta(input_reader));
+      return dacoexec::detail::integer_coding::from_positive(
+        dacoexec::detail::integer_coding::read_delta(input_reader));
     });
   for (std::size_t index = 0; index < signed_values.size(); ++index) {
-    REQUIRE(dacoexec::detail::numeric::zigzag_decode(decoded.at(index)) == signed_values.at(index));
+    REQUIRE(dacoexec::detail::integer_coding::zigzag_decode(decoded.at(index)) == signed_values.at(index));
   }
 }
 
