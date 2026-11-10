@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstddef>
+#include <dacoexec/error.hpp>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
@@ -33,7 +34,7 @@ public:
 
   [[nodiscard]] constexpr auto create(T value) -> T *
   {
-    if (used_ == capacity) { throw std::length_error("Node arena exhausted"); }
+    if (used_ == capacity) { throw ::dacoexec::exception(::dacoexec::errc::capacity_exceeded, "Node arena exhausted"); }
     auto *node = &storage_.at(used_);
     *node = std::move(value);
     ++used_;

@@ -1,7 +1,9 @@
+#include "error_test_utils.hpp"
 #include "huffman_test_utils.hpp"
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/huffman/types.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/huffman/canonical.hpp>
@@ -589,8 +591,8 @@ TEST_CASE("frequency counters reject overflow and keep earlier increments", "[hu
   try {
     dacoexec::detail::huffman::accumulate_frequencies(frequencies, input);
     FAIL("expected frequency overflow");
-  } catch (std::overflow_error const &error) {
-    REQUIRE(std::string_view{ error.what() } == "Huffman frequency counter overflow");
+  } catch (dacoexec::exception const &error) {
+    REQUIRE(error.code() == dacoexec::errc::numeric_overflow);
   }
   REQUIRE(frequencies.at(0x11) == 1);
   REQUIRE(frequencies.at(0x00) == std::numeric_limits<std::uint64_t>::max());
@@ -787,8 +789,8 @@ TEST_CASE("a parent frequency that overflows uint64 is rejected", "[huffman]")
       auto const lengths = dacoexec::detail::huffman::build_code_lengths(frequencies);
       static_cast<void>(lengths);
       FAIL("expected tree frequency overflow");
-    } catch (std::overflow_error const &error) {
-      REQUIRE(std::string_view{ error.what() } == "Huffman tree frequency overflow");
+    } catch (dacoexec::exception const &error) {
+      REQUIRE(error.code() == dacoexec::errc::numeric_overflow);
     }
   };
 
@@ -922,21 +924,21 @@ TEST_CASE("canonical validation rejects invalid trees and reports unsupported wi
 {
   dacoexec::detail::huffman::code_length_table lengths{};
   lengths.at(0) = 2;
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), dacoexec::exception);
   lengths.at(1) = 2;
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), dacoexec::exception);
   lengths.at(0) = 1;
   lengths.at(1) = 1;
   lengths.at(2) = 1;
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), dacoexec::exception);
   constexpr std::size_t unsupported_chain_symbols = 40;
   auto const deep = dacoexec::detail::huffman::build_code_lengths(chain_frequencies(unsupported_chain_symbols));
   REQUIRE(*std::ranges::max_element(deep) == unsupported_chain_symbols - 1U);
   REQUIRE_FALSE(dacoexec::detail::huffman::try_make_canonical_codebook(deep).has_value());
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(deep), std::length_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(deep), dacoexec::exception);
 }
 
 TEST_CASE("canonical codes preserve all unsigned byte indexes", "[huffman][canonical]")
@@ -1040,11 +1042,11 @@ TEST_CASE("unsupported canonical widths take precedence over invalid tree struct
   lengths.at(0) = 1;
   lengths.at(1) = 1;
   lengths.at(2) = 1;
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::try_make_canonical_codebook(lengths), dacoexec::exception);
   // Keep the unsupported symbol last so earlier counts already oversubscribe.
   lengths.back() = static_cast<std::uint8_t>(dacoexec::detail::huffman::max_canonical_bits + 1U);
   REQUIRE_FALSE(dacoexec::detail::huffman::try_make_canonical_codebook(lengths).has_value());
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), std::length_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::huffman::make_canonical_codebook(lengths), dacoexec::exception);
 }
 
 namespace {
@@ -1110,20 +1112,24 @@ TEST_CASE("typed node arenas reject exhaustion without invalidating nodes", "[hu
   constexpr std::size_t leaf_capacity = 2;
   dacoexec::detail::memory::static_node_arena<node, leaf_capacity> arena;
   auto const frequencies = dacoexec::detail::huffman::count_frequencies(std::string_view{ "AB" });
-  REQUIRE_THROWS_AS(dacoexec::detail::huffman::build_code_lengths(frequencies, arena), std::length_error);
+  REQUIRE_THROWS_MATCHES(dacoexec::detail::huffman::build_code_lengths(frequencies, arena),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::capacity_exceeded));
   REQUIRE(arena.size() == leaf_capacity);
 
   dacoexec::detail::memory::static_node_arena<node, leaf_capacity> linked;
   auto const *leaf = linked.create(node{});
   auto const *parent = linked.create(node{ .left_ = leaf, .right_ = leaf });
-  REQUIRE_THROWS_AS(linked.create(node{}), std::length_error);
+  REQUIRE_THROWS_MATCHES(
+    linked.create(node{}), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::capacity_exceeded));
   REQUIRE(parent->left_ == leaf);
   REQUIRE(parent->right_ == leaf);
   REQUIRE(leaf->is_leaf());
 
   dacoexec::detail::memory::static_node_arena<node, 0> empty;
   REQUIRE(dacoexec::detail::huffman::build_code_lengths({}, empty) == dacoexec::detail::huffman::code_length_table{});
-  REQUIRE_THROWS_AS(empty.create(node{}), std::length_error);
+  REQUIRE_THROWS_MATCHES(
+    empty.create(node{}), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::capacity_exceeded));
 }
 
 TEST_CASE("dynamic tree storage releases PMR nodes after success and overflow", "[huffman][allocation]")
@@ -1144,7 +1150,7 @@ TEST_CASE("dynamic tree storage releases PMR nodes after success and overflow", 
     dacoexec::detail::huffman::frequency_table frequencies{};
     frequencies.at(0) = std::numeric_limits<std::uint64_t>::max();
     frequencies.at(1) = 1;
-    REQUIRE_THROWS_AS(dacoexec::detail::huffman::build_code_lengths(frequencies, storage), std::overflow_error);
+    REQUIRE_THROWS_AS(dacoexec::detail::huffman::build_code_lengths(frequencies, storage), dacoexec::exception);
     REQUIRE(resource.outstanding() == storage.size());
   }
   REQUIRE(resource.outstanding() == 0);

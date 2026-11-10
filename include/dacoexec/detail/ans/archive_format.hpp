@@ -11,6 +11,7 @@
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/support/crc32.hpp>
 #include <dacoexec/detail/views/ans_frames.hpp>
+#include <dacoexec/error.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -43,7 +44,9 @@ using codec::checked_add;
   entropy_coder coder = entropy_coder::rans,
   unsigned table_log = tans::default_table_log) -> encoded_frame
 {
-  if (block.bytes_.empty() || block.bytes_.size() > max_frame_size) { throw format_error("Invalid input block size"); }
+  if (block.bytes_.empty() || block.bytes_.size() > max_frame_size) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Invalid input block size");
+  }
   auto const checksum = dacoexec::detail::support::crc32(block.bytes_);
   encoded_frame frame;
   frame.block_ = encoder{ coder, table_log }.encode(std::move(block));

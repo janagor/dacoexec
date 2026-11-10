@@ -1,4 +1,5 @@
 #include <dacoexec/detail/bit/codeword.hpp>
+#include <dacoexec/error.hpp>
 //! \file
 //! Shared integer coding operations and decoder resource limits.
 
@@ -39,7 +40,8 @@ concept bit_output = requires(Writer &out, bit_sequence bits, bool bit) {
 [[nodiscard]] constexpr auto gamma_bit_length(std::uint64_t value) -> unsigned
 {
   if (value == 0U) {
-    throw std::invalid_argument("dacoexec::detail::integer_coding gamma requires a positive integer");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::invalid_argument, "dacoexec::detail::integer_coding gamma requires a positive integer");
   }
   auto const width = static_cast<unsigned>(std::bit_width(value));
   return width + (width - 1U);
@@ -48,7 +50,8 @@ concept bit_output = requires(Writer &out, bit_sequence bits, bool bit) {
 [[nodiscard]] constexpr auto delta_bit_length(std::uint64_t value) -> unsigned
 {
   if (value == 0U) {
-    throw std::invalid_argument("dacoexec::detail::integer_coding delta requires a positive integer");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::invalid_argument, "dacoexec::detail::integer_coding delta requires a positive integer");
   }
   auto const width = static_cast<unsigned>(std::bit_width(value));
   return gamma_bit_length(width) + (width - 1U);
@@ -90,9 +93,13 @@ constexpr auto read_unary(Reader &reader, decode_limits limits, std::uint64_t ma
 {
   std::uint64_t quotient = 0;
   while (reader.read_bit()) {
-    if (quotient == maximum) { throw std::overflow_error("dacoexec::detail::integer_coding unary overflow"); }
+    if (quotient == maximum) {
+      throw ::dacoexec::exception(
+        ::dacoexec::errc::numeric_overflow, "dacoexec::detail::integer_coding unary overflow");
+    }
     if (quotient == limits.max_unary_bits_) {
-      throw std::length_error("dacoexec::detail::integer_coding unary limit exceeded");
+      throw ::dacoexec::exception(
+        ::dacoexec::errc::codeword_limit_exceeded, "dacoexec::detail::integer_coding unary limit exceeded");
     }
     ++quotient;
   }
@@ -102,14 +109,16 @@ constexpr auto read_unary(Reader &reader, decode_limits limits, std::uint64_t ma
 constexpr auto validate_rice(unsigned shift) -> void
 {
   if (shift >= integer_bits) {
-    throw std::invalid_argument("dacoexec::detail::integer_coding Rice shift exceeds domain");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::invalid_argument, "dacoexec::detail::integer_coding Rice shift exceeds domain");
   }
 }
 
 constexpr auto validate_golomb(std::uint32_t divisor) -> void
 {
   if (divisor == 0U) {
-    throw std::invalid_argument("dacoexec::detail::integer_coding Golomb divisor must be positive");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::invalid_argument, "dacoexec::detail::integer_coding Golomb divisor must be positive");
   }
 }
 

@@ -1,3 +1,4 @@
+#include "error_test_utils.hpp"
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -63,9 +64,13 @@ TEST_CASE("tANS standalone and archive round trips", "[ans][tans]")
       REQUIRE(payload == ans::tans::encode_block(input, model));
       auto truncated = payload;
       truncated.pop_back();
-      REQUIRE_THROWS_AS(ans::tans::decode_block(truncated, model, input.size()), dacoexec::ans::decode_error);
+      REQUIRE_THROWS_MATCHES(ans::tans::decode_block(truncated, model, input.size()),
+        dacoexec::exception,
+        dacoexec::test::error_is(dacoexec::errc::invalid_payload));
       payload.push_back(std::byte{ 0 });
-      REQUIRE_THROWS_AS(ans::tans::decode_block(payload, model, input.size()), dacoexec::ans::decode_error);
+      REQUIRE_THROWS_MATCHES(ans::tans::decode_block(payload, model, input.size()),
+        dacoexec::exception,
+        dacoexec::test::error_is(dacoexec::errc::invalid_payload));
       auto archive = dacoexec::ans::compress(
         input, { .block_size_ = 1024, .coder_ = dacoexec::ans::entropy_coder::tans, .table_log_ = precision });
       REQUIRE(dacoexec::ans::decompress(archive) == input);
@@ -78,8 +83,10 @@ TEST_CASE("tANS standalone and archive round trips", "[ans][tans]")
   REQUIRE(ans::tans::decode_block(ans::tans::encode_block(empty, byte_model), byte_model, 0).empty());
   REQUIRE(dacoexec::ans::decompress(dacoexec::ans::compress(empty, { .coder_ = dacoexec::ans::entropy_coder::tans }))
       .empty());
-  REQUIRE_THROWS_AS(dacoexec::ans::compress(empty, { .coder_ = dacoexec::ans::entropy_coder::tans, .table_log_ = 7 }),
-    std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(
+    dacoexec::ans::compress(empty, { .coder_ = dacoexec::ans::entropy_coder::tans, .table_log_ = 7 }),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
 }
 
 TEST_CASE("tANS canonical payload and malformed state", "[ans][tans]")
@@ -92,12 +99,15 @@ TEST_CASE("tANS canonical payload and malformed state", "[ans][tans]")
   auto payload = ans::tans::encode_block(input, model);
   REQUIRE(payload == std::vector<std::byte>(8, std::byte{ 0 }));
   payload.at(1) = std::byte{ 4 };
-  REQUIRE_THROWS_AS(ans::tans::decode_block(payload, model, input.size()), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::tans::decode_block(payload, model, input.size()),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
   std::vector<std::byte> archive;
-  REQUIRE_THROWS_AS(
+  REQUIRE_THROWS_MATCHES(
     dacoexec::ans::compress_stream(
       input, std::back_inserter(archive), { .coder_ = dacoexec::ans::entropy_coder::tans, .table_log_ = 13 }),
-    std::invalid_argument);
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   REQUIRE(archive.empty());
 }
 
@@ -112,14 +122,22 @@ TEST_CASE("tANS frames verify checksum padding and output bounds", "[ans][tans]"
   if (bits % 8U != 0) {
     auto damaged = payload;
     damaged.back() |= std::byte{ 1 };
-    REQUIRE_THROWS_AS(ans::tans::decode_block(damaged, model, input.size()), dacoexec::ans::decode_error);
+    REQUIRE_THROWS_MATCHES(ans::tans::decode_block(damaged, model, input.size()),
+      dacoexec::exception,
+      dacoexec::test::error_is(dacoexec::errc::invalid_payload));
   }
-  REQUIRE_THROWS_AS(ans::tans::decode_block(payload, model, input.size(), 1), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::tans::decode_block(payload, model, input.size(), 1),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::output_limit_exceeded));
   auto archive = dacoexec::ans::compress(input, { .coder_ = dacoexec::ans::entropy_coder::tans });
   REQUIRE(archive.at(ans::archive_header_size) == std::byte{ 2 });
-  REQUIRE_THROWS_AS(dacoexec::ans::decompress(archive, { .max_output_bytes_ = 1 }), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(dacoexec::ans::decompress(archive, { .max_output_bytes_ = 1 }),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::output_limit_exceeded));
   archive.at(ans::archive_header_size + ans::crc_field_offset) ^= std::byte{ 1 };
-  REQUIRE_THROWS_AS(dacoexec::ans::decompress(archive), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(dacoexec::ans::decompress(archive),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::checksum_mismatch));
 }
 
 TEST_CASE("tANS two-symbol golden payload", "[ans][tans]")
@@ -189,7 +207,8 @@ TEST_CASE("tANS randomized models and packing match the specification", "[ans][t
         REQUIRE(slots == model.frequencies());
         for (unsigned symbol = 0; symbol < 256; ++symbol) {
           if (counts.at(symbol) == 0) {
-            REQUIRE_THROWS_AS(table.encode(0, symbol), std::invalid_argument);
+            REQUIRE_THROWS_MATCHES(
+              table.encode(0, symbol), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
             continue;
           }
           for (std::uint32_t state = 0; state < model.total(); ++state) {
@@ -221,10 +240,13 @@ TEST_CASE("Unknown ANS coders fail before writing even an empty archive", "[ans]
   // Deliberately exercise an enum value outside the supported enumerators.
   // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
   auto invalid = static_cast<dacoexec::ans::entropy_coder>(99);
-  REQUIRE_THROWS_AS(dacoexec::ans::compress_stream(empty, std::back_inserter(destination), { .coder_ = invalid }),
-    std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(dacoexec::ans::compress_stream(empty, std::back_inserter(destination), { .coder_ = invalid }),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::unsupported_coder));
   REQUIRE(destination.empty());
-  REQUIRE_THROWS_AS(dacoexec::detail::ans::encoder(invalid), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(dacoexec::detail::ans::encoder(invalid),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::unsupported_coder));
   REQUIRE_NOTHROW(dacoexec::ans::compress(empty, { .table_log_ = 0 }));
 }
 
@@ -248,7 +270,8 @@ TEST_CASE("One DAN1 archive mixes RAW rANS and tANS", "[ans][tans]")
   ans::write_frame_header(sink, {});
   REQUIRE(dacoexec::ans::decompress(archive) == expected);
   archive.push_back(std::byte{ 0 });
-  REQUIRE_THROWS_AS(dacoexec::ans::decompress(archive), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    dacoexec::ans::decompress(archive), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_archive));
 }
 
 TEST_CASE("tANS archive metadata rejects invalid precision counts and frequencies", "[ans][tans]")
@@ -264,7 +287,9 @@ TEST_CASE("tANS archive metadata rejects invalid precision counts and frequencie
   }
   auto damaged = archive;
   damaged.resize(damaged.size() - 1);
-  REQUIRE_THROWS_AS(dacoexec::ans::decompress(damaged), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(dacoexec::ans::decompress(damaged),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::truncated_archive));
 }
 
 TEST_CASE("tANS skewed golden vectors retain the original wire format", "[ans][tans]")
@@ -301,13 +326,19 @@ TEST_CASE("tANS rejects nonterminal states and excess valid bits", "[ans][tans]"
   auto payload = ans::tans::encode_block(input, model);
   auto damaged = payload;
   damaged.at(4) = std::byte{ 3 };// Extra valid bit, still within the same final byte.
-  REQUIRE_THROWS_AS(ans::tans::decode_block(damaged, model, 2), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::tans::decode_block(damaged, model, 2),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
   damaged = payload;
   damaged.at(4) = std::byte{ 1 };
-  REQUIRE_THROWS_AS(ans::tans::decode_block(damaged, model, 2), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::tans::decode_block(damaged, model, 2),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
   std::vector<std::byte> nonterminal(8, std::byte{ 0 });
   nonterminal.at(0) = std::byte{ 1 };
-  REQUIRE_THROWS_AS(ans::tans::decode_block(nonterminal, model, 0), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::tans::decode_block(nonterminal, model, 0),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)

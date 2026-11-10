@@ -25,6 +25,19 @@ function(run_failure)
     message(FATAL_ERROR "CLI unexpectedly succeeded: ${ARGN}")
   endif()
 endfunction()
+function(run_failure_with_code expected_code)
+  execute_process(
+    COMMAND "${CLI}" ${ARGN}
+    RESULT_VARIABLE result
+    ERROR_VARIABLE diagnostic)
+  if(result EQUAL 0
+     OR NOT
+        diagnostic
+        MATCHES
+        "\\[dacoexec:${expected_code}\\]")
+    message(FATAL_ERROR "Expected CLI error code ${expected_code}: ${ARGN}\n${diagnostic}")
+  endif()
+endfunction()
 run_success(
   compress
   --algorithm
@@ -40,13 +53,16 @@ if(NOT
    actual)
   message(FATAL_ERROR "CLI round trip differs")
 endif()
-run_failure(
+# errc::invalid_argument = 1: path-policy rejection happens before opening files.
+run_failure_with_code(
+  1
   compress
   --algorithm
   huffman
   "${input}"
   "${archive}")
-run_failure(
+run_failure_with_code(
+  1
   compress
   --algorithm
   huffman

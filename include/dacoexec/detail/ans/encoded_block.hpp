@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <dacoexec/detail/ans/model_wire.hpp>
 #include <dacoexec/detail/ans/rans/codec.hpp>
+#include <dacoexec/error.hpp>
 #include <optional>
 #include <vector>
 
@@ -27,7 +28,7 @@ struct encoded_block
 [[nodiscard]] inline auto model_metadata_size(encoded_block const &block) -> std::size_t
 {
   if (block.encoding_ == block_encoding::raw) { return 0; }
-  if (!block.model_) { throw decode_error("Missing ANS model"); }
+  if (!block.model_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Missing ANS model"); }
   return model_wire_size(*block.model_);
 }
 

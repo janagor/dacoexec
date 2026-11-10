@@ -5,6 +5,7 @@
 #include <bit>
 #include <cstdint>
 #include <dacoexec/detail/ans/model.hpp>
+#include <dacoexec/error.hpp>
 #include <vector>
 
 namespace dacoexec::detail::ans::tans {
@@ -15,7 +16,9 @@ inline constexpr unsigned transform_shift = 16;
 
 inline auto validate_precision(unsigned precision) -> void
 {
-  if (precision < min_table_log || precision > max_table_log) { throw std::invalid_argument("Invalid tANS table log"); }
+  if (precision < min_table_log || precision > max_table_log) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid tANS table log");
+  }
 }
 
 struct decode_entry
@@ -79,7 +82,9 @@ public:
     auto const &transform = transforms_.at(symbol);
     // Every present symbol has a positive bias at supported table logs;
     // zero is reserved for symbols absent from the model.
-    if (transform.delta_nb_bits_ == 0) { throw std::invalid_argument("Absent tANS symbol"); }
+    if (transform.delta_nb_bits_ == 0) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Absent tANS symbol");
+    }
     auto const value = state + model_.total();
     auto const bits = (value + transform.delta_nb_bits_) >> transform_shift;
     auto const index = static_cast<std::int32_t>(value >> bits) + transform.delta_find_state_;

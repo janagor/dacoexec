@@ -50,7 +50,7 @@ public:
 #endif
       if (file_ != nullptr) { return; }
     }
-    throw stream_error("Cannot create temporary output file");
+    throw ::dacoexec::exception(::dacoexec::errc::io_error, "Cannot create temporary output file");
   }
 
   temporary_output(temporary_output const &) = delete;
@@ -67,20 +67,24 @@ public:
 
   auto write(std::span<std::byte const> bytes) -> void
   {
-    if (file_ == nullptr) { throw stream_error("Temporary output is closed"); }
+    if (file_ == nullptr) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Temporary output is closed");
+    }
     if (!bytes.empty() && std::fwrite(bytes.data(), sizeof(std::byte), bytes.size(), file_.get()) != bytes.size()) {
-      throw stream_error("Output file write failed");
+      throw ::dacoexec::exception(::dacoexec::errc::io_error, "Output file write failed");
     }
   }
 
   auto close() -> void
   {
     if (file_ == nullptr) { return; }
-    if (std::fflush(file_.get()) != 0) { throw stream_error("Output file flush failed"); }
+    if (std::fflush(file_.get()) != 0) {
+      throw ::dacoexec::exception(::dacoexec::errc::io_error, "Output file flush failed");
+    }
     auto *file = file_.release();
     // Ownership is released solely to check the final C close result.
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-    if (std::fclose(file) != 0) { throw stream_error("Output file close failed"); }
+    if (std::fclose(file) != 0) { throw ::dacoexec::exception(::dacoexec::errc::io_error, "Output file close failed"); }
   }
 
   // Requires a trusted directory: publication uses the temporary pathname,

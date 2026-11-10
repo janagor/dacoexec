@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <dacoexec/detail/bit/codeword.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 #include <iterator>
 #include <limits>
 #include <span>
@@ -94,8 +95,8 @@ private:
  * write_bit writes one bit. write_bits writes the low `bit_count` bits of
  * `value`, highest of those bits first. `bit_count` is 0 through 32. A
  * zero-length write of a zero value does nothing. Counts above 32, and values
- * with bits set outside the declared width, throw std::invalid_argument.
- * A finalized or failed writer throws std::logic_error before those argument
+ * with bits set outside the declared width, throw dacoexec::exception (errc::invalid_argument).
+ * A finalized or failed writer throws dacoexec::exception (errc::invalid_state) before those argument
  * checks. A 32-bit integer is never shifted by 32.
  *
  * Only one partial output byte is buffered. Filled bits occupy its high
@@ -105,7 +106,7 @@ private:
  * finish() emits a partial byte padded with zero bits on the right and
  * returns how many padding bits were added, which is 0 through 7. A later
  * finish() returns that same count and writes nothing. The destructor does
- * not emit the partial byte. Writing after finish() throws std::logic_error.
+ * not emit the partial byte. Writing after finish() throws dacoexec::exception (errc::invalid_state).
  *
  * If the output iterator throws, that exception propagates and the writer
  * refuses further writes and finalization. Bytes the sink already accepted
@@ -210,7 +211,7 @@ public:
   /**
    * Appends one bit, emitting a byte immediately when it becomes full.
    *
-   * @throws std::logic_error If finalized, failed, or moved from.
+   * @throws dacoexec::exception (errc::invalid_state) If finalized, failed, or moved from.
    * Output-iterator exceptions propagate and make the writer unusable.
    */
   auto write_bit(bool bit) -> void
@@ -220,8 +221,8 @@ public:
    * Writes the low bit_count bits of value, highest bit first.
    *
    * @param bits Value and width from zero through 32; zero width requires value zero.
-   * @throws std::invalid_argument If the width or value is invalid.
-   * @throws std::logic_error If unusable or finalized, checked before arguments.
+   * @throws dacoexec::exception (errc::invalid_argument) If the width or value is invalid.
+   * @throws dacoexec::exception (errc::invalid_state) If unusable or finalized, checked before arguments.
    * Output exceptions propagate, retire the writer, and leave accepted bytes intact.
    */
   auto write_bits(bit_sequence bits) -> void
@@ -230,10 +231,12 @@ public:
     auto const [value, bit_count] = bits;
     detail::bit::codeword_status const status = detail::bit::check_codeword(bits);
     if (status == detail::bit::codeword_status::count_too_large) {
-      throw std::invalid_argument("dacoexec::bit_writer bit count must be at most 32");
+      throw ::dacoexec::exception(
+        ::dacoexec::errc::invalid_argument, "dacoexec::bit_writer bit count must be at most 32");
     }
     if (status == detail::bit::codeword_status::value_too_wide) {
-      throw std::invalid_argument("dacoexec::bit_writer value has bits set outside the codeword width");
+      throw ::dacoexec::exception(
+        ::dacoexec::errc::invalid_argument, "dacoexec::bit_writer value has bits set outside the codeword width");
     }
     if (bit_count == 0U) { return; }
 
@@ -252,12 +255,12 @@ public:
    * Emits the final partial byte, if any, and returns the zero-padding count.
    *
    * @return Padding bits from zero through seven; repeated calls return the same count.
-   * @throws std::logic_error If failed or moved from.
+   * @throws dacoexec::exception (errc::invalid_state) If failed or moved from.
    * Output exceptions propagate and permanently disable the writer.
    */
   [[nodiscard]] auto finish() -> std::uint8_t
   {
-    if (failed_) { throw std::logic_error("dacoexec::bit_writer is unusable"); }
+    if (failed_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "dacoexec::bit_writer is unusable"); }
     if (finalized_) { return padding_; }
 
     std::uint8_t const padding = pending_bits_ == 0U
@@ -286,8 +289,10 @@ public:
 private:
   auto ensure_writable() const -> void
   {
-    if (failed_) { throw std::logic_error("dacoexec::bit_writer is unusable"); }
-    if (finalized_) { throw std::logic_error("dacoexec::bit_writer write after finalization"); }
+    if (failed_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "dacoexec::bit_writer is unusable"); }
+    if (finalized_) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "dacoexec::bit_writer write after finalization");
+    }
   }
 
   auto accept_chunk(bit_sequence bits) -> void
@@ -357,9 +362,9 @@ auto bit_output_iterator<Out>::proxy::operator=(bool bit) const -> proxy const &
 
 /**
  * Reads only the declared valid bits of a byte span. Storage must outlive the reader.
- * Invalid widths throw invalid_argument; exhausted reads throw out_of_range.
- * Failed read_bits calls leave the position unchanged. Padding is never consumed;
- * validating padding bytes belongs to the containing format.
+ * Invalid widths throw dacoexec::exception (errc::invalid_argument); exhausted reads throw dacoexec::exception
+ * (errc::truncated_input). Failed read_bits calls leave the position unchanged. Padding is never consumed; validating
+ * padding bytes belongs to the containing format.
  */
 class bit_reader
 {
@@ -370,7 +375,7 @@ public:
     auto const whole_bytes = valid_bits / detail::support::bits_per_byte;
     auto const partial_bits = valid_bits % detail::support::bits_per_byte;
     if (whole_bytes > bytes.size() || (whole_bytes == bytes.size() && partial_bits != 0U)) {
-      throw std::invalid_argument("dacoexec::bit_reader bit limit exceeds storage");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "dacoexec::bit_reader bit limit exceeds storage");
     }
   }
 
@@ -378,7 +383,9 @@ public:
 
   constexpr auto read_bit() -> bool
   {
-    if (remaining_ == 0U) { throw std::out_of_range("dacoexec::bit_reader exhausted input"); }
+    if (remaining_ == 0U) {
+      throw ::dacoexec::exception(::dacoexec::errc::truncated_input, "dacoexec::bit_reader exhausted input");
+    }
     auto const shift =
       detail::support::bits_per_byte - 1U - static_cast<unsigned>(position_ % detail::support::bits_per_byte);
     auto const value = std::to_integer<unsigned>(bytes_.subspan(position_ / detail::support::bits_per_byte).front());
@@ -390,9 +397,11 @@ public:
   constexpr auto read_bits(unsigned count) -> std::uint64_t
   {
     if (count > std::numeric_limits<std::uint64_t>::digits) {
-      throw std::invalid_argument("dacoexec::bit_reader width exceeds uint64_t");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "dacoexec::bit_reader width exceeds uint64_t");
     }
-    if (count > remaining_) { throw std::out_of_range("dacoexec::bit_reader exhausted input"); }
+    if (count > remaining_) {
+      throw ::dacoexec::exception(::dacoexec::errc::truncated_input, "dacoexec::bit_reader exhausted input");
+    }
     std::uint64_t value = 0;
     for (unsigned index = 0; index < count; ++index) { value = (value << 1U) | (read_bit() ? 1U : 0U); }
     return value;

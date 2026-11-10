@@ -2,6 +2,7 @@
 #ifndef DACOEXEC_EXECUTION_DETAIL_ORDERED_PARALLEL_HPP
 #define DACOEXEC_EXECUTION_DETAIL_ORDERED_PARALLEL_HPP
 
+#include <dacoexec/error.hpp>
 #include <stdexec/execution.hpp>
 
 #include <algorithm>
@@ -137,7 +138,9 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
     {
       try {
         if (!stop_requested()) {
-          if (capacity_ == 0) { throw std::invalid_argument("Invalid parallel batch capacity"); }
+          if (capacity_ == 0) {
+            throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid parallel batch capacity");
+          }
           source_.initialize();
         }
       } catch (...) {
@@ -182,7 +185,9 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
       }
       for (auto &slot : slots_) {
         if (stop_requested()) { return; }
-        if (!slot.value_) { throw std::logic_error("Completed worker has no result"); }
+        if (!slot.value_) {
+          throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Completed worker has no result");
+        }
         source_.commit(std::move(*slot.value_));
       }
     }

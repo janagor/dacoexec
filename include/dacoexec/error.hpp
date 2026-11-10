@@ -1,10 +1,8 @@
 //! \file
-//! Structured errors detected by dacoexec. Client and allocation exceptions
-//! propagate unchanged.
+//! Structured errors detected by dacoexec. Client and allocation exceptions propagate unchanged.
 #ifndef DACOEXEC_ERROR_HPP
 #define DACOEXEC_ERROR_HPP
 
-#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <type_traits>
@@ -29,14 +27,15 @@ enum class errc {
   codeword_limit_exceeded = 14,
 };
 
-[[nodiscard]] inline auto category() noexcept -> std::error_category const & {
-  class error_category final : public std::error_category {
+[[nodiscard]] inline auto category() noexcept -> std::error_category const &
+{
+  class error_category final : public std::error_category
+  {
   public:
-    [[nodiscard]] auto name() const noexcept -> char const * override {
-      return "dacoexec";
-    }
+    [[nodiscard]] auto name() const noexcept -> char const * override { return "dacoexec"; }
 
-    [[nodiscard]] auto message(int value) const -> std::string override {
+    [[nodiscard]] auto message(int value) const -> std::string override
+    {
       switch (static_cast<errc>(value)) {
       case errc::invalid_argument:
         return "Invalid argument";
@@ -75,72 +74,22 @@ enum class errc {
   return instance;
 }
 
-[[nodiscard]] inline auto make_error_code(errc code) noexcept
-    -> std::error_code {
-  return {static_cast<int>(code), category()};
-}
+[[nodiscard]] inline auto make_error_code(errc code) noexcept -> std::error_code
+{ return { static_cast<int>(code), category() }; }
 
-class exception : public std::system_error {
+class exception : public std::system_error
+{
 public:
   explicit exception(errc code) : std::system_error(make_error_code(code)) {}
 
-  exception(errc code, std::string const &context)
-      : std::system_error(make_error_code(code), context) {}
+  exception(errc code, std::string const &context) : std::system_error(make_error_code(code), context) {}
 };
 
-} // namespace dacoexec
+}// namespace dacoexec
 
 namespace std {
-template <> struct is_error_code_enum<dacoexec::errc> : true_type {};
-} // namespace std
-// Legacy types remain available until the coordinated migration.
-namespace dacoexec {
-/**
- * Malformed DHF1 framing, invalid frame metadata, or a stream output-limit
- * violation.
- *
- * The diagnostic is supplied through the inherited std::runtime_error
- * constructors.
- */
-class format_error : public std::runtime_error {
-public:
-  using std::runtime_error::runtime_error;
+template<> struct is_error_code_enum<dacoexec::errc> : true_type
+{
 };
-
-/**
- * Stream or file I/O failure, including errors reported by io::ostream_sink.
- *
- * The diagnostic is supplied through the inherited std::runtime_error
- * constructors.
- */
-class stream_error : public std::runtime_error {
-public:
-  using std::runtime_error::runtime_error;
-};
-} // namespace dacoexec
-
-namespace dacoexec::huffman {
-/**
- * Malformed Huffman block metadata or payload, including output-bound
- * violations.
- *
- * Diagnostics use the inherited std::runtime_error constructors.
- * @see decompress_block
- */
-class decode_error : public std::runtime_error {
-public:
-  using std::runtime_error::runtime_error;
-};
-
-} // namespace dacoexec::huffman
-
-namespace dacoexec::ans {
-
-class decode_error : public std::runtime_error {
-public:
-  using std::runtime_error::runtime_error;
-};
-
-} // namespace dacoexec::ans
-
-#endif // DACOEXEC_ERROR_HPP
+}// namespace std
+#endif// DACOEXEC_ERROR_HPP

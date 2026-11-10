@@ -8,6 +8,7 @@
 #include <dacoexec/detail/huffman/types.hpp>
 #include <dacoexec/detail/support/buffer.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/error.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -582,12 +583,12 @@ TEST_CASE("zero block size is rejected and a short input does not reserve the wh
 {
   auto stats = std::make_shared<source_stats>();
   byte_source const source{ make_bytes(4), stats };
-  REQUIRE_THROWS_AS(dacoexec::detail::views::blocks(0), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::views::blocks(0), dacoexec::exception);
   REQUIRE(stats->dereferences_ == 0);
   REQUIRE(stats->begin_calls_ == 0);
 
   std::vector<std::byte> input = make_bytes(1);
-  REQUIRE_THROWS_AS(dacoexec::detail::blocks_view(std::views::all(input), std::size_t{ 0 }), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::blocks_view(std::views::all(input), std::size_t{ 0 }), dacoexec::exception);
 
   constexpr std::size_t short_size = 100;
   std::vector<std::byte> short_input = make_bytes(short_size);
@@ -839,13 +840,13 @@ TEST_CASE("codewords failures are terminal without emitting absent symbols", "[h
   }
   std::vector<std::byte> const absent{ std::byte{ 0xFF } };
   auto missing_first = absent | dacoexec::detail::huffman::views::codewords(book);
-  REQUIRE_THROWS_AS(missing_first.begin(), std::invalid_argument);
+  REQUIRE_THROWS_AS(missing_first.begin(), dacoexec::exception);
   REQUIRE(missing_first.begin() == missing_first.end());
   std::vector<std::byte> const tail{ input.front(), absent.front() };
   auto missing_tail = tail | dacoexec::detail::huffman::views::codewords(book);
   auto cursor = missing_tail.begin();
   REQUIRE(*cursor == test_detail::canonical_word(book, 0));
-  REQUIRE_THROWS_AS(++cursor, std::invalid_argument);
+  REQUIRE_THROWS_AS(++cursor, dacoexec::exception);
   REQUIRE(cursor == missing_tail.end());
   REQUIRE(missing_tail.begin() == missing_tail.end());
   auto empty = std::vector<std::byte>{}

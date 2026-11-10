@@ -1,9 +1,11 @@
+#include "error_test_utils.hpp"
 #include <dacoexec/detail/adt/static_priority_queue.hpp>
 #include <dacoexec/detail/ans/format.hpp>
 #include <dacoexec/detail/huffman/format.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/views/ans_frame_parser.hpp>
 #include <dacoexec/detail/views/huffman_frame_parser.hpp>
+#include <dacoexec/error.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -66,7 +68,8 @@ template<class Format> auto check_parser_sequence_boundary(bool extra_data) -> v
   REQUIRE(parser.current_.has_value());
   REQUIRE(parser.current_->block_.sequence_ == last_sequence);
   if (extra_data) {
-    REQUIRE_THROWS_AS(parser.load_next_frame(), std::overflow_error);
+    REQUIRE_THROWS_MATCHES(
+      parser.load_next_frame(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::numeric_overflow));
     REQUIRE_FALSE(parser.current_.has_value());
     REQUIRE(parser.finished_);
     // Failure is terminal: later calls must not read or publish another frame.
@@ -85,17 +88,19 @@ TEST_CASE("static priority queues retain ordering and contents at capacity", "[a
   dacoexec::detail::adt::static_priority_queue<int, 2, order> queue{ order{ false } };
   queue.push(1);
   queue.push(2);
-  REQUIRE_THROWS_AS(queue.push(3), std::length_error);
+  REQUIRE_THROWS_MATCHES(
+    queue.push(3), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::capacity_exceeded));
   REQUIRE(queue.size() == 2);
   REQUIRE(queue.pop() == 2);
   queue.push(3);
   REQUIRE(queue.pop() == 3);
   REQUIRE(queue.pop() == 1);
-  REQUIRE_THROWS_AS(queue.pop(), std::out_of_range);
+  REQUIRE_THROWS_MATCHES(queue.pop(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_state));
 
   dacoexec::detail::adt::static_priority_queue<int, 0> empty;
-  REQUIRE_THROWS_AS(empty.push(1), std::length_error);
-  REQUIRE_THROWS_AS(empty.pop(), std::out_of_range);
+  REQUIRE_THROWS_MATCHES(
+    empty.push(1), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::capacity_exceeded));
+  REQUIRE_THROWS_MATCHES(empty.pop(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_state));
   REQUIRE(empty.empty());
 }
 

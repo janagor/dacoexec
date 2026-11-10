@@ -1,3 +1,4 @@
+#include "error_test_utils.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
@@ -68,14 +69,22 @@ TEST_CASE("ANS normalization preserves support and handles full-width counts", "
   auto const model = ans::make_model(std::array<std::uint64_t, 2>{ maximum - 1, 1 });
   REQUIRE(model.frequencies().front() == model.total() - 1);
   REQUIRE(model.frequencies().back() == 1);
-  REQUIRE_THROWS_AS((ans::make_model(std::array<std::uint64_t, 2>{ maximum, 1 })), std::overflow_error);
-  REQUIRE_THROWS_AS((ans::make_model(std::array<std::uint64_t, 2>{ 0, 0 })), std::invalid_argument);
-  REQUIRE_THROWS_AS((ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, 0)), std::invalid_argument);
-  REQUIRE_THROWS_AS(
-    (ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, ans::max_precision_bits + 1)), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ maximum, 1 })),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::numeric_overflow));
+  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ 0, 0 })),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
+  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, 0)),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
+  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, ans::max_precision_bits + 1)),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   ans::frequency_table counts{};
   counts.fill(1);
-  REQUIRE_THROWS_AS(ans::make_model(counts, 1), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(
+    ans::make_model(counts, 1), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   for (unsigned precision = dacoexec::detail::support::bits_per_byte; precision <= ans::max_precision_bits;
     ++precision) {
     auto const normalized = ans::make_model(counts, precision);
@@ -102,10 +111,14 @@ TEST_CASE("rANS has a stable wire vector and rejects symbols absent from its mod
   REQUIRE(encoded == expected);
   REQUIRE(ans::rans::decode_block(encoded, model, input.size()) == input);
   bytes const invalid{ std::byte{ 0 }, std::byte{ 2 } };
-  REQUIRE_THROWS_AS(ans::rans::encode_block(invalid, model), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(ans::rans::encode_block(invalid, model),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   counts.at(1) = 0;
   auto const single = ans::make_model(counts);
-  REQUIRE_THROWS_AS(ans::rans::encode_block(input, single), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(ans::rans::encode_block(input, single),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   bytes repeated(block_size, std::byte{ 0 });
   auto const compact = ans::rans::encode_block(repeated, single);
   REQUIRE(compact.size() == sizeof(std::uint32_t));
@@ -122,15 +135,19 @@ TEST_CASE("rANS round trips byte alphabets at every supported precision", "[ans]
     auto const model = ans::make_model(ans::count_frequencies(input), precision);
     auto const encoded = ans::rans::encode_block(input, model);
     REQUIRE(ans::rans::decode_block(encoded, model, input.size()) == input);
-    REQUIRE_THROWS_AS(
-      ans::rans::decode_block(encoded, model, input.size(), input.size() - 1), dacoexec::ans::decode_error);
+    REQUIRE_THROWS_MATCHES(ans::rans::decode_block(encoded, model, input.size(), input.size() - 1),
+      dacoexec::exception,
+      dacoexec::test::error_is(dacoexec::errc::output_limit_exceeded));
     for (std::size_t size = 0; size < encoded.size(); ++size) {
-      REQUIRE_THROWS_AS(
-        ans::rans::decode_block(std::span(encoded).first(size), model, input.size()), dacoexec::ans::decode_error);
+      REQUIRE_THROWS_MATCHES(ans::rans::decode_block(std::span(encoded).first(size), model, input.size()),
+        dacoexec::exception,
+        dacoexec::test::error_is(dacoexec::errc::invalid_payload));
     }
     auto trailing = encoded;
     trailing.push_back(std::byte{ 0 });
-    REQUIRE_THROWS_AS(ans::rans::decode_block(trailing, model, input.size()), dacoexec::ans::decode_error);
+    REQUIRE_THROWS_MATCHES(ans::rans::decode_block(trailing, model, input.size()),
+      dacoexec::exception,
+      dacoexec::test::error_is(dacoexec::errc::invalid_payload));
   }
 }
 
@@ -158,24 +175,32 @@ TEST_CASE("DAN1 validates framing, checksums, models and output limits", "[ans]"
   auto const encoded = archive(input);
   REQUIRE(restore(encoded) == input);
   REQUIRE(restore(archive({})).empty());
-  REQUIRE_THROWS_AS(restore(encoded, input.size() - 1), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(restore(encoded, input.size() - 1),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::output_limit_exceeded));
   auto trailing = encoded;
   trailing.push_back(std::byte{ 0 });
-  REQUIRE_THROWS_AS(restore(trailing), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(trailing), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_archive));
   for (std::size_t size = 0; size < encoded.size(); ++size) {
-    REQUIRE_THROWS(restore(bytes(encoded.begin(), encoded.begin() + static_cast<std::ptrdiff_t>(size))));
+    REQUIRE_THROWS_MATCHES(restore(bytes(encoded.begin(), encoded.begin() + static_cast<std::ptrdiff_t>(size))),
+      dacoexec::exception,
+      dacoexec::test::error_is(dacoexec::errc::truncated_archive));
   }
   auto corrupt = encoded;
   corrupt.at(ans::archive_header_size + ans::crc_field_offset) ^= std::byte{ 1 };
-  REQUIRE_THROWS_AS(restore(corrupt), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(corrupt), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::checksum_mismatch));
   corrupt = encoded;
   corrupt.at(ans::archive_header_size + ans::frame_header_size) = std::byte{ 0 };
-  REQUIRE_THROWS_AS(restore(corrupt), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(corrupt), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
   corrupt = encoded;
   auto const first_frequency =
     ans::archive_header_size + ans::frame_header_size + ans::model_prefix_size + sizeof(std::uint8_t);
   corrupt.at(first_frequency) = std::byte{ 1 };
-  REQUIRE_THROWS_AS(restore(corrupt), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(corrupt), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
 }
 
 TEST_CASE("ANS adaptors consume independent owned blocks", "[ans]")
@@ -196,7 +221,9 @@ TEST_CASE("ANS adaptors consume independent owned blocks", "[ans]")
 TEST_CASE("ANS rejects inconsistent normalized models and decoder states", "[ans]")
 {
   using model_type = ans::frequency_model<ans::alphabet_size>;
-  REQUIRE_THROWS_AS(model_type(model_type::table_type{}, ans::default_precision_bits), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(model_type(model_type::table_type{}, ans::default_precision_bits),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   ans::frequency_table counts{};
   counts.at(0) = 1;
   counts.at(1) = 1;
@@ -205,13 +232,19 @@ TEST_CASE("ANS rejects inconsistent normalized models and decoder states", "[ans
   auto const encoded_empty = ans::rans::encode_block(empty, model);
   REQUIRE(ans::rans::decode_block(encoded_empty, model, 0).empty());
   bytes invalid_state(sizeof(std::uint32_t), std::byte{ 0 });
-  REQUIRE_THROWS_AS(ans::rans::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::rans::decode_block(invalid_state, model, 0),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
   constexpr auto all_bits_set = std::numeric_limits<unsigned char>::max();
   invalid_state.assign(sizeof(std::uint32_t), static_cast<std::byte>(all_bits_set));
-  REQUIRE_THROWS_AS(ans::rans::decode_block(invalid_state, model, 0), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::rans::decode_block(invalid_state, model, 0),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
   auto wrong_terminal = encoded_empty;
   wrong_terminal.front() ^= std::byte{ 1 };
-  REQUIRE_THROWS_AS(ans::rans::decode_block(wrong_terminal, model, 0), dacoexec::ans::decode_error);
+  REQUIRE_THROWS_MATCHES(ans::rans::decode_block(wrong_terminal, model, 0),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
 }
 
 TEST_CASE("ANS block views stage once and preserve borrowed dereferences", "[ans][ranges]")
@@ -278,7 +311,8 @@ TEST_CASE("DAN1 sparse model cost includes only present symbols", "[ans]")
   auto const model_offset = ans::archive_header_size + ans::frame_header_size;
   auto const entry_count_offset = model_offset + sizeof(std::uint8_t);
   corrupt.at(entry_count_offset) = std::byte{ 0 };
-  REQUIRE_THROWS_AS(restore(corrupt), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(corrupt), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
   auto const maximum_model = ans::make_model(ans::count_frequencies(input), ans::max_precision_bits);
   ans::encoded_frame frame;
   frame.block_ = { .encoding_ = ans::block_encoding::rans,
@@ -308,16 +342,19 @@ TEST_CASE("DAN1 sparse models require unique sorted symbols", "[ans]")
   auto const second_symbol_offset = first_symbol_offset + ans::model_entry_size;
   auto duplicate = encoded;
   duplicate.at(second_symbol_offset) = duplicate.at(first_symbol_offset);
-  REQUIRE_THROWS_AS(restore(duplicate), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(duplicate), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
   auto unordered = encoded;
   std::swap(unordered.at(first_symbol_offset), unordered.at(second_symbol_offset));
-  REQUIRE_THROWS_AS(restore(unordered), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(unordered), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
   auto oversized = encoded;
   auto const count_offset = model_offset + sizeof(std::uint8_t);
   auto const invalid_count =
     dacoexec::detail::support::write_u16_le(static_cast<std::uint16_t>(ans::alphabet_size + 1));
   std::ranges::copy(invalid_count, oversized.begin() + static_cast<std::ptrdiff_t>(count_offset));
-  REQUIRE_THROWS_AS(restore(oversized), dacoexec::format_error);
+  REQUIRE_THROWS_MATCHES(
+    restore(oversized), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
 }
 
 TEST_CASE("ANS staged views leave failed passes ended", "[ans][ranges]")
@@ -325,7 +362,7 @@ TEST_CASE("ANS staged views leave failed passes ended", "[ans][ranges]")
   bytes input(block_size, std::byte{ 'B' });
   auto const model = ans::make_model(ans::count_frequencies(bytes{ std::byte{ 'A' } }));
   auto view = input | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model);
-  REQUIRE_THROWS_AS(view.begin(), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(view.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   REQUIRE(view.begin() == view.end());
 }
 

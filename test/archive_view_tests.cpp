@@ -269,7 +269,7 @@ TEST_CASE("Archive view failures are terminal and never synthesize END", "[archi
     auto archive = compress(input);
     archive.pop_back();
     auto truncated = archive | make_decode();
-    CHECK_THROWS_AS(collect(truncated), dacoexec::format_error);
+    CHECK_THROWS_AS(collect(truncated), dacoexec::exception);
     CHECK(truncated.begin() == truncated.end());
   });
 }
@@ -280,19 +280,19 @@ TEST_CASE("Archive decoding verifies whole frames and validates END on exhaustio
     std::string input(sample_size, 'x');
     auto archive = compress(input);
     auto limited = archive | make_decode(block_size - 1);
-    CHECK_THROWS_AS(*limited.begin(), dacoexec::format_error);
+    CHECK_THROWS_AS(*limited.begin(), dacoexec::exception);
     CHECK(limited.begin() == limited.end());
     auto later_limit = archive | make_decode(block_size);
     std::vector<std::byte> output;
-    CHECK_THROWS_AS(std::ranges::copy(later_limit, std::back_inserter(output)), dacoexec::format_error);
+    CHECK_THROWS_AS(std::ranges::copy(later_limit, std::back_inserter(output)), dacoexec::exception);
     CHECK(output == std::vector<std::byte>(block_size, std::byte{ 'x' }));
-    CHECK_THROWS_AS(collect(archive | make_decode(0)), dacoexec::format_error);
+    CHECK_THROWS_AS(collect(archive | make_decode(0)), dacoexec::exception);
     std::string empty;
     auto empty_archive = compress(empty);
     CHECK(collect(empty_archive | make_decode(0)).empty());
     archive.push_back(std::byte{ 0 });
     auto complete = archive | make_decode();
-    CHECK_THROWS_AS(collect(complete), dacoexec::format_error);
+    CHECK_THROWS_AS(collect(complete), dacoexec::exception);
     // A consumer that stops early does not inspect the malformed suffix.
     auto partial = archive | make_decode() | std::views::take(1);
     CHECK(collect(partial) == std::vector<std::byte>{ std::byte{ 'x' } });
@@ -300,22 +300,22 @@ TEST_CASE("Archive decoding verifies whole frames and validates END on exhaustio
     auto corrupt = compress(input);
     corrupt.at(archive_header_size + crc_offset) ^= std::byte{ 1 };
     auto corrupt_view = corrupt | make_decode();
-    CHECK_THROWS_AS(*corrupt_view.begin(), dacoexec::format_error);
+    CHECK_THROWS_AS(*corrupt_view.begin(), dacoexec::exception);
     CHECK(corrupt_view.begin() == corrupt_view.end());
   });
 }
 
 TEST_CASE("Archive adaptor factories validate options eagerly", "[archive_views]")
 {
-  CHECK_THROWS_AS(dv::encode::huffman({ .block_size_ = 0 }), std::invalid_argument);
-  CHECK_THROWS_AS(dv::encode::ans({ .block_size_ = 0 }), std::invalid_argument);
+  CHECK_THROWS_AS(dv::encode::huffman({ .block_size_ = 0 }), dacoexec::exception);
+  CHECK_THROWS_AS(dv::encode::ans({ .block_size_ = 0 }), dacoexec::exception);
   // Invalid enum values must be rejected at the public boundary.
   // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-  CHECK_THROWS_AS(dv::encode::ans({ .coder_ = static_cast<dacoexec::ans::entropy_coder>(99) }), std::invalid_argument);
+  CHECK_THROWS_AS(dv::encode::ans({ .coder_ = static_cast<dacoexec::ans::entropy_coder>(99) }), dacoexec::exception);
   CHECK_THROWS_AS(
-    dv::encode::ans({ .coder_ = dacoexec::ans::entropy_coder::tans, .table_log_ = 0 }), std::invalid_argument);
-  CHECK_THROWS_AS(dv::decode::huffman({ .max_frame_size_ = 0 }), std::invalid_argument);
-  CHECK_THROWS_AS(dv::decode::ans({ .max_frame_size_ = 0 }), std::invalid_argument);
+    dv::encode::ans({ .coder_ = dacoexec::ans::entropy_coder::tans, .table_log_ = 0 }), dacoexec::exception);
+  CHECK_THROWS_AS(dv::decode::huffman({ .max_frame_size_ = 0 }), dacoexec::exception);
+  CHECK_THROWS_AS(dv::decode::ans({ .max_frame_size_ = 0 }), dacoexec::exception);
 }
 
 TEST_CASE("Archive views handle compressed frames and reject every truncated prefix", "[archive_views]")
@@ -334,7 +334,7 @@ TEST_CASE("Archive views handle compressed frames and reject every truncated pre
         CHECK(decoded.begin() == decoded.end());
       }
       archive.front() = std::byte{ 0 };
-      CHECK_THROWS_AS(collect(archive | make_decode()), dacoexec::format_error);
+      CHECK_THROWS_AS(collect(archive | make_decode()), dacoexec::exception);
     },
     compressed_block_size);
 }
@@ -347,7 +347,7 @@ TEST_CASE("Archive decoding publishes earlier frames but no bytes from a corrupt
     archive.at(archive_header_size + frame_header_size + block_size + crc_offset) ^= std::byte{ 1 };
     auto decoded = archive | make_decode();
     std::vector<std::byte> output;
-    CHECK_THROWS_AS(std::ranges::copy(decoded, std::back_inserter(output)), dacoexec::format_error);
+    CHECK_THROWS_AS(std::ranges::copy(decoded, std::back_inserter(output)), dacoexec::exception);
     CHECK(output == std::vector<std::byte>(block_size, std::byte{ 'x' }));
     CHECK(decoded.begin() == decoded.end());
   });
@@ -416,13 +416,13 @@ TEST_CASE("Archive view decode limits reject oversized frames", "[archive_views]
   std::string input(sample_size, 'x');
   auto huffman = dacoexec::huffman::compress(input);
   auto ans = dacoexec::ans::compress(input);
-  CHECK_THROWS_AS(collect(huffman | dv::decode::huffman({ .max_frame_size_ = 10 })), dacoexec::format_error);
-  CHECK_THROWS_AS(collect(ans | dv::decode::ans({ .max_frame_size_ = 10 })), dacoexec::format_error);
+  CHECK_THROWS_AS(collect(huffman | dv::decode::huffman({ .max_frame_size_ = 10 })), dacoexec::exception);
+  CHECK_THROWS_AS(collect(ans | dv::decode::ans({ .max_frame_size_ = 10 })), dacoexec::exception);
   constexpr std::size_t too_large = (16 * 1024 * 1024) + 1;
-  CHECK_THROWS_AS(dv::encode::huffman({ .block_size_ = too_large }), std::invalid_argument);
-  CHECK_THROWS_AS(dv::encode::ans({ .block_size_ = too_large }), std::invalid_argument);
-  CHECK_THROWS_AS(dv::decode::huffman({ .max_frame_size_ = too_large }), std::invalid_argument);
-  CHECK_THROWS_AS(dv::decode::ans({ .max_frame_size_ = too_large }), std::invalid_argument);
+  CHECK_THROWS_AS(dv::encode::huffman({ .block_size_ = too_large }), dacoexec::exception);
+  CHECK_THROWS_AS(dv::encode::ans({ .block_size_ = too_large }), dacoexec::exception);
+  CHECK_THROWS_AS(dv::decode::huffman({ .max_frame_size_ = too_large }), dacoexec::exception);
+  CHECK_THROWS_AS(dv::decode::ans({ .max_frame_size_ = too_large }), dacoexec::exception);
 }
 
 TEST_CASE("Taking exactly an archive header never acquires the encoder source", "[archive_views]")
@@ -457,14 +457,14 @@ TEST_CASE("Taking exactly a decoded frame leaves a corrupt next frame untouched"
     CHECK(counts.reads_ == first_frame_end);
     CHECK(counts.advances_ == first_frame_end);
     // Resuming through either dereference or end comparison must still verify it.
-    CHECK_THROWS_AS(*cursor, dacoexec::format_error);
+    CHECK_THROWS_AS(*cursor, dacoexec::exception);
     CHECK(cursor == std::default_sentinel);
     CHECK(prefix.begin() == prefix.end());
 
     auto other = stored | make_decode();
     auto next = other.begin();
     for (std::size_t index = 0; index < block_size; ++index) { ++next; }
-    CHECK_THROWS_AS(next == other.end(), dacoexec::format_error);
+    CHECK_THROWS_AS(next == other.end(), dacoexec::exception);
     CHECK(next == other.end());
   });
 }
@@ -588,7 +588,7 @@ TEST_CASE("Taking zero archive bytes performs no producer work", "[archive_views
     CHECK(decoding_counts.reads_ == 0);
     CHECK(decoding_counts.advances_ == 0);
     // Zero consumption does not hide the error when a byte is later requested.
-    CHECK_THROWS_AS(*decoded_cursor, dacoexec::format_error);
+    CHECK_THROWS_AS(*decoded_cursor, dacoexec::exception);
     CHECK(decoded_cursor == std::default_sentinel);
 
     observed_view::counters throwing_counts;

@@ -1,3 +1,4 @@
+#include "error_test_utils.hpp"
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/integer_coding/common.hpp>
 #include <dacoexec/detail/integer_coding/delta.hpp>
@@ -7,6 +8,7 @@
 #include <dacoexec/detail/views/bits.hpp>
 #include <dacoexec/detail/views/integer_decode.hpp>
 #include <dacoexec/detail/views/integer_encode.hpp>
+#include <dacoexec/error.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -201,32 +203,43 @@ TEST_CASE("integer decoding defers source increments until another bit is needed
 TEST_CASE("integer views reject invalid parameters and terminate after malformed input", "[integer_coding][views]")
 {
   constexpr auto invalid_shift = dacoexec::detail::integer_coding::integer_bits;
-  REQUIRE_THROWS_AS(dv::encode::golomb(0), std::invalid_argument);
-  REQUIRE_THROWS_AS(dv::decode::golomb(0, 0), std::invalid_argument);
-  REQUIRE_THROWS_AS(dv::encode::rice(invalid_shift), std::invalid_argument);
-  REQUIRE_THROWS_AS(dv::decode::rice(invalid_shift, 0), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(
+    dv::encode::golomb(0), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
+  REQUIRE_THROWS_MATCHES(
+    dv::decode::golomb(0, 0), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
+  REQUIRE_THROWS_MATCHES(
+    dv::encode::rice(invalid_shift), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
+  REQUIRE_THROWS_MATCHES(dv::decode::rice(invalid_shift, 0),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   std::vector<std::uint64_t> const zero{ 0 };
   auto gamma = zero | dv::encode::gamma();
-  REQUIRE_THROWS_AS(gamma.begin(), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(
+    gamma.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   REQUIRE(gamma.begin() == gamma.end());
   auto delta = zero | dv::encode::delta();
-  REQUIRE_THROWS_AS(delta.begin(), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(
+    delta.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   REQUIRE(delta.begin() == delta.end());
   std::vector<bool> const truncated{ false, true };
   auto decoder = truncated | dv::decode::gamma(1);
-  REQUIRE_THROWS_AS(decoder.begin(), std::out_of_range);
+  REQUIRE_THROWS_MATCHES(
+    decoder.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::truncated_input));
   REQUIRE(decoder.begin() == decoder.end());
   std::vector<bool> const overflow(dacoexec::detail::integer_coding::integer_bits, false);
   auto oversized = overflow | dv::decode::gamma(1);
-  REQUIRE_THROWS_AS(oversized.begin(), std::overflow_error);
+  REQUIRE_THROWS_MATCHES(
+    oversized.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::numeric_overflow));
   REQUIRE(oversized.begin() == oversized.end());
   constexpr dacoexec::detail::integer_coding::decode_limits limits{ .max_unary_bits_ = 1 };
   std::vector<bool> const unary{ true, true, false };
   auto rice = unary | dv::decode::rice(0, 1, limits);
-  REQUIRE_THROWS_AS(rice.begin(), std::length_error);
+  REQUIRE_THROWS_MATCHES(
+    rice.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::codeword_limit_exceeded));
   REQUIRE(rice.begin() == rice.end());
   auto golomb = unary | dv::decode::golomb(1, 1, limits);
-  REQUIRE_THROWS_AS(golomb.begin(), std::length_error);
+  REQUIRE_THROWS_MATCHES(
+    golomb.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::codeword_limit_exceeded));
 }
 
 TEST_CASE("unbounded unary codewords start without materializing their prefix", "[integer_coding][views]")

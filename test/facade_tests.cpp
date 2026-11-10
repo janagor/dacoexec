@@ -76,9 +76,9 @@ TEST_CASE("Public codecs round trip complete archives with bounded streaming out
     CHECK(statistics.frames_ == 9);
     CHECK(statistics.input_bytes_ == archive.size());
     CHECK(statistics.output_bytes_ == text.size());
-    CHECK_THROWS_AS(dacoexec::huffman::decompress(archive, { .max_output_bytes_ = 100 }), dacoexec::format_error);
+    CHECK_THROWS_AS(dacoexec::huffman::decompress(archive, { .max_output_bytes_ = 100 }), dacoexec::exception);
     archive.pop_back();
-    CHECK_THROWS_AS(dacoexec::huffman::decompress(archive), dacoexec::format_error);
+    CHECK_THROWS_AS(dacoexec::huffman::decompress(archive), dacoexec::exception);
   }
   SECTION("ANS")
   {
@@ -90,9 +90,9 @@ TEST_CASE("Public codecs round trip complete archives with bounded streaming out
     CHECK(statistics.output_bytes_ == archive.size());
     auto decoded = dacoexec::ans::decompress(archive);
     CHECK(decoded == std::vector<std::byte>(text.size(), std::byte{ 'a' }));
-    CHECK_THROWS_AS(dacoexec::ans::decompress(archive, { .max_output_bytes_ = 100 }), dacoexec::format_error);
+    CHECK_THROWS_AS(dacoexec::ans::decompress(archive, { .max_output_bytes_ = 100 }), dacoexec::exception);
     archive.push_back(std::byte{ 0 });
-    CHECK_THROWS_AS(dacoexec::ans::decompress(archive), dacoexec::format_error);
+    CHECK_THROWS_AS(dacoexec::ans::decompress(archive), dacoexec::exception);
   }
 }
 
@@ -102,12 +102,12 @@ TEST_CASE("Public codecs handle empty input and validate options before sink wri
   CHECK(dacoexec::huffman::decompress(dacoexec::huffman::compress(empty)).empty());
   CHECK(dacoexec::ans::decompress(dacoexec::ans::compress(empty)).empty());
   std::ostringstream sink;
-  CHECK_THROWS_AS(dacoexec::huffman::compress_stream(empty, sink, { .block_size_ = 0 }), std::invalid_argument);
+  CHECK_THROWS_AS(dacoexec::huffman::compress_stream(empty, sink, { .block_size_ = 0 }), dacoexec::exception);
   CHECK(sink.str().empty());
-  CHECK_THROWS_AS(dacoexec::ans::compress_stream(empty, sink, { .block_size_ = 0 }), std::invalid_argument);
+  CHECK_THROWS_AS(dacoexec::ans::compress_stream(empty, sink, { .block_size_ = 0 }), dacoexec::exception);
   CHECK(sink.str().empty());
-  CHECK_THROWS_AS(dacoexec::huffman::decompress(empty), dacoexec::format_error);
-  CHECK_THROWS_AS(dacoexec::ans::decompress(empty), dacoexec::format_error);
+  CHECK_THROWS_AS(dacoexec::huffman::decompress(empty), dacoexec::exception);
+  CHECK_THROWS_AS(dacoexec::ans::decompress(empty), dacoexec::exception);
 }
 
 TEST_CASE("Public integer adaptors and bit iterators compose without integer primitives", "[facade]")

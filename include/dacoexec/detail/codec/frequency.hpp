@@ -6,6 +6,7 @@
 
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <array>
 #include <cstddef>
@@ -37,12 +38,12 @@ using frequency_table = std::array<std::uint64_t, alphabet_size>;
  * the low eight bits, so 0x00, 0x80, and 0xFF stay distinct.
  *
  * A counter stops at the maximum std::uint64_t. The next occurrence of that
- * symbol throws std::overflow_error. An exception from the source, or that
+ * symbol throws dacoexec::exception (errc::numeric_overflow). An exception from the source, or that
  * overflow, leaves earlier increments applied.
  *
  * @param frequencies Existing counters to mutate without clearing them.
  * @param input Byte input range consumed once.
- * @throws std::overflow_error If an increment cannot fit in std::uint64_t.
+ * @throws dacoexec::exception (errc::numeric_overflow) If an increment cannot fit in std::uint64_t.
  * @see count_frequencies
  */
 template<byte_input_range R>
@@ -58,7 +59,9 @@ constexpr auto accumulate_frequencies(frequency_table &frequencies,
     std::byte const value = dacoexec::detail::support::to_byte(static_cast<source_value>(*cursor));
     std::size_t const symbol = std::to_integer<unsigned char>(value);
     auto &count = frequencies.at(symbol);
-    if (count == std::numeric_limits<std::uint64_t>::max()) { throw std::overflow_error(overflow_message); }
+    if (count == std::numeric_limits<std::uint64_t>::max()) {
+      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, overflow_message);
+    }
     ++count;
     std::ranges::advance(cursor, 1);
   }
@@ -71,7 +74,7 @@ constexpr auto accumulate_frequencies(frequency_table &frequencies,
  * finished table, or the function throws and no table is returned.
  *
  * @return Counts indexed by unsigned byte value.
- * @throws std::overflow_error If a symbol count cannot fit in std::uint64_t.
+ * @throws dacoexec::exception (errc::numeric_overflow) If a symbol count cannot fit in std::uint64_t.
  * Source exceptions propagate.
  * @see accumulate_frequencies
  */

@@ -8,6 +8,7 @@
 #include <dacoexec/detail/huffman/block_codec.hpp>
 #include <dacoexec/detail/huffman/decode_view.hpp>
 #include <dacoexec/detail/huffman/encoded_block.hpp>
+#include <dacoexec/error.hpp>
 #include <iterator>
 #include <limits>
 #include <stdexcept>
@@ -15,7 +16,7 @@
 namespace dacoexec::detail::huffman {
 
 
-class decoder : public codec::decoder_base<decoder, encoded_block, decode_error>
+class decoder : public codec::decoder_base<decoder, encoded_block>
 {
 public:
   decoder() = default;
@@ -32,7 +33,7 @@ public:
   {
     ::dacoexec::detail::huffman::validate_block(block);
     if (infer_padding && block.padding_bits_ != 0) {
-      throw decode_error("Inferred padding requires a zero padding count");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Inferred padding requires a zero padding count");
     }
   }
 

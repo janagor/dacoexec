@@ -6,6 +6,7 @@
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/views/archive_bytes.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/error.hpp>
 #include <iterator>
 #include <optional>
 #include <ranges>
@@ -66,7 +67,7 @@ public:
   explicit archive_encode_closure(options_type options) : options_(options)
   {
     if (options.block_size_ == 0 || options.block_size_ > Format::max_frame_size) {
-      throw std::invalid_argument("Invalid block size");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid block size");
     }
     Format::validate_options(options);
   }

@@ -1,7 +1,9 @@
+#include "error_policy.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <dacoexec/detail/ans/rans/codec.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
+#include <dacoexec/error.hpp>
 #include <span>
 #include <stdexcept>
 
@@ -21,8 +23,9 @@ extern "C" auto LLVMFuzzerTestOneInput(std::uint8_t const *data, std::size_t siz
   try {
     static_cast<void>(dacoexec::detail::ans::decompress_stream(
       bytes, sink, { .max_frame_size_ = output_limit, .max_output_bytes_ = output_limit }));
-  } catch (dacoexec::format_error const &) {
-  } catch (dacoexec::detail::ans::decode_error const &) {}
+  } catch (dacoexec::exception const &error) {
+    if (!dacoexec::fuzz::expected_archive_error(error.code())) { throw; }
+  }
   if (bytes.empty()) { return 0; }
   dacoexec::detail::ans::frequency_table counts{};
   counts[0] = 1;
@@ -30,10 +33,14 @@ extern "C" auto LLVMFuzzerTestOneInput(std::uint8_t const *data, std::size_t siz
   auto byte_model = dacoexec::detail::ans::make_model(counts, 10);
   try {
     static_cast<void>(dacoexec::detail::ans::tans::decode_block(bytes, byte_model, 1024, output_limit));
-  } catch (dacoexec::ans::decode_error const &) {}
+  } catch (dacoexec::exception const &error) {
+    if (!dacoexec::fuzz::expected_ans_block_error(error.code())) { throw; }
+  }
   constexpr std::size_t symbols = 1024;
   try {
     static_cast<void>(dacoexec::detail::ans::rans::decode_block(bytes, byte_model, symbols, output_limit));
-  } catch (dacoexec::detail::ans::decode_error const &) {}
+  } catch (dacoexec::exception const &error) {
+    if (!dacoexec::fuzz::expected_ans_block_error(error.code())) { throw; }
+  }
   return 0;
 }

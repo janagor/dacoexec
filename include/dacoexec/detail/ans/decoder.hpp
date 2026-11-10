@@ -6,10 +6,11 @@
 #include <dacoexec/detail/ans/encoded_block.hpp>
 #include <dacoexec/detail/ans/tans/codec.hpp>
 #include <dacoexec/detail/codec/decoder_base.hpp>
+#include <dacoexec/error.hpp>
 
 namespace dacoexec::detail::ans {
 
-class decoder : public codec::decoder_base<decoder, encoded_block, decode_error>
+class decoder : public codec::decoder_base<decoder, encoded_block>
 {
 public:
   decoder() = default;
@@ -25,15 +26,15 @@ public:
   static auto validate(encoded_block const &block) -> void
   {
     if (is_raw(block)) {
-      if (block.model_) { throw decode_error("Invalid ANS RAW metadata"); }
+      if (block.model_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid ANS RAW metadata"); }
     } else if ((block.encoding_ != block_encoding::rans && block.encoding_ != block_encoding::tans) || !block.model_) {
-      throw decode_error("Invalid ANS block metadata");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid ANS block metadata");
     }
   }
 
   [[nodiscard]] static auto decode_compressed(encoded_block const &block, std::size_t limit) -> std::vector<std::byte>
   {
-    if (!block.model_) { throw decode_error("Invalid ANS block metadata"); }
+    if (!block.model_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid ANS block metadata"); }
     if (block.encoding_ == block_encoding::tans) {
       return tans::decode_block(
         block.payload_, *block.model_, static_cast<std::size_t>(block.uncompressed_size_), limit);

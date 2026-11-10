@@ -1,3 +1,4 @@
+#include "error_test_utils.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <dacoexec/detail/huffman/block.hpp>
@@ -25,7 +26,7 @@ using dacoexec::detail::huffman::build_code_lengths;
 using dacoexec::detail::huffman::code_length_table;
 using dacoexec::detail::huffman::compress_block;
 using dacoexec::detail::huffman::count_frequencies;
-using dacoexec::huffman::decode_error;
+using dacoexec::exception;
 using dacoexec::detail::huffman::decompress_block;
 using dacoexec::detail::huffman::encoded_block;
 using dacoexec::detail::huffman::frequency_table;
@@ -156,7 +157,9 @@ TEST_CASE("Malformed canonical length tables fail at decoder boundary", "[huffma
   }
   SECTION("unsupported width") { block.lengths_.at(0) = max_canonical_bits + 1U; }
   SECTION("empty") {}
-  CHECK_THROWS_AS(decompress_block(std::move(block), sample.size()), decode_error);
+  CHECK_THROWS_MATCHES(decompress_block(std::move(block), sample.size()),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
 }
 
 TEST_CASE("Malformed Huffman payloads never return partial output", "[huffman][codec]")
@@ -176,12 +179,17 @@ TEST_CASE("Malformed Huffman payloads never return partial output", "[huffman][c
     block.lengths_.front() = 1;
     block.payload_.front() = std::byte{ high_bit_value };
   }
-  CHECK_THROWS_AS(decompress_block(std::move(block), large_block), decode_error);
+  CHECK_THROWS_MATCHES(decompress_block(std::move(block), large_block),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
 }
 
 TEST_CASE("Block metadata and output limits are validated", "[huffman][codec]")
 {
-  CHECK_THROWS_AS(decompress_block(golden(), 0), decode_error);
+  CHECK_THROWS_MATCHES(decompress_block(golden(), 0),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::output_limit_exceeded));
+  auto expected_code = dacoexec::errc::invalid_payload;
   encoded_block block;
   SECTION("raw size mismatch") { block.uncompressed_size_ = 1; }
   SECTION("raw padding") { block.padding_bits_ = 1; }
@@ -192,9 +200,14 @@ TEST_CASE("Block metadata and output limits are validated", "[huffman][codec]")
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     block.encoding_ = static_cast<block_encoding>(std::numeric_limits<std::uint8_t>::max());
   }
-  SECTION("huge output") { block.uncompressed_size_ = std::numeric_limits<std::uint64_t>::max(); }
+  SECTION("huge output")
+  {
+    block.uncompressed_size_ = std::numeric_limits<std::uint64_t>::max();
+    expected_code = dacoexec::errc::output_limit_exceeded;
+  }
   SECTION("empty Huffman") { block.encoding_ = block_encoding::canonical_huffman; }
-  CHECK_THROWS_AS(decompress_block(std::move(block), large_block), decode_error);
+  CHECK_THROWS_MATCHES(
+    decompress_block(std::move(block), large_block), dacoexec::exception, dacoexec::test::error_is(expected_code));
 }
 
 TEST_CASE("Fixed seed random and skewed blocks round trip", "[huffman][codec]")
@@ -266,7 +279,8 @@ TEST_CASE("Impossible Huffman output size fails the bit-count preflight", "[huff
   try {
     static_cast<void>(decompress_block(std::move(block), gibibyte));
     FAIL("Impossible output size was accepted");
-  } catch (decode_error const &error) {
-    CHECK(std::string_view{ error.what() } == "Huffman payload cannot produce declared output size");
+  } catch (dacoexec::exception const &error) {
+    CHECK(error.code() == dacoexec::errc::invalid_payload);
+    CHECK(std::string_view{ error.what() }.starts_with("Huffman payload cannot produce declared output size"));
   }
 }

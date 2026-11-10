@@ -3,6 +3,7 @@
 #define DACOEXEC_HUFFMAN_DETAIL_CANONICAL_IMPL_HPP
 
 #include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/error.hpp>
 #include <optional>
 #include <stdexcept>
 
@@ -32,17 +33,21 @@ constexpr auto validate_canonical_lengths(canonical_length_counts const &lengths
 {
   if (lengths.present_ == 0) { return; }
   if (lengths.present_ == 1) {
-    if (lengths.counts_.at(1) != 1) { throw std::invalid_argument("Huffman singleton must have length one"); }
+    if (lengths.counts_.at(1) != 1) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Huffman singleton must have length one");
+    }
     return;
   }
 
   std::uint64_t slots = 1;
   for (unsigned length = 1; length <= max_canonical_bits; ++length) {
     slots *= 2U;
-    if (lengths.counts_.at(length) > slots) { throw std::invalid_argument("Oversubscribed Huffman lengths"); }
+    if (lengths.counts_.at(length) > slots) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Oversubscribed Huffman lengths");
+    }
     slots -= lengths.counts_.at(length);
   }
-  if (slots != 0) { throw std::invalid_argument("Incomplete Huffman lengths"); }
+  if (slots != 0) { throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Incomplete Huffman lengths"); }
 }
 
 [[nodiscard]] constexpr auto assign_canonical_codewords(code_length_table const &lengths,

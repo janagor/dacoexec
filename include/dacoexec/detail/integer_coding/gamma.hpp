@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/integer_coding/common.hpp>
+#include <dacoexec/error.hpp>
 #include <stdexcept>
 
 namespace dacoexec::detail::integer_coding {
@@ -26,7 +27,10 @@ template<bit_input Reader> constexpr auto read_gamma(Reader &reader) -> std::uin
   unsigned zeros = 0;
   while (!reader.read_bit()) {
     ++zeros;
-    if (zeros >= integer_bits) { throw std::overflow_error("dacoexec::detail::integer_coding gamma overflow"); }
+    if (zeros >= integer_bits) {
+      throw ::dacoexec::exception(
+        ::dacoexec::errc::numeric_overflow, "dacoexec::detail::integer_coding gamma overflow");
+    }
   }
   return (std::uint64_t{ 1 } << zeros) | reader.read_bits(zeros);
 }

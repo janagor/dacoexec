@@ -42,7 +42,7 @@ public:
   explicit ans_frames_view(V base, std::size_t frame_limit)
   {
     if (frame_limit == 0 || frame_limit > ans::max_frame_size) {
-      throw std::invalid_argument("Invalid DAN1 frame limit");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid DAN1 frame limit");
     }
     state_ = std::make_unique<state>(std::move(base), frame_limit);
   }
@@ -72,7 +72,9 @@ public:
 
     [[nodiscard]] auto operator*() const -> ans::encoded_frame const &
     {
-      if (!state_->current_) { throw std::bad_optional_access{}; }
+      if (!state_->current_) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Iterator has no current value");
+      }
       return *state_->current_;
     }
 
@@ -124,7 +126,7 @@ namespace views {
     explicit constexpr ans_frames_closure(std::size_t frame_limit) : frame_limit_(frame_limit)
     {
       if (frame_limit_ == 0 || frame_limit_ > ans::max_frame_size) {
-        throw std::invalid_argument("Invalid DAN1 frame limit");
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid DAN1 frame limit");
       }
     }
 

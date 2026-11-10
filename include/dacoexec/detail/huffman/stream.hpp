@@ -20,9 +20,9 @@ namespace dacoexec::detail::huffman {
  * @param sink Destination satisfying io::byte_output_sink.
  * @param options Compression block size.
  * @return Completed statistics including archive framing and length tables.
- * @throws std::invalid_argument If block_size_ is zero or exceeds max_frame_size,
+ * @throws dacoexec::exception (errc::invalid_argument) If block_size_ is zero or exceeds max_frame_size,
  *     before the archive header is written.
- * @throws std::overflow_error If codec counters or statistics overflow.
+ * @throws dacoexec::exception (errc::numeric_overflow) If codec counters or statistics overflow.
  *
  * @code
  * io::iterator_sink sink{std::back_inserter(archive)};
@@ -53,11 +53,11 @@ template<std::ranges::viewable_range R, io::byte_output_sink S>
  * @param sink Destination for decoded bytes.
  * @param options Per-frame size and cumulative decoded-output limits.
  * @return Completed statistics; input includes framing and output is plain bytes.
- * @throws std::invalid_argument If max_frame_size_ is zero or exceeds the format limit.
- * @throws format_error For malformed framing or code-length tables, checksum
- *     mismatch, or cumulative output exceeding max_output_bytes_.
- * @throws decode_error For malformed block content or padding.
- * @throws std::overflow_error If statistics or frame sequence numbers overflow.
+ * @throws dacoexec::exception (errc::invalid_argument) If max_frame_size_ is zero or exceeds the format limit.
+ * @throws dacoexec::exception For malformed framing or code-length tables, checksum
+ *     mismatch, or configured output limits; code() identifies the failure.
+ * @throws dacoexec::exception (errc::invalid_payload) For malformed block content or padding.
+ * @throws dacoexec::exception (errc::numeric_overflow) If statistics or frame sequence numbers overflow.
  * @see compress_stream
  * @see decode_options
  */

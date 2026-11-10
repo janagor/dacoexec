@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <dacoexec/detail/ans/model_normalization.hpp>
 #include <dacoexec/detail/codec/frequency.hpp>
+#include <dacoexec/error.hpp>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -26,14 +27,20 @@ public:
   explicit frequency_model(table_type frequencies, unsigned precision = default_precision_bits)
     : frequencies_(frequencies), precision_bits_(precision)
   {
-    if (precision == 0 || precision > max_precision_bits) { throw std::invalid_argument("Invalid ANS precision"); }
+    if (precision == 0 || precision > max_precision_bits) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS precision");
+    }
     std::uint64_t sum = 0;
     for (std::size_t symbol = 0; symbol < symbol_count; ++symbol) {
       cumulative_.at(symbol) = static_cast<std::uint32_t>(sum);
       sum += frequencies_.at(symbol);
-      if (sum > total()) { throw std::invalid_argument("Invalid ANS frequency sum"); }
+      if (sum > total()) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS frequency sum");
+      }
     }
-    if (sum != total()) { throw std::invalid_argument("Invalid ANS frequency sum"); }
+    if (sum != total()) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS frequency sum");
+    }
   }
 
   [[nodiscard]] auto frequencies() const noexcept -> table_type const & { return frequencies_; }
@@ -56,16 +63,22 @@ template<std::size_t symbol_count>
 [[nodiscard]] auto make_model(std::array<std::uint64_t, symbol_count> const &counts,
   unsigned precision = default_precision_bits) -> frequency_model<symbol_count>
 {
-  if (precision == 0 || precision > max_precision_bits) { throw std::invalid_argument("Invalid ANS precision"); }
+  if (precision == 0 || precision > max_precision_bits) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS precision");
+  }
   std::uint64_t sum = 0;
   std::uint32_t present = 0;
   for (auto count : counts) {
-    if (count > std::numeric_limits<std::uint64_t>::max() - sum) { throw std::overflow_error("ANS count overflow"); }
+    if (count > std::numeric_limits<std::uint64_t>::max() - sum) {
+      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "ANS count overflow");
+    }
     sum += count;
     present += count != 0 ? 1U : 0U;
   }
   auto const total = std::uint32_t{ 1 } << precision;
-  if (sum == 0 || present > total) { throw std::invalid_argument("ANS model cannot represent alphabet"); }
+  if (sum == 0 || present > total) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "ANS model cannot represent alphabet");
+  }
   auto const slots = total - present;
   typename frequency_model<symbol_count>::table_type frequencies{};
   std::array<std::uint64_t, symbol_count> remainders{};

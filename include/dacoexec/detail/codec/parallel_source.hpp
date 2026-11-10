@@ -7,6 +7,7 @@
 #include <dacoexec/detail/codec/stream_statistics.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
+#include <dacoexec/error.hpp>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
@@ -37,7 +38,7 @@ template<std::ranges::view V, io::byte_output_sink Sink, class Format> struct pa
   auto initialize() -> void
   {
     if (options_.block_size_ == 0 || options_.block_size_ > Format::max_frame_size) {
-      throw std::invalid_argument("Invalid block size");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid block size");
     }
     Format::validate_options(options_);
     blocks_.emplace(std::move(source_), options_.block_size_);
@@ -46,14 +47,18 @@ template<std::ranges::view V, io::byte_output_sink Sink, class Format> struct pa
 
   auto next() -> std::optional<byte_block>
   {
-    if (!blocks_) { throw std::logic_error("Parallel source is not initialized"); }
+    if (!blocks_) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Parallel source is not initialized");
+    }
     if (!cursor_) {
       cursor_.emplace(blocks_->begin());
     } else if (advance_) {
       ++*cursor_;
     }
     advance_ = false;
-    if (!cursor_) { throw std::logic_error("Parallel source cursor is not initialized"); }
+    if (!cursor_) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Parallel source cursor is not initialized");
+    }
     if (*cursor_ == blocks_->end()) { return std::nullopt; }
     advance_ = true;
     return std::optional<byte_block>{ std::in_place, std::move(**cursor_) };

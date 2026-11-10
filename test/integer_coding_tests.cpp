@@ -1,3 +1,4 @@
+#include "error_test_utils.hpp"
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/integer_coding/common.hpp>
 #include <dacoexec/detail/integer_coding/delta.hpp>
@@ -5,6 +6,7 @@
 #include <dacoexec/detail/integer_coding/golomb.hpp>
 #include <dacoexec/detail/integer_coding/rice.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -88,7 +90,7 @@ auto check_value(Encode encode, Decode decode, std::uint64_t value, std::string_
   }
   for (std::size_t limit = 0; limit < packed.bits_; ++limit) {
     dacoexec::bit_reader truncated{ packed.bytes_, limit };
-    REQUIRE_THROWS_AS(decode(truncated), std::out_of_range);
+    REQUIRE_THROWS_AS(decode(truncated), dacoexec::exception);
   }
 }
 
@@ -213,34 +215,35 @@ TEST_CASE("integer coding invalid domains and bounded malicious prefixes", "[int
 {
   std::vector<std::byte> output;
   dacoexec::bit_writer writer{ std::back_inserter(output) };
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_gamma(writer, 0U), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_delta(writer, 0U), std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_golomb(writer, 0U, 0U), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_gamma(writer, 0U), dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_delta(writer, 0U), dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_golomb(writer, 0U, 0U), dacoexec::exception);
   REQUIRE_THROWS_AS(
     dacoexec::detail::integer_coding::write_rice(writer, 0U, dacoexec::detail::integer_coding::integer_bits),
-    std::invalid_argument);
+    dacoexec::exception);
   REQUIRE(writer.finish() == 0U);
   REQUIRE(output.empty());
 
   std::array<std::byte, 1> const ones{ std::byte{ 0xFF } };
   dacoexec::bit_reader limited{ ones, byte_bits };
-  REQUIRE_THROWS_AS(
-    dacoexec::detail::integer_coding::read_rice(limited, 0U, { .max_unary_bits_ = rice_shift }), std::length_error);
+  REQUIRE_THROWS_MATCHES(dacoexec::detail::integer_coding::read_rice(limited, 0U, { .max_unary_bits_ = rice_shift }),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::codeword_limit_exceeded));
   dacoexec::bit_reader overflow{ ones, byte_bits };
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_rice(overflow, largest_shift), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_rice(overflow, largest_shift), dacoexec::exception);
   dacoexec::bit_reader invalid{ ones, byte_bits };
   REQUIRE_THROWS_AS(
     dacoexec::detail::integer_coding::read_rice(invalid, dacoexec::detail::integer_coding::integer_bits),
-    std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_golomb(invalid, 0U), std::invalid_argument);
+    dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_golomb(invalid, 0U), dacoexec::exception);
   REQUIRE(invalid.remaining_bits() == byte_bits);
 
   std::array<std::byte, sizeof(std::uint64_t)> const zeros{};
   dacoexec::bit_reader gamma_overflow{ zeros, dacoexec::detail::integer_coding::integer_bits };
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_gamma(gamma_overflow), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_gamma(gamma_overflow), dacoexec::exception);
   auto const wide_length = encode_value(gamma_write, dacoexec::detail::integer_coding::integer_bits + 1U);
   dacoexec::bit_reader delta_overflow{ wide_length.bytes_, wide_length.bits_ };
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_delta(delta_overflow), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_delta(delta_overflow), dacoexec::exception);
 }
 
 TEST_CASE("bit reader preserves exact boundaries and failed reads", "[bit_reader]")
@@ -250,15 +253,15 @@ TEST_CASE("bit reader preserves exact boundaries and failed reads", "[bit_reader
   std::array<std::byte, 1> const bytes{ std::byte{ 0b10111111 } };
   dacoexec::bit_reader reader{ bytes, valid_bits };
   REQUIRE(reader.read_bits(0U) == 0U);
-  REQUIRE_THROWS_AS(reader.read_bits(valid_bits + 1U), std::out_of_range);
-  REQUIRE_THROWS_AS(reader.read_bits(dacoexec::detail::integer_coding::integer_bits + 1U), std::invalid_argument);
+  REQUIRE_THROWS_AS(reader.read_bits(valid_bits + 1U), dacoexec::exception);
+  REQUIRE_THROWS_AS(reader.read_bits(dacoexec::detail::integer_coding::integer_bits + 1U), dacoexec::exception);
   REQUIRE(reader.remaining_bits() == valid_bits);
   REQUIRE(reader.read_bits(valid_bits) == expected_value);
-  REQUIRE_THROWS_AS(reader.read_bit(), std::out_of_range);
-  REQUIRE_THROWS_AS((dacoexec::bit_reader{ bytes, byte_bits + 1U }), std::invalid_argument);
+  REQUIRE_THROWS_AS(reader.read_bit(), dacoexec::exception);
+  REQUIRE_THROWS_AS((dacoexec::bit_reader{ bytes, byte_bits + 1U }), dacoexec::exception);
   dacoexec::bit_reader empty{ std::span<std::byte const>{}, 0U };
   REQUIRE(empty.read_bits(0U) == 0U);
-  REQUIRE_THROWS_AS(empty.read_bit(), std::out_of_range);
+  REQUIRE_THROWS_AS(empty.read_bit(), dacoexec::exception);
   std::array<std::byte, sizeof(std::uint64_t)> full{};
   full.fill(all_bits_byte);
   dacoexec::bit_reader wide{ full, dacoexec::detail::integer_coding::integer_bits };
@@ -285,7 +288,9 @@ TEST_CASE("unary limits are inclusive and default decoding is unrestricted", "[i
           REQUIRE(decode(bounded, { .max_unary_bits_ = limit }) == quotient);
           REQUIRE(bounded.remaining_bits() == 0U);
         } else {
-          REQUIRE_THROWS_AS(decode(bounded, { .max_unary_bits_ = limit }), std::length_error);
+          REQUIRE_THROWS_MATCHES(decode(bounded, { .max_unary_bits_ = limit }),
+            dacoexec::exception,
+            dacoexec::test::error_is(dacoexec::errc::codeword_limit_exceeded));
         }
         dacoexec::bit_reader unrestricted{ packed.bytes_, packed.bits_ };
         REQUIRE(decode(unrestricted, {}) == quotient);
@@ -300,12 +305,12 @@ TEST_CASE("Rice and Golomb sizes use checked arithmetic", "[integer_coding]")
   static_assert(dacoexec::detail::integer_coding::rice_bit_length(maximum - 1U, 0U) == maximum);
   static_assert(dacoexec::detail::integer_coding::golomb_bit_length(maximum - 1U, 1U) == maximum);
   static_assert(dacoexec::detail::integer_coding::rice_bit_length(maximum, largest_shift) == largest_shift + 2U);
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::rice_bit_length(maximum, 0U), std::overflow_error);
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::golomb_bit_length(maximum, 1U), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::rice_bit_length(maximum, 0U), dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::golomb_bit_length(maximum, 1U), dacoexec::exception);
   REQUIRE_THROWS_AS(
     dacoexec::detail::integer_coding::rice_bit_length(0U, dacoexec::detail::integer_coding::integer_bits),
-    std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::golomb_bit_length(0U, 0U), std::invalid_argument);
+    dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::golomb_bit_length(0U, 0U), dacoexec::exception);
   for (std::uint64_t value = 0; value < small_value_limit; ++value) {
     REQUIRE(
       dacoexec::detail::integer_coding::rice_bit_length(value, rice_shift) == encode_value(rice_write, value).bits_);
@@ -369,15 +374,15 @@ TEST_CASE("Golomb decoder arithmetic rejects values beyond uint64_t", "[integer_
           == maximum);
   REQUIRE_THROWS_AS(
     dacoexec::detail::integer_coding::golomb_value({ .quotient_ = quotient, .remainder_ = remainder + 1U }, divisor),
-    std::overflow_error);
+    dacoexec::exception);
   REQUIRE_THROWS_AS(
     dacoexec::detail::integer_coding::golomb_value({ .quotient_ = quotient + 1U, .remainder_ = 0U }, divisor),
-    std::overflow_error);
+    dacoexec::exception);
 
   // Exercise the unary quotient overflow branch with a small bound.
   std::array<std::byte, 1> const prefix{ std::byte{ 0b11000000 } };
   dacoexec::bit_reader reader{ prefix, byte_bits };
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_unary(reader, {}, 1U), std::overflow_error);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_unary(reader, {}, 1U), dacoexec::exception);
 }
 
 namespace {
@@ -400,8 +405,8 @@ template<class Encode> auto check_sink_failure(Encode encode, std::uint64_t valu
   dacoexec::bit_writer writer{ std::back_inserter(sink) };
   REQUIRE_THROWS_WITH(encode(writer, value), "integer coding test sink failure");
   REQUIRE(sink.bytes_.size() == 1U);
-  REQUIRE_THROWS_AS(writer.finish(), std::logic_error);
-  REQUIRE_THROWS_AS(encode(writer, value), std::logic_error);
+  REQUIRE_THROWS_AS(writer.finish(), dacoexec::exception);
+  REQUIRE_THROWS_AS(encode(writer, value), dacoexec::exception);
   REQUIRE(sink.bytes_.size() == 1U);
 }
 

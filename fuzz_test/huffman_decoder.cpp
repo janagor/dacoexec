@@ -1,3 +1,4 @@
+#include "error_policy.hpp"
 #include <dacoexec/detail/huffman/block.hpp>
 #include <dacoexec/error.hpp>
 
@@ -37,8 +38,8 @@ auto malformed(std::span<std::uint8_t const> input) -> void
   try {
     auto const decoded = huffman::decompress_block(std::move(block), output_limit);
     if (decoded.bytes_.size() != expected_size) { std::abort(); }
-  } catch (dacoexec::huffman::decode_error const &) {
-    // Documented malformed block rejection; other exceptions are failures.
+  } catch (dacoexec::exception const &error) {
+    if (!dacoexec::fuzz::expected_huffman_block_error(error.code())) { throw; }
   }
 }
 

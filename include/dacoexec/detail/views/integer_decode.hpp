@@ -5,6 +5,7 @@
 #define DACOEXEC_VIEWS_INTEGER_DECODE_HPP
 
 #include <dacoexec/detail/views/integer_codec.hpp>
+#include <dacoexec/error.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -24,7 +25,7 @@ namespace dacoexec::detail::views {
  * storage borrowed by the view must outlive iteration. Any exception permanently
  * ends the pass. Storage is bounded independently of input and codeword size.
  * Decodes exactly count values; trailing bits are left unread. Zero count
- * never starts the source. Truncation throws out_of_range; malformed values
+ * never starts the source. Truncation throws dacoexec::exception (errc::truncated_input); malformed values
  * and unary limits use the low-level decoder exception types.
  * Source increments are deferred until another bit is needed, so the final
  * requested value never stages subsequent input.
@@ -58,7 +59,8 @@ class integer_decode_view : public std::ranges::view_interface<integer_decode_vi
     auto read_bit() -> bool
     {
       if (!cursor_.has_value()) {
-        throw std::out_of_range("dacoexec::detail::integer_decode_view source cursor is not initialized");
+        throw ::dacoexec::exception(
+          ::dacoexec::errc::invalid_state, "dacoexec::detail::integer_decode_view source cursor is not initialized");
       }
       auto &position = cursor_.value();
       if (pending_advance_) {
@@ -66,7 +68,8 @@ class integer_decode_view : public std::ranges::view_interface<integer_decode_vi
         pending_advance_ = false;
       }
       if (position == std::ranges::end(base_)) {
-        throw std::out_of_range("dacoexec::detail::integer_decode_view exhausted input");
+        throw ::dacoexec::exception(
+          ::dacoexec::errc::truncated_input, "dacoexec::detail::integer_decode_view exhausted input");
       }
       auto const bit = static_cast<bool>(*position);
       pending_advance_ = true;
@@ -76,7 +79,8 @@ class integer_decode_view : public std::ranges::view_interface<integer_decode_vi
     auto read_bits(unsigned count) -> std::uint64_t
     {
       if (count > integer_coding::integer_bits) {
-        throw std::invalid_argument("dacoexec::detail::integer_decode_view width exceeds uint64_t");
+        throw ::dacoexec::exception(
+          ::dacoexec::errc::invalid_argument, "dacoexec::detail::integer_decode_view width exceeds uint64_t");
       }
       std::uint64_t value = 0;
       for (unsigned index = 0; index < count; ++index) { value = (value << 1U) | (read_bit() ? 1U : 0U); }

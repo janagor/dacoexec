@@ -7,6 +7,7 @@
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/huffman/canonical.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -28,7 +29,7 @@ namespace dacoexec::detail::huffman {
  *
  * Accepts a byte_input_range and returns codeword values by value. Increment
  * advances one source symbol and stages its codeword; repeated begin() resumes
- * the current pass. An absent symbol throws std::invalid_argument. A moved-from
+ * the current pass. An absent symbol throws dacoexec::exception (errc::invalid_argument). A moved-from
  * or default view is empty. Move assignment invalidates iterators to the old
  * destination state. The stored source view may borrow external storage.
  *
@@ -74,7 +75,9 @@ class codewords_view : public std::ranges::view_interface<codewords_view<V>>
         using source_value = std::ranges::range_value_t<V>;
         std::byte const value = dacoexec::detail::support::to_byte(static_cast<source_value>(*position));
         current_ = codebook_.at(std::to_integer<std::uint8_t>(value));
-        if (current_.length_ == 0) { throw std::invalid_argument("Symbol absent from Huffman codebook"); }
+        if (current_.length_ == 0) {
+          throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Symbol absent from Huffman codebook");
+        }
       } catch (...) {
         finished_ = true;
         throw;
@@ -207,7 +210,7 @@ namespace views {
    * Creates a lazy byte-to-codeword adaptor, storing a copy of the codebook.
    *
    * @param codebook Validated mapping; every encountered symbol must be present.
-   * Absent symbols throw std::invalid_argument during iteration.
+   * Absent symbols throw dacoexec::exception (errc::invalid_argument) during iteration.
    *
    * @code
    * auto words = bytes | dacoexec::detail::huffman::views::codewords(book);

@@ -7,19 +7,21 @@
 #include <cstdint>
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/integer_coding/common.hpp>
+#include <dacoexec/error.hpp>
 #include <limits>
 #include <stdexcept>
 
 namespace dacoexec::detail::integer_coding {
 
-/** Returns the encoded size; throws overflow_error if it cannot fit uint64_t. */
+/** Returns the encoded size; throws dacoexec::exception (errc::numeric_overflow) if it cannot fit uint64_t. */
 [[nodiscard]] constexpr auto rice_bit_length(std::uint64_t value, unsigned shift) -> std::uint64_t
 {
   ::dacoexec::detail::integer_coding::validate_rice(shift);
   auto const quotient = value >> shift;
   auto const suffix_bits = std::uint64_t{ shift } + 1U;
   if (quotient > std::numeric_limits<std::uint64_t>::max() - suffix_bits) {
-    throw std::overflow_error("dacoexec::detail::integer_coding Rice size overflow");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::numeric_overflow, "dacoexec::detail::integer_coding Rice size overflow");
   }
   return quotient + suffix_bits;
 }

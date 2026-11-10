@@ -209,7 +209,7 @@ struct file_sink
   auto write(std::span<std::byte const> bytes) -> void
   {
     if (std::fwrite(bytes.data(), 1, bytes.size(), file_) != bytes.size()) {
-      throw dacoexec::stream_error("Temporary archive write failed");
+      throw dacoexec::exception(dacoexec::errc::io_error, "Temporary archive write failed");
     }
     count_ += bytes.size();
   }
@@ -223,8 +223,9 @@ template<bool use_ans> auto exercise(std::uint64_t size, bool high_entropy = fal
     size, [high_entropy](std::uint64_t offset) -> std::byte { return source_byte(offset, high_entropy); });
   static_assert(std::ranges::input_range<decltype(source)>);
   static_assert(!std::ranges::forward_range<decltype(source)>);
-  std::unique_ptr<std::FILE, decltype(&std::fclose)> file(std::tmpfile(), &std::fclose);
-  if (!file) { throw dacoexec::stream_error("Cannot create temporary archive"); }
+  auto const close_file = [](std::FILE *value) noexcept { static_cast<void>(std::fclose(value)); };
+  std::unique_ptr<std::FILE, decltype(close_file)> file(std::tmpfile(), close_file);
+  if (!file) { throw dacoexec::exception(dacoexec::errc::io_error, "Cannot create temporary archive"); }
   file_sink compressed{ .file_ = file.get() };
   auto const encoded = [&]() -> auto {
     if constexpr (use_ans) {
@@ -248,10 +249,12 @@ template<bool use_ans> auto exercise(std::uint64_t size, bool high_entropy = fal
       throw std::logic_error("High-entropy fixture did not select RAW frames");
     }
   }
-  if (std::fseek(file.get(), 0, SEEK_SET) != 0) { throw dacoexec::stream_error("Cannot rewind temporary archive"); }
+  if (std::fseek(file.get(), 0, SEEK_SET) != 0) {
+    throw dacoexec::exception(dacoexec::errc::io_error, "Cannot rewind temporary archive");
+  }
   generated_bytes archive(compressed.count_, [&file](std::uint64_t) -> std::byte {
     auto const value = std::fgetc(file.get());
-    if (value == EOF) { throw dacoexec::stream_error("Temporary archive read failed"); }
+    if (value == EOF) { throw dacoexec::exception(dacoexec::errc::io_error, "Temporary archive read failed"); }
     return static_cast<std::byte>(static_cast<unsigned char>(value));
   });
   checking_sink decoded{ .high_entropy_ = high_entropy };

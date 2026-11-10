@@ -70,32 +70,36 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
 {
   if (header.kind_ == frame_kind::end) {
     if (header.uncompressed_size_ != 0 || header.payload_size_ != 0 || header.crc32_ != 0) {
-      throw format_error("Nonzero END fields");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Nonzero END fields");
     }
     return;
   }
   if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::rans && header.kind_ != frame_kind::tans) {
-    throw format_error("Unknown frame type");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Unknown frame type");
   }
-  if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > limit
-      || header.payload_size_ > limit || header.uncompressed_size_ > max_frame_size
+  if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > max_frame_size
       || header.payload_size_ > max_frame_size) {
-    throw format_error("Invalid DAN1 frame size");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Invalid DAN1 frame size");
+  }
+  if (header.uncompressed_size_ > limit || header.payload_size_ > limit) {
+    throw ::dacoexec::exception(::dacoexec::errc::output_limit_exceeded, "Frame exceeds configured size limit");
   }
   if (header.kind_ == frame_kind::rans && header.payload_size_ < rans::state_bytes) {
-    throw format_error("Truncated ANS state");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Truncated ANS state");
   }
   if (header.kind_ == frame_kind::tans && header.payload_size_ < tans::payload_prefix_size) {
-    throw format_error("Truncated tANS state and bit count");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Truncated tANS state and bit count");
   }
   if (header.kind_ == frame_kind::raw && header.payload_size_ != header.uncompressed_size_) {
-    throw format_error("Inconsistent RAW sizes");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Inconsistent RAW sizes");
   }
 }
 
 inline auto read_archive_header(std::span<std::byte const, archive_header_size> bytes) -> void
 {
-  if (!std::ranges::equal(bytes, archive_header_bytes)) { throw format_error("Invalid DAN1 header"); }
+  if (!std::ranges::equal(bytes, archive_header_bytes)) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_archive, "Invalid DAN1 header");
+  }
 }
 
 [[nodiscard]] inline auto read_frame_header(std::span<std::byte const, frame_header_size> bytes,
@@ -117,19 +121,21 @@ template<io::byte_output_sink S> inline auto write_frame_header(S &sink, frame_h
 template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame const &frame) -> void
 {
   validate_frame_header(frame.header_);
-  if (frame.header_.kind_ == frame_kind::end) { throw format_error("END has no data block"); }
+  if (frame.header_.kind_ == frame_kind::end) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "END has no data block");
+  }
   auto const &block = frame.block_;
   if (block.payload_.size() != frame.header_.payload_size_
       || block.uncompressed_size_ != frame.header_.uncompressed_size_
       || block.encoding_ != (static_cast<block_encoding>(frame.header_.kind_))) {
-    throw format_error("Inconsistent encoded frame");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Inconsistent encoded frame");
   }
   if ((block.encoding_ != block_encoding::raw) != block.model_.has_value()) {
-    throw format_error("Inconsistent ANS model metadata");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Inconsistent ANS model metadata");
   }
   write_frame_header(sink, frame.header_);
   if (frame.header_.kind_ == frame_kind::rans || frame.header_.kind_ == frame_kind::tans) {
-    if (!block.model_) { throw format_error("Missing ANS model"); }
+    if (!block.model_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Missing ANS model"); }
     constexpr auto max_model_wire_size =
       ::dacoexec::detail::ans::model_prefix_size + (alphabet_size * ::dacoexec::detail::ans::model_entry_size);
     std::array<std::byte, max_model_wire_size> metadata{};

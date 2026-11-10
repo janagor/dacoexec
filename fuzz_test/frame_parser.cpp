@@ -1,3 +1,4 @@
+#include "error_policy.hpp"
 #include <dacoexec/detail/huffman/decode_view.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 #include <dacoexec/error.hpp>
@@ -31,8 +32,9 @@ auto parse(std::span<std::uint8_t const> input) -> void
     auto const statistics =
       huffman::decompress_stream(input, sink, { .max_frame_size_ = input_limit, .max_output_bytes_ = output_limit });
     if (statistics.input_bytes_ != input.size() || statistics.output_bytes_ != sink.count_) { std::abort(); }
-  } catch (dacoexec::format_error const &) {
-  } catch (dacoexec::huffman::decode_error const &) {}
+  } catch (dacoexec::exception const &error) {
+    if (!dacoexec::fuzz::expected_archive_error(error.code())) { throw; }
+  }
 }
 }// namespace
 

@@ -4,6 +4,7 @@
 #ifndef DACOEXEC_VIEWS_ANS_HPP
 #define DACOEXEC_VIEWS_ANS_HPP
 #include <dacoexec/detail/ans/block.hpp>
+#include <dacoexec/error.hpp>
 #include <exception>
 #include <iterator>
 #include <memory>
@@ -55,7 +56,9 @@ class ans_block_view : public std::ranges::view_interface<ans_block_view<V, Oper
     auto load() -> void
     {
       current_.reset();
-      if (!cursor_) { throw std::logic_error("ANS block cursor is not initialized"); }
+      if (!cursor_) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "ANS block cursor is not initialized");
+      }
       if (*cursor_ == std::ranges::end(base_)) {
         finished_ = true;
         return;
@@ -81,7 +84,9 @@ class ans_block_view : public std::ranges::view_interface<ans_block_view<V, Oper
     {
       if (finished_) { return; }
       try {
-        if (!cursor_) { throw std::logic_error("ANS block cursor is not initialized"); }
+        if (!cursor_) {
+          throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "ANS block cursor is not initialized");
+        }
         ++*cursor_;
         load();
       } catch (...) {
@@ -116,7 +121,9 @@ public:
 
     auto operator*() const -> result_type const &
     {
-      if (state_ == nullptr || !state_->current_) { throw std::bad_optional_access{}; }
+      if (state_ == nullptr || !state_->current_) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Iterator has no current value");
+      }
       return *state_->current_;
     }
 

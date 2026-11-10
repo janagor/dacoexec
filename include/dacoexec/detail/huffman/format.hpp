@@ -116,38 +116,43 @@ struct encoded_frame
  * Checks frame kind, nonzero data sizes, limits, RAW size equality and END zeros.
  *
  * @param limit Additional bound on both sizes, capped by max_frame_size.
- * @throws format_error If header fields violate these rules.
+ * @throws dacoexec::exception (errc::invalid_frame) If header fields violate these rules.
+ * @throws dacoexec::exception (errc::output_limit_exceeded) If a configured size bound is exceeded.
  * Code lengths, payload contents, and checksum are not inspected.
  */
 inline auto validate_frame_header(frame_header const &header, std::size_t limit = max_frame_size) -> void
 {
   if (header.kind_ == frame_kind::end) {
     if (header.uncompressed_size_ != 0 || header.payload_size_ != 0 || header.crc32_ != 0) {
-      throw format_error("Nonzero END fields");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Nonzero END fields");
     }
     return;
   }
   if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::huffman) {
-    throw format_error("Unknown frame type");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Unknown frame type");
   }
-  if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > limit
-      || header.payload_size_ > limit || header.uncompressed_size_ > max_frame_size
+  if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > max_frame_size
       || header.payload_size_ > max_frame_size) {
-    throw format_error("Invalid DHF1 frame size");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Invalid DHF1 frame size");
+  }
+  if (header.uncompressed_size_ > limit || header.payload_size_ > limit) {
+    throw ::dacoexec::exception(::dacoexec::errc::output_limit_exceeded, "Frame exceeds configured size limit");
   }
   if (header.kind_ == frame_kind::raw && header.payload_size_ != header.uncompressed_size_) {
-    throw format_error("Inconsistent RAW sizes");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Inconsistent RAW sizes");
   }
 }
 
 /**
  * Checks the complete archive magic and reserved bytes.
  *
- * @throws format_error If any byte differs from archive_header_bytes.
+ * @throws dacoexec::exception (errc::invalid_archive) If any byte differs from archive_header_bytes.
  */
 inline auto read_archive_header(std::span<std::byte const, archive_header_size> bytes) -> void
 {
-  if (!std::ranges::equal(bytes, archive_header_bytes)) { throw format_error("Invalid DHF1 header"); }
+  if (!std::ranges::equal(bytes, archive_header_bytes)) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_archive, "Invalid DHF1 header");
+  }
 }
 
 /**
@@ -155,7 +160,7 @@ inline auto read_archive_header(std::span<std::byte const, archive_header_size> 
  *
  * @param limit Additional payload and uncompressed-size bound.
  * @return Validated host-representation header, including END.
- * @throws format_error If the decoded header violates validate_frame_header().
+ * @throws dacoexec::exception (errc::invalid_frame) If the decoded header violates validate_frame_header().
  */
 [[nodiscard]] inline auto read_frame_header(std::span<std::byte const, frame_header_size> bytes,
   std::size_t limit = max_frame_size) -> frame_header
@@ -173,7 +178,7 @@ template<io::byte_output_sink S> inline auto write_archive_header(S &sink) -> vo
 /**
  * Validates and writes a 13-byte little-endian header.
  *
- * @throws format_error If header fields are invalid, before writing.
+ * @throws dacoexec::exception (errc::invalid_frame) If header fields are invalid, before writing.
  * Sink exceptions propagate; already-written bytes remain accepted.
  */
 template<io::byte_output_sink S> inline auto write_frame_header(S &sink, frame_header const &header) -> void
@@ -185,7 +190,7 @@ template<io::byte_output_sink S> inline auto write_frame_header(S &sink, frame_h
 /**
  * Writes a frame header, optional canonical length table, and owned payload.
  *
- * @throws format_error If the header is invalid or payload size, uncompressed
+ * @throws dacoexec::exception (errc::invalid_frame) If the header is invalid or payload size, uncompressed
  *     size, or encoding disagrees with the header, before the first write.
  * Length-table structure, padding and checksum are not validated or recomputed.
  * Sink failures can leave a header or body prefix; no writes are retried.
@@ -201,7 +206,7 @@ template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame 
       || block.uncompressed_size_ != frame.header_.uncompressed_size_
       || block.encoding_
            != (frame.header_.kind_ == frame_kind::huffman ? block_encoding::canonical_huffman : block_encoding::raw)) {
-    throw format_error("Inconsistent encoded frame");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Inconsistent encoded frame");
   }
   write_frame_header(sink, frame.header_);
   if (frame.header_.kind_ == frame_kind::huffman) {

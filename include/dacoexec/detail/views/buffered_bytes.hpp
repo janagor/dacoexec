@@ -7,6 +7,7 @@
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/support/buffer.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -38,7 +39,7 @@ namespace dacoexec::detail {
  * The range is single-pass. Copying an iterator aliases the same byte; it
  * does not restart the source or duplicate the window. Repeated begin() calls
  * resume the in-progress pass. A buffer size of zero throws
- * std::invalid_argument. The window buffer starts at a capacity of at most
+ * dacoexec::exception (errc::invalid_argument). The window buffer starts at a capacity of at most
  * 4096 bytes and doubles until it reaches the requested size. An empty source
  * allocates nothing. An exception from the source propagates unchanged. The
  * unfinished window is discarded, and later iteration does not resume.
@@ -130,12 +131,13 @@ public:
    * Stores the source view without reading it.
    *
    * @param capacity Maximum bytes per read-ahead window.
-   * @throws std::invalid_argument If capacity is zero.
+   * @throws dacoexec::exception (errc::invalid_argument) If capacity is zero.
    */
   buffered_bytes_view(V base, std::size_t capacity) : state_(std::make_unique<state>(std::move(base), capacity))
   {
     if (capacity == 0) {
-      throw std::invalid_argument("dacoexec::detail::views::buffered_bytes requires a positive buffer size");
+      throw ::dacoexec::exception(
+        ::dacoexec::errc::invalid_argument, "dacoexec::detail::views::buffered_bytes requires a positive buffer size");
     }
   }
 
@@ -216,7 +218,8 @@ namespace views {
     explicit constexpr buffered_bytes_closure(std::size_t capacity) : capacity_(capacity)
     {
       if (capacity_ == 0) {
-        throw std::invalid_argument("dacoexec::detail::views::buffered_bytes requires a positive buffer size");
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_argument,
+          "dacoexec::detail::views::buffered_bytes requires a positive buffer size");
       }
     }
 
@@ -239,7 +242,7 @@ namespace views {
    * Creates a bounded read-ahead adaptor yielding std::byte values.
    *
    * @param capacity Maximum bytes read into each window.
-   * @throws std::invalid_argument If capacity is zero.
+   * @throws dacoexec::exception (errc::invalid_argument) If capacity is zero.
    *
    * @code
    * auto buffered = bytes | dacoexec::detail::views::buffered_bytes(window_size);

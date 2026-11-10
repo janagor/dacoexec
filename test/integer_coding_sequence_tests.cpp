@@ -1,3 +1,4 @@
+#include "error_test_utils.hpp"
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/integer_coding/common.hpp>
 #include <dacoexec/detail/integer_coding/delta.hpp>
@@ -6,6 +7,7 @@
 #include <dacoexec/detail/integer_coding/sequence.hpp>
 #include <dacoexec/detail/numeric/mapping.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -116,8 +118,8 @@ TEST_CASE("signed mappings compose with integer coding sequences", "[integer_cod
     REQUIRE(dacoexec::detail::numeric::zigzag_decode(dacoexec::detail::numeric::zigzag_encode(value)) == value);
   }
   REQUIRE_THROWS_AS(dacoexec::detail::numeric::to_positive(dacoexec::detail::numeric::zigzag_encode(signed_minimum)),
-    std::overflow_error);
-  REQUIRE_THROWS_AS(dacoexec::detail::numeric::from_positive(0U), std::invalid_argument);
+    dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::numeric::from_positive(0U), dacoexec::exception);
 
   auto mapped = signed_values | std::views::transform([](std::int64_t value) -> std::uint64_t {
     return dacoexec::detail::numeric::to_positive(dacoexec::detail::numeric::zigzag_encode(value));
@@ -145,8 +147,8 @@ TEST_CASE("empty sequences and failures preserve explicit boundaries", "[integer
   dacoexec::detail::integer_coding::write_gamma_sequence(writer, empty);
   REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_rice_sequence(
                       writer, empty, dacoexec::detail::integer_coding::integer_bits),
-    std::invalid_argument);
-  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_golomb_sequence(writer, empty, 0U), std::invalid_argument);
+    dacoexec::exception);
+  REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::write_golomb_sequence(writer, empty, 0U), dacoexec::exception);
   dacoexec::detail::integer_coding::write_gamma_sequence(writer, positive_values);
   auto const padding = writer.finish();
   dacoexec::bit_reader reader{ bytes, (bytes.size() * byte_bits) - padding };
@@ -154,14 +156,14 @@ TEST_CASE("empty sequences and failures preserve explicit boundaries", "[integer
   dacoexec::detail::integer_coding::read_gamma_sequence(reader, 0U, std::back_inserter(decoded));
   REQUIRE(decoded.empty());
   REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_golomb_sequence(reader, 0U, std::back_inserter(decoded), 0U),
-    std::invalid_argument);
+    dacoexec::exception);
   REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_rice_sequence(
                       reader, 0U, std::back_inserter(decoded), dacoexec::detail::integer_coding::integer_bits),
-    std::invalid_argument);
+    dacoexec::exception);
   REQUIRE(reader.remaining_bits() == (bytes.size() * byte_bits) - padding);
   REQUIRE_THROWS_AS(dacoexec::detail::integer_coding::read_gamma_sequence(
                       reader, positive_values.size() + 1U, std::back_inserter(decoded)),
-    std::out_of_range);
+    dacoexec::exception);
   REQUIRE(std::ranges::equal(decoded, positive_values));
 }
 
@@ -195,9 +197,10 @@ TEST_CASE("sequence callbacks and decoding limits propagate failures", "[integer
       return golomb ? dacoexec::detail::integer_coding::read_golomb(input_reader, 1U, limits)
                     : dacoexec::detail::integer_coding::read_rice(input_reader, 0U, limits);
     };
-    REQUIRE_THROWS_AS(
+    REQUIRE_THROWS_MATCHES(
       dacoexec::detail::integer_coding::read_sequence(bounded, quotients.size(), std::back_inserter(decoded), decode),
-      std::length_error);
+      dacoexec::exception,
+      dacoexec::test::error_is(dacoexec::errc::codeword_limit_exceeded));
     REQUIRE(decoded == std::vector<std::uint64_t>{ 0U });
   }
 }

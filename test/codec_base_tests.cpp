@@ -1,3 +1,4 @@
+#include "error_test_utils.hpp"
 #include <dacoexec/detail/ans/decoder.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
 #include <dacoexec/detail/ans/encoder.hpp>
@@ -46,9 +47,7 @@ struct candidate_encoder
   { return metadata_; }
 };
 
-struct short_decoder
-  : dacoexec::detail::codec::
-      decoder_base<short_decoder, dacoexec::detail::ans::encoded_block, dacoexec::ans::decode_error>
+struct short_decoder : dacoexec::detail::codec::decoder_base<short_decoder, dacoexec::detail::ans::encoded_block>
 {
   short_decoder() = default;
 
@@ -84,10 +83,14 @@ template<typename Encoder, typename Decoder, typename Error> auto check_codec() 
   CHECK(output.sequence_ == sequence);
 
   auto oversized = Encoder{}.encode({ sequence, { symbol } });
-  CHECK_THROWS_AS(Decoder{}.decode(std::move(oversized), 0), Error);
+  CHECK_THROWS_MATCHES(Decoder{}.decode(std::move(oversized), 0),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::output_limit_exceeded));
   auto inconsistent = Encoder{}.encode({ sequence, { symbol } });
   inconsistent.uncompressed_size_ = 0;
-  CHECK_THROWS_AS(Decoder{}.decode(std::move(inconsistent), 1), Error);
+  CHECK_THROWS_MATCHES(Decoder{}.decode(std::move(inconsistent), 1),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
 
   auto empty = Decoder{}.decode(Encoder{}.encode({ sequence, {} }), 0);
   CHECK(empty.sequence_ == sequence);
@@ -114,13 +117,13 @@ TEST_CASE("Shared decoder rejects incomplete codec output", "[codec]")
 {
   dacoexec::detail::ans::encoded_block block;
   block.uncompressed_size_ = input_size;
-  CHECK_THROWS_AS(short_decoder{}.decode(std::move(block), input_size), dacoexec::ans::decode_error);
+  CHECK_THROWS_MATCHES(short_decoder{}.decode(std::move(block), input_size),
+    dacoexec::exception,
+    dacoexec::test::error_is(dacoexec::errc::invalid_payload));
 }
 
 TEST_CASE("Codec classes preserve ownership, sequences, and bounds", "[codec]")
 {
-  check_codec<dacoexec::detail::huffman::encoder,
-    dacoexec::detail::huffman::decoder,
-    dacoexec::huffman::decode_error>();
-  check_codec<dacoexec::detail::ans::encoder, dacoexec::detail::ans::decoder, dacoexec::ans::decode_error>();
+  check_codec<dacoexec::detail::huffman::encoder, dacoexec::detail::huffman::decoder, dacoexec::exception>();
+  check_codec<dacoexec::detail::ans::encoder, dacoexec::detail::ans::decoder, dacoexec::exception>();
 }

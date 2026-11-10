@@ -30,14 +30,14 @@ namespace dacoexec::detail::huffman {
  * An empty table yields all zeros. One present symbol receives length 1, so
  * zero stays reserved for absent symbols. Two present symbols both receive
  * length 1. A parent frequency that would pass the maximum std::uint64_t
- * throws std::overflow_error.
+ * throws dacoexec::exception (errc::numeric_overflow).
  *
  * Construction uses a fixed array of 511 nodes and a fixed heap. It performs
  * no dynamic allocation.
  *
  * @param frequencies Occurrence counts; zeros denote absent symbols.
  * @return Per-symbol depths, including zeros for absent symbols.
- * @throws std::overflow_error If a merged frequency exceeds std::uint64_t.
+ * @throws dacoexec::exception (errc::numeric_overflow) If a merged frequency exceeds std::uint64_t.
  * @see make_canonical_codebook
  */
 [[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies) -> code_length_table;

@@ -7,8 +7,8 @@
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/huffman/canonical.hpp>
 #include <dacoexec/detail/huffman/decode_lookup.hpp>
-#include <dacoexec/detail/huffman/error.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <array>
 #include <cstddef>
@@ -36,7 +36,7 @@ namespace dacoexec::detail::huffman {
  * Explicit mode requires exactly the declared meaningful bits. Inferred mode
  * additionally accepts a final partial byte of fewer than eight zero bits.
  * Truncation, invalid trie transitions, count mismatches, nonzero padding and
- * trailing bytes throw decode_error. Source exceptions propagate unchanged.
+ * trailing bytes throw dacoexec::exception (errc::invalid_payload). Source exceptions propagate unchanged.
  *
  * The source view, fixed trie and cursor belong to one heap state. Iterators
  * survive moves of a started view; destroying its owner invalidates them.
@@ -72,11 +72,17 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
 
     auto read_bit() -> unsigned
     {
-      if (!cursor_.has_value()) { throw decode_error("Huffman source cursor is not initialized"); }
+      if (!cursor_.has_value()) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Huffman source cursor is not initialized");
+      }
       auto &position = cursor_.value();
-      if (consumed_bits_ == valid_bits_) { throw decode_error("Truncated Huffman codeword"); }
+      if (consumed_bits_ == valid_bits_) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Truncated Huffman codeword");
+      }
       if (cached_bits_ == 0) {
-        if (position == std::ranges::end(base_)) { throw decode_error("Truncated Huffman payload"); }
+        if (position == std::ranges::end(base_)) {
+          throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Truncated Huffman payload");
+        }
         using source_value = std::ranges::range_value_t<V>;
         cache_ =
           std::to_integer<std::uint8_t>(dacoexec::detail::support::to_byte(static_cast<source_value>(*position)));
@@ -91,19 +97,25 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
 
     auto validate_end() -> void
     {
-      if (!cursor_.has_value()) { throw decode_error("Huffman source cursor is not initialized"); }
+      if (!cursor_.has_value()) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Huffman source cursor is not initialized");
+      }
       auto &position = cursor_.value();
       if (consumed_bits_ != valid_bits_
           && (!infer_padding_ || valid_bits_ - consumed_bits_ >= dacoexec::detail::support::bits_per_byte
               || valid_bits_ - consumed_bits_ != cached_bits_)) {
-        throw decode_error("Trailing meaningful Huffman bits");
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Trailing meaningful Huffman bits");
       }
       if (cached_bits_ != 0) {
         auto const mask = (1U << cached_bits_) - 1U;
-        if ((static_cast<unsigned>(cache_) & mask) != 0) { throw decode_error("Nonzero Huffman padding"); }
+        if ((static_cast<unsigned>(cache_) & mask) != 0) {
+          throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Nonzero Huffman padding");
+        }
         std::ranges::advance(position, 1);
       }
-      if (position != std::ranges::end(base_)) { throw decode_error("Trailing Huffman payload bytes"); }
+      if (position != std::ranges::end(base_)) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Trailing Huffman payload bytes");
+      }
       finished_ = true;
     }
 
@@ -124,7 +136,7 @@ class decode_view : public std::ranges::view_interface<decode_view<V>>
           }
           node = lookup_.nodes_.at(node).children_.at(read_bit());
           if (node == ::dacoexec::detail::huffman::missing_decode_node) {
-            throw decode_error("Invalid Huffman trie transition");
+            throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid Huffman trie transition");
           }
         }
       } catch (...) {
@@ -285,7 +297,7 @@ namespace views {
    * @param expected_symbol_count Exact number of bytes to produce.
    * @param infer_padding Permit fewer than eight unused zero bits in the final
    *     byte after the expected symbols; otherwise require exact meaningful bits.
-   * Malformed content throws decode_error during iteration. Exhaust the view to
+   * Malformed content throws dacoexec::exception (errc::invalid_payload) during iteration. Exhaust the view to
    * validate trailing bits, zero padding, and source exhaustion.
    *
    * @code

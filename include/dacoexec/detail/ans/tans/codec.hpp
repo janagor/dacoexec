@@ -16,6 +16,15 @@ inline constexpr unsigned packed_byte_bits = 8;
 inline constexpr unsigned packed_byte_mask = 0xFF;
 inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
 
+// The serialized payload bit count is uint32_t, independently of output limits.
+[[nodiscard]] constexpr auto checked_payload_bit_count(std::uint32_t count, unsigned added) -> std::uint32_t
+{
+  if (added > std::numeric_limits<std::uint32_t>::max() - count) {
+    throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "tANS payload bit count overflow");
+  }
+  return count + added;
+}
+
 [[nodiscard]] inline auto encode_block(std::span<std::byte const> input, tables const &table) -> std::vector<std::byte>
 {
   std::vector<std::byte> reverse;
@@ -25,12 +34,9 @@ inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
   unsigned buffered = 0;
   for (auto symbol : std::views::reverse(input)) {
     auto const transition = table.encode(state, std::to_integer<unsigned>(symbol));
-    if (transition.num_bits_ > std::numeric_limits<std::uint32_t>::max() - count) {
-      throw std::length_error("tANS payload too large");
-    }
+    count = checked_payload_bit_count(count, transition.num_bits_);
     accumulator |= std::uint64_t{ transition.bits_ } << buffered;
     buffered += transition.num_bits_;
-    count += transition.num_bits_;
     while (buffered >= packed_byte_bits) {
       reverse.push_back(static_cast<std::byte>(accumulator & packed_byte_mask));
       accumulator >>= packed_byte_bits;
@@ -68,20 +74,23 @@ inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
   std::size_t count,
   std::size_t limit = std::numeric_limits<std::size_t>::max()) -> std::vector<std::byte>
 {
-  if (count > limit || payload.size() < payload_prefix_size) {
-    throw ::dacoexec::ans::decode_error("Invalid tANS payload size");
+  if (count > limit) {
+    throw ::dacoexec::exception(::dacoexec::errc::output_limit_exceeded, "tANS output exceeds configured limit");
+  }
+  if (payload.size() < payload_prefix_size) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid tANS payload size");
   }
   auto state = support::read_u32_le(payload.first<4>());
   auto const bits = support::read_u32_le(payload.subspan<4, 4>());
   if (state >= table.total()
       || payload.size() - payload_prefix_size
            != (static_cast<std::size_t>(bits) + (packed_byte_bits - 1U)) / packed_byte_bits) {
-    throw ::dacoexec::ans::decode_error("Invalid tANS state or bit length");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid tANS state or bit length");
   }
   if (bits % packed_byte_bits != 0
       && (std::to_integer<unsigned>(payload.back()) & ((1U << (packed_byte_bits - (bits % packed_byte_bits))) - 1U))
            != 0) {
-    throw ::dacoexec::ans::decode_error("Invalid tANS padding");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid tANS padding");
   }
   std::vector<std::byte> output;
   output.reserve(count);
@@ -97,7 +106,9 @@ inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
   // The assertion makes that invariant executable in debug/sanitizer builds.
   for (std::size_t symbol = 0; symbol < count; ++symbol) {
     auto const &entry = table.decode(state);
-    if (entry.num_bits_ > bits - position) { throw ::dacoexec::ans::decode_error("Truncated tANS bits"); }
+    if (entry.num_bits_ > bits - position) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Truncated tANS bits");
+    }
     while (buffered < entry.num_bits_) {
       assert(cursor != packed.end());
       accumulator = (accumulator << packed_byte_bits) | std::to_integer<unsigned>(*cursor++);
@@ -111,7 +122,7 @@ inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
     state = entry.baseline_ + value;
   }
   if (state != 0 || position != bits) {
-    throw ::dacoexec::ans::decode_error("Invalid tANS final state or excess bits");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid tANS final state or excess bits");
   }
   return output;
 }
@@ -121,11 +132,14 @@ inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
   std::size_t count,
   std::size_t limit = std::numeric_limits<std::size_t>::max()) -> std::vector<std::byte>
 {
-  if (count > limit || payload.size() < payload_prefix_size) {
-    throw ::dacoexec::ans::decode_error("Invalid tANS payload size");
+  if (count > limit) {
+    throw ::dacoexec::exception(::dacoexec::errc::output_limit_exceeded, "tANS output exceeds configured limit");
+  }
+  if (payload.size() < payload_prefix_size) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid tANS payload size");
   }
   if (model.precision_bits() < min_table_log || model.precision_bits() > max_table_log) {
-    throw ::dacoexec::ans::decode_error("Invalid tANS table log");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid tANS table log");
   }
   return decode_block(payload, tables{ model }, count, limit);
 }

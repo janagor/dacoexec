@@ -5,6 +5,7 @@
 #define DACOEXEC_NUMERIC_MAPPING_HPP
 
 #include <cstdint>
+#include <dacoexec/error.hpp>
 #include <limits>
 #include <stdexcept>
 
@@ -27,7 +28,8 @@ namespace dacoexec::detail::numeric {
 [[nodiscard]] constexpr auto to_positive(std::uint64_t value) -> std::uint64_t
 {
   if (value == std::numeric_limits<std::uint64_t>::max()) {
-    throw std::overflow_error("dacoexec::detail::numeric positive mapping overflow");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::numeric_overflow, "dacoexec::detail::numeric positive mapping overflow");
   }
   return value + 1U;
 }
@@ -35,7 +37,8 @@ namespace dacoexec::detail::numeric {
 [[nodiscard]] constexpr auto from_positive(std::uint64_t value) -> std::uint64_t
 {
   if (value == 0U) {
-    throw std::invalid_argument("dacoexec::detail::numeric positive mapping requires a positive value");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::invalid_argument, "dacoexec::detail::numeric positive mapping requires a positive value");
   }
   return value - 1U;
 }

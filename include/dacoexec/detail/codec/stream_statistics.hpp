@@ -4,6 +4,7 @@
 #define DACOEXEC_CODEC_STREAM_STATISTICS_HPP
 
 #include <cstdint>
+#include <dacoexec/error.hpp>
 #include <limits>
 #include <stdexcept>
 
@@ -29,7 +30,7 @@ struct stream_statistics
 inline auto checked_add(std::uint64_t &total, std::uint64_t amount) -> void
 {
   if (amount > std::numeric_limits<std::uint64_t>::max() - total) {
-    throw std::overflow_error("Stream statistics overflow");
+    throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "Stream statistics overflow");
   }
   total += amount;
 }

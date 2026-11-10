@@ -29,14 +29,14 @@ namespace dacoexec::detail {
  * Lazy single-pass owning frame parser. Moving the view preserves cursor state.
  * Dereference transfers the staged value; increment invalidates its reference.
  * DATA frames receive consecutive sequence numbers starting at zero. After
- * sequence 2^64-1, another DATA frame throws overflow_error; END remains valid.
+ * sequence 2^64-1, another DATA frame throws dacoexec::exception (errc::numeric_overflow); END remains valid.
  * Any source or format failure permanently ends the pass without publishing it.
  *
  * Accepts a byte_input_range and yields move-only huffman::encoded_frame values.
  * Construction reads nothing. begin() validates the archive header and stages
  * the first complete data frame; increment reads the next frame. END is consumed
  * but not yielded. Missing END, trailing bytes, truncated input, invalid headers,
- * and invalid canonical tables throw format_error. Payload bits and CRC32 are
+ * and invalid canonical tables throw dacoexec::exception (errc::invalid_frame). Payload bits and CRC32 are
  * checked only by decoding, not by this parser. Parsed padding_bits_ is zero;
  * decoding must infer the final partial-byte padding.
  *
@@ -47,7 +47,7 @@ namespace dacoexec::detail {
  * the owner or replacing its state by move assignment invalidates its iterators.
  * The owned source view may itself borrow storage, which must remain valid.
  *
- * @throws std::invalid_argument If the configured limit is zero or exceeds
+ * @throws dacoexec::exception (errc::invalid_argument) If the configured limit is zero or exceeds
  *     huffman::max_frame_size.
  * @see views::frames
  */
@@ -64,12 +64,12 @@ public:
    * Stores the source view without reading it.
    *
    * @param frame_limit Maximum payload and uncompressed size of each data frame.
-   * @throws std::invalid_argument If the limit is zero or above max_frame_size.
+   * @throws dacoexec::exception (errc::invalid_argument) If the limit is zero or above max_frame_size.
    */
   explicit frames_view(V base, std::size_t frame_limit)
   {
     if (frame_limit == 0 || frame_limit > huffman::max_frame_size) {
-      throw std::invalid_argument("Invalid DHF1 frame limit");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid DHF1 frame limit");
     }
     state_ = std::make_unique<state>(std::move(base), frame_limit);
   }
@@ -109,7 +109,9 @@ public:
      */
     [[nodiscard]] auto operator*() const -> huffman::encoded_frame &&
     {
-      if (!state_->current_) { throw std::bad_optional_access{}; }
+      if (!state_->current_) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Iterator has no current value");
+      }
       return std::move(*state_->current_);
     }
 
@@ -162,7 +164,7 @@ namespace views {
     explicit constexpr frames_closure(std::size_t frame_limit) : frame_limit_(frame_limit)
     {
       if (frame_limit_ == 0 || frame_limit_ > huffman::max_frame_size) {
-        throw std::invalid_argument("Invalid DHF1 frame limit");
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid DHF1 frame limit");
       }
     }
 
@@ -185,7 +187,7 @@ namespace views {
    *
    * @param frame_limit Bound on each data frame's payload and uncompressed sizes,
    *     excluding headers and the separate Huffman length table.
-   * @throws std::invalid_argument If frame_limit is zero or exceeds max_frame_size.
+   * @throws dacoexec::exception (errc::invalid_argument) If frame_limit is zero or exceeds max_frame_size.
    *
    * @code
    * auto frames = archive | dacoexec::detail::views::frames();

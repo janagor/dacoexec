@@ -11,6 +11,7 @@
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/support/crc32.hpp>
 #include <dacoexec/detail/views/frames.hpp>
+#include <dacoexec/error.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -55,14 +56,16 @@ using codec::checked_add;
  *
  * @param block Owned input of at most max_frame_size bytes.
  * @return Consistent header and owned encoded body ready for write_frame().
- * @throws format_error If input is empty or exceeds the supported frame size.
+ * @throws dacoexec::exception (errc::invalid_frame) If input is empty or exceeds the supported frame size.
  * Codec and allocation exceptions propagate.
  * @see compress_block
  * @see write_frame
  */
 [[nodiscard]] inline auto encode_frame(byte_block block) -> encoded_frame
 {
-  if (block.bytes_.empty() || block.bytes_.size() > max_frame_size) { throw format_error("Invalid input block size"); }
+  if (block.bytes_.empty() || block.bytes_.size() > max_frame_size) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Invalid input block size");
+  }
   auto const checksum = dacoexec::detail::support::crc32(block.bytes_);
   encoded_frame frame;
   frame.block_ = compress_block(std::move(block));

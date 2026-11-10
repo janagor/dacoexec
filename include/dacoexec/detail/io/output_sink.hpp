@@ -44,7 +44,7 @@ public:
   /**
    * Writes bytes in bounded chunks and checks the stream after each chunk.
    *
-   * @throws stream_error If the stream reports failure.
+   * @throws dacoexec::exception (errc::io_error) If the stream reports failure.
    * Stream exceptions propagate. An accepted prefix is not rolled back.
    */
   auto write(std::span<std::byte const> bytes) -> void
@@ -58,7 +58,7 @@ public:
         return static_cast<char>(std::to_integer<unsigned char>(byte));
       });
       stream_.get().write(buffer.data(), static_cast<std::streamsize>(count));
-      if (!stream_.get()) { throw stream_error("Output stream write failed"); }
+      if (!stream_.get()) { throw ::dacoexec::exception(::dacoexec::errc::io_error, "Output stream write failed"); }
       bytes = bytes.subspan(count);
     }
   }

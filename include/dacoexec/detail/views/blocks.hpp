@@ -7,6 +7,7 @@
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/support/buffer.hpp>
 #include <dacoexec/detail/support/byte.hpp>
+#include <dacoexec/error.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -73,10 +74,10 @@ struct byte_block
  * The range is single-pass. Copying an iterator aliases the same staged
  * block; it does not restart the source or duplicate the buffer. Repeated
  * begin() calls resume the in-progress pass. A block size of zero throws
- * std::invalid_argument. Each block buffer starts at a capacity of at most
+ * dacoexec::exception (errc::invalid_argument). Each block buffer starts at a capacity of at most
  * 4096 bytes and then doubles until it reaches the configured block size.
  * After the block numbered 2^64-1, a further non-empty block throws
- * std::overflow_error. An exhausted source ends without that error. An
+ * dacoexec::exception (errc::numeric_overflow). An exhausted source ends without that error. An
  * exception from the source abandons the unfinished block and propagates
  * unchanged. Failures while filling a block permanently end the pass. Exceptions
  * from initial cursor acquisition, end/sentinel checks, or sequence overflow
@@ -101,7 +102,8 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
     {
       if (initialized_) { return; }
       if (block_size_ == 0) {
-        throw std::invalid_argument("dacoexec::detail::views::blocks requires a positive block size");
+        throw ::dacoexec::exception(
+          ::dacoexec::errc::invalid_argument, "dacoexec::detail::views::blocks requires a positive block size");
       }
       initialized_ = true;
       input_ = std::ranges::begin(base_);
@@ -125,7 +127,8 @@ class blocks_view : public std::ranges::view_interface<blocks_view<V>>
         return;
       }
       if (sequence_limit_reached_) {
-        throw std::overflow_error("dacoexec::detail::views::blocks sequence number space is exhausted");
+        throw ::dacoexec::exception(
+          ::dacoexec::errc::numeric_overflow, "dacoexec::detail::views::blocks sequence number space is exhausted");
       }
 
       auto bytes = read_block(cursor, last);
@@ -193,12 +196,13 @@ public:
    * Stores the source view without reading it.
    *
    * @param block_size Maximum bytes in a staged block.
-   * @throws std::invalid_argument If block_size is zero.
+   * @throws dacoexec::exception (errc::invalid_argument) If block_size is zero.
    */
   explicit blocks_view(V base, std::size_t block_size)
   {
     if (block_size == 0) {
-      throw std::invalid_argument("dacoexec::detail::views::blocks requires a positive block size");
+      throw ::dacoexec::exception(
+        ::dacoexec::errc::invalid_argument, "dacoexec::detail::views::blocks requires a positive block size");
     }
     state_ = std::make_unique<state>(std::move(base), block_size);
   }
@@ -238,7 +242,9 @@ public:
      */
     [[nodiscard]] auto operator*() const -> byte_block &&
     {
-      if (!state_->current_) { throw std::bad_optional_access{}; }
+      if (!state_->current_) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Iterator has no current value");
+      }
       return std::move(*state_->current_);
     }
 
@@ -295,7 +301,8 @@ namespace views {
     explicit constexpr blocks_closure(std::size_t block_size) : block_size_(block_size)
     {
       if (block_size_ == 0) {
-        throw std::invalid_argument("dacoexec::detail::views::blocks requires a positive block size");
+        throw ::dacoexec::exception(
+          ::dacoexec::errc::invalid_argument, "dacoexec::detail::views::blocks requires a positive block size");
       }
     }
 
@@ -317,7 +324,7 @@ namespace views {
    * Creates an adaptor partitioning a viewable byte_input_range into owned blocks.
    *
    * @param block_size Maximum bytes per block; the last block may be shorter.
-   * @throws std::invalid_argument If block_size is zero.
+   * @throws dacoexec::exception (errc::invalid_argument) If block_size is zero.
    *
    * @code
    * auto chunks = bytes | dacoexec::detail::views::blocks(block_size);

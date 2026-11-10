@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <dacoexec/detail/ans/format.hpp>
 #include <dacoexec/detail/codec/frame_parser.hpp>
+#include <dacoexec/error.hpp>
 #include <span>
 #include <stdexcept>
 
@@ -37,12 +38,16 @@ struct ans_frame_format
     block.encoding_ = ans::block_encoding::rans;
     auto const precision = std::to_integer<unsigned>(reader.read_byte());
     auto const count = dacoexec::detail::support::read_u16_le(reader.template read_array<sizeof(std::uint16_t)>());
-    if (count == 0 || count > ans::alphabet_size) { throw format_error("Invalid ANS model entry count"); }
+    if (count == 0 || count > ans::alphabet_size) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Invalid ANS model entry count");
+    }
     ans::frequency_model<ans::alphabet_size>::table_type frequencies{};
     unsigned previous = 0;
     for (std::uint16_t entry = 0; entry < count; ++entry) {
       auto const symbol = std::to_integer<unsigned>(reader.read_byte());
-      if (entry != 0 && symbol <= previous) { throw format_error("Unordered ANS model symbols"); }
+      if (entry != 0 && symbol <= previous) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Unordered ANS model symbols");
+      }
       frequencies.at(symbol) =
         std::uint32_t{ dacoexec::detail::support::read_u16_le(reader.template read_array<sizeof(std::uint16_t)>()) }
         + 1;
@@ -50,8 +55,9 @@ struct ans_frame_format
     }
     try {
       block.model_.emplace(frequencies, precision);
-    } catch (std::invalid_argument const &error) {
-      throw format_error(error.what());
+    } catch (::dacoexec::exception const &error) {
+      if (error.code() != errc::invalid_argument) { throw; }
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, error.what());
     }
     block.encoding_ = static_cast<ans::block_encoding>(frame.header_.kind_);
   }

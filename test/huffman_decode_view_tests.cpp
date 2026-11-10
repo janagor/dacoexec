@@ -27,7 +27,7 @@ using dacoexec::detail::huffman::build_code_lengths;
 using dacoexec::detail::huffman::canonical_codebook;
 using dacoexec::detail::huffman::code_length_table;
 using dacoexec::detail::huffman::count_frequencies;
-using dacoexec::huffman::decode_error;
+using dacoexec::exception;
 using dacoexec::detail::huffman::make_canonical_codebook;
 using dacoexec::detail::huffman::max_canonical_bits;
 namespace huffman_views = dacoexec::detail::huffman::views;
@@ -118,7 +118,7 @@ TEST_CASE("Decoder failure on begin is permanent", "[huffman][decode]")
 {
   std::vector<std::byte> source;
   auto decoded = std::move(source) | huffman_views::decode(sample_book(), sample_bits, sample.size());
-  CHECK_THROWS_AS(decoded.begin(), decode_error);
+  CHECK_THROWS_AS(decoded.begin(), dacoexec::exception);
   CHECK(decoded.begin() == decoded.end());
 }
 
@@ -143,7 +143,7 @@ TEST_CASE("Empty lazy decoding requires an empty source", "[huffman][decode]")
   CHECK(decoded.begin() == decoded.end());
   source.push_back(std::byte{ 0 });
   auto extra = source | huffman_views::decode(sample_book(), 0, 0);
-  CHECK_THROWS_AS(extra.begin(), decode_error);
+  CHECK_THROWS_AS(extra.begin(), dacoexec::exception);
 }
 
 TEST_CASE("Decoder move assignment preserves existing source iterators", "[huffman][decode]")

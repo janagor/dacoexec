@@ -4,7 +4,6 @@
 #define DACOEXEC_ANS_RANS_STATE_HPP
 
 #include <algorithm>
-#include <dacoexec/detail/ans/error.hpp>
 #include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/support/endian.hpp>
 #include <dacoexec/error.hpp>
@@ -36,7 +35,9 @@ template<std::ranges::bidirectional_range R, std::size_t symbol_count>
     auto const symbol =
       std::to_integer<std::uint8_t>(dacoexec::detail::support::to_byte(static_cast<source_value>(*cursor)));
     auto const frequency = model.frequencies().at(symbol);
-    if (frequency == 0) { throw std::invalid_argument("ANS symbol absent from model"); }
+    if (frequency == 0) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "ANS symbol absent from model");
+    }
     auto const threshold = (std::uint64_t{ lower_bound } >> model.precision_bits()) * radix * frequency;
     while (state >= threshold) {
       output.push_back(static_cast<std::byte>(state & byte_mask));
@@ -57,10 +58,15 @@ template<class Symbol = std::uint8_t, std::size_t symbol_count>
   std::size_t limit) -> std::vector<Symbol>
 {
   static_assert(symbol_count <= alphabet_size);
-  if (count > limit || payload.size() < state_bytes) { throw decode_error("Invalid ANS size"); }
+  if (count > limit) {
+    throw ::dacoexec::exception(::dacoexec::errc::output_limit_exceeded, "ANS output exceeds configured limit");
+  }
+  if (payload.size() < state_bytes) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid ANS size");
+  }
   auto state = dacoexec::detail::support::read_u32_le(payload.first<state_bytes>());
   if (state < lower_bound || state >= std::uint64_t{ lower_bound } * radix) {
-    throw decode_error("Invalid ANS initial state");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid ANS initial state");
   }
   std::vector<std::uint8_t> lookup(model.total());
   for (std::size_t symbol = 0; symbol < symbol_count; ++symbol) {
@@ -77,12 +83,14 @@ template<class Symbol = std::uint8_t, std::size_t symbol_count>
     output.push_back(static_cast<Symbol>(symbol));
     state = (model.frequencies().at(symbol) * (state >> model.precision_bits())) + slot - model.cumulative().at(symbol);
     while (state < lower_bound) {
-      if (position == payload.size()) { throw decode_error("Truncated ANS payload"); }
+      if (position == payload.size()) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Truncated ANS payload");
+      }
       state = (state << byte_bits) | std::to_integer<std::uint32_t>(payload.subspan(position++).front());
     }
   }
   if (position != payload.size() || state != lower_bound) {
-    throw decode_error("Invalid ANS terminal state or trailing bytes");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid ANS terminal state or trailing bytes");
   }
   return output;
 }

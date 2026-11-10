@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <dacoexec/detail/huffman/canonical.hpp>
-#include <dacoexec/detail/huffman/error.hpp>
+#include <dacoexec/error.hpp>
 #include <limits>
 #include <optional>
 
@@ -41,12 +41,14 @@ struct decode_lookup
         auto const bit = (word.bits_ >> (remaining - 1U)) & 1U;
         auto &child = nodes_.at(node).children_.at(bit);
         if (child == missing_decode_node) {
-          if (used == decode_node_capacity) { throw decode_error("Huffman trie capacity exceeded"); }
+          if (used == decode_node_capacity) {
+            throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Huffman trie capacity exceeded");
+          }
           child = used++;
         }
         node = child;
       }
-      if (word.length_ != 0) { nodes_.at(node).symbol_ = static_cast<std::byte>(symbol); }
+      if (word.length_ != 0) { nodes_.at(node).symbol_.emplace(static_cast<std::byte>(symbol)); }
     }
   }
 

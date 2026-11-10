@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <dacoexec/detail/adt/static_priority_queue.hpp>
 #include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/error.hpp>
 #include <iterator>
 #include <stdexcept>
 
@@ -96,7 +97,7 @@ private:
     std::uint64_t const left_frequency = first.node_->frequency_;
     std::uint64_t const right_frequency = second.node_->frequency_;
     if (left_frequency > std::numeric_limits<std::uint64_t>::max() - right_frequency) {
-      throw std::overflow_error("Huffman tree frequency overflow");
+      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "Huffman tree frequency overflow");
     }
     std::uint64_t const frequency = left_frequency + right_frequency;
     std::uint16_t const min_symbol = std::min(first.node_->min_symbol_, second.node_->min_symbol_);

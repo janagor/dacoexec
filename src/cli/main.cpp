@@ -76,7 +76,7 @@ private:
       if (!stream_->eof()) {
         stream_->read(buffer_.data(), static_cast<std::streamsize>(buffer_.size()));
         if (stream_->bad() || (stream_->fail() && !stream_->eof())) {
-          throw dacoexec::stream_error("Input read failed");
+          throw ::dacoexec::exception(::dacoexec::errc::io_error, "Input read failed");
         }
         size_ = static_cast<std::size_t>(stream_->gcount());
       }
@@ -113,13 +113,13 @@ auto process(process_options const &options) -> void
   auto const input_path = fs::absolute(options.input_name_);
   auto const output_path = fs::absolute(options.output_name_);
   if (fs::exists(output_path) && fs::equivalent(input_path, output_path)) {
-    throw dacoexec::stream_error("Input and output refer to the same file");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Input and output refer to the same file");
   }
   if (fs::exists(output_path) && !options.force_) {
-    throw dacoexec::stream_error("Output exists; use --force to replace it");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Output exists; use --force to replace it");
   }
   std::ifstream input(input_path, std::ios::binary);
-  if (!input) { throw dacoexec::stream_error("Cannot open input file"); }
+  if (!input) { throw ::dacoexec::exception(::dacoexec::errc::io_error, "Cannot open input file"); }
   // badbit distinguishes underlying read failures from ordinary EOF.
   input.exceptions(std::ios::badbit);
   dacoexec::cli::temporary_output output(output_path);
@@ -145,7 +145,7 @@ auto process(process_options const &options) -> void
                           });
     input.clear();
     input.seekg(0);
-    if (!input) { throw dacoexec::stream_error("Cannot rewind input file"); }
+    if (!input) { throw ::dacoexec::exception(::dacoexec::errc::io_error, "Cannot rewind input file"); }
     if (is_ans) {
       static_cast<void>(
         dacoexec::ans::decompress_stream(source, output, { .max_output_bytes_ = options.output_limit_ }));
@@ -154,7 +154,7 @@ auto process(process_options const &options) -> void
         dacoexec::huffman::decompress_stream(source, output, { .max_output_bytes_ = options.output_limit_ }));
     }
   }
-  if (input.bad()) { throw dacoexec::stream_error("Input read failed"); }
+  if (input.bad()) { throw ::dacoexec::exception(::dacoexec::errc::io_error, "Input read failed"); }
   output.close();
   input.close();
   output.publish(output_path, options.force_);
@@ -188,7 +188,7 @@ try {
   decompress->add_flag("--force", force);
   CLI11_PARSE(app, argc, argv);
   if (table_log_option->count() != 0 && algorithm != "tans") {
-    throw std::invalid_argument("--table-log requires --algorithm tans");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "--table-log requires --algorithm tans");
   }
   process({ .input_name_ = input,
     .output_name_ = output,
@@ -199,6 +199,10 @@ try {
     .output_limit_ = output_limit,
     .table_log_ = table_log });
   return 0;
+} catch (dacoexec::exception const &error) {
+  std::cerr << "dacoexec [" << error.code().category().name() << ':' << error.code().value() << "]: " << error.what()
+            << '\n';
+  return 1;
 } catch (std::exception const &error) {
   std::cerr << "dacoexec: " << error.what() << '\n';
   return 1;

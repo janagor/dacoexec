@@ -18,7 +18,7 @@ namespace dacoexec::detail::huffman {
  *
  * @param block Owned bytes to consume; sequence_ is preserved.
  * @return Independent owned encoded data.
- * @throws std::overflow_error If frequency counting or tree sums overflow.
+ * @throws dacoexec::exception (errc::numeric_overflow) If frequency counting or tree sums overflow.
  * Allocation failures propagate.
  * @code
  * auto encoded = huffman::compress_block(std::move(block));
@@ -31,7 +31,7 @@ namespace dacoexec::detail::huffman {
 { return encoder{}.encode(std::move(block)); }
 
 /**
- * Malformed content throws decode_error; allocation failures propagate.
+ * Malformed content throws dacoexec::exception (errc::invalid_payload); allocation failures propagate.
  * The output bound is checked before reconstructing or allocating output.
  * infer_padding is for framing formats without a padding-count field: supply
  * padding_bits_ == 0 and accept only zero padding in the final partial byte.
@@ -45,8 +45,8 @@ namespace dacoexec::detail::huffman {
  * @param infer_padding Infer final padding instead of using an explicit count.
  * @return Independently owned bytes with the original sequence number; RAW
  *     transfers the payload directly. No partial output is returned on failure.
- * @throws decode_error If metadata, code lengths, payload, padding, or bounds
- *     are invalid.
+ * @throws dacoexec::exception (errc::invalid_payload) If metadata, code lengths, payload, or padding are invalid.
+ * @throws dacoexec::exception (errc::output_limit_exceeded) If the decoded size exceeds max_output_bytes.
  * @see compress_block
  */
 [[nodiscard]] inline auto decompress_block(encoded_block block,

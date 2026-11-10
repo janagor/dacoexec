@@ -2,6 +2,7 @@
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/views/bits.hpp>
 #include <dacoexec/detail/views/buffered_bytes.hpp>
+#include <dacoexec/error.hpp>
 
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
@@ -204,15 +205,15 @@ static_assert(std::is_nothrow_move_constructible_v<bit_range>);
 static_assert(sizeof(bit_range) <= sizeof(void *) * 2);
 
 using byte_insert = std::back_insert_iterator<std::vector<std::byte>>;
-using writer = dacoexec::bit_writer<byte_insert>;
+using writer_type = dacoexec::bit_writer<byte_insert>;
 using bit_out = dacoexec::bit_output_iterator<byte_insert>;
 
 static_assert(std::output_iterator<bit_out, bool>);
 static_assert(std::indirectly_writable<bit_out, bool>);
 static_assert(std::copyable<bit_out>);
-static_assert(!std::copyable<writer>);
-static_assert(std::movable<writer>);
-static_assert(std::same_as<decltype(std::declval<writer &>().output_iterator()), bit_out>);
+static_assert(!std::copyable<writer_type>);
+static_assert(std::movable<writer_type>);
+static_assert(std::same_as<decltype(std::declval<writer_type &>().output_iterator()), bit_out>);
 
 template<class Out>
 concept can_make_writer = requires(Out output) { dacoexec::bit_writer<Out>{ std::move(output) }; };
@@ -427,7 +428,7 @@ public:
   using pointer = void;
   using reference = void;
 
-  explicit fail_sink_iterator(state *state) noexcept : state_(state) {}
+  explicit fail_sink_iterator(state *sink_state) noexcept : state_(sink_state) {}
 
   auto operator*() noexcept -> fail_sink_iterator & { return *this; }
 
@@ -485,7 +486,7 @@ public:
   using pointer = void;
   using reference = void;
 
-  explicit retarget_iterator(std::shared_ptr<control> control) : control_(std::move(control)) {}
+  explicit retarget_iterator(std::shared_ptr<control> state) : control_(std::move(state)) {}
 
   retarget_iterator(retarget_iterator const &) = default;
   auto operator=(retarget_iterator const &) -> retarget_iterator & = default;
@@ -539,6 +540,9 @@ template<class Action> auto require_what(Action &&action, std::string_view expec
   try {
     std::forward<Action>(action)();
     FAIL("expected an exception");
+  } catch (dacoexec::exception const &error) {
+    REQUIRE(error.code() == dacoexec::errc::invalid_state);
+    REQUIRE(std::string_view{ error.what() }.starts_with(expected));
   } catch (std::exception const &error) {
     REQUIRE(std::string_view{ error.what() } == expected);
   }
@@ -963,7 +967,7 @@ TEST_CASE("buffered bytes yield the source across partial windows", "[buffered]"
     collected.push_back(value);
   }
   REQUIRE(collected == one);
-  REQUIRE_THROWS_AS(dacoexec::detail::views::buffered_bytes(0), std::invalid_argument);
+  REQUIRE_THROWS_AS(dacoexec::detail::views::buffered_bytes(0), dacoexec::exception);
 
   std::vector<unsigned char> const chars{ 0x00, 0x80, 0xFF, 0xB2 };
   collected.clear();
@@ -1162,12 +1166,12 @@ TEST_CASE("invalid codewords are rejected without writing", "[bit_writer]")
   std::vector<std::byte> out;
   dacoexec::bit_writer writer{ std::back_inserter(out) };
   writer.write_bit(true);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 1U, .bit_count_ = 0U }), std::invalid_argument);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 33U }), std::invalid_argument);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 100U }), std::invalid_argument);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0x1FFU, .bit_count_ = 8U }), std::invalid_argument);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 2U, .bit_count_ = 1U }), std::invalid_argument);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0xFFFFFFFFU, .bit_count_ = 31U }), std::invalid_argument);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 1U, .bit_count_ = 0U }), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 33U }), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 100U }), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0x1FFU, .bit_count_ = 8U }), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 2U, .bit_count_ = 1U }), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0xFFFFFFFFU, .bit_count_ = 31U }), dacoexec::exception);
   REQUIRE(writer.finish() == 7);
   REQUIRE(out == std::vector<std::byte>{ std::byte{ 0x80 } });
   require_what([&]() -> void { writer.write_bits({ .value_ = 1U, .bit_count_ = 0U }); },
@@ -1193,9 +1197,9 @@ TEST_CASE("finish pads with zeros and is idempotent", "[bit_writer]")
   REQUIRE(writer.finish() == 3);
   REQUIRE(writer.finish() == 3);
   REQUIRE(out == std::vector<std::byte>{ std::byte{ 0xB0 } });
-  REQUIRE_THROWS_AS(writer.write_bit(true), std::logic_error);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 0U }), std::logic_error);
-  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 8U }), std::logic_error);
+  REQUIRE_THROWS_AS(writer.write_bit(true), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 0U }), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0U, .bit_count_ = 8U }), dacoexec::exception);
   REQUIRE(out.size() == 1);
 }
 
@@ -1217,8 +1221,8 @@ TEST_CASE("moving a writer transfers the partial byte", "[bit_writer]")
   auto moved = std::move(writer);
   // Verify the documented moved-from state.
   // NOLINTNEXTLINE(bugprone-use-after-move,hicpp-invalid-access-moved,clang-analyzer-cplusplus.Move)
-  REQUIRE_THROWS_AS(writer.write_bit(true), std::logic_error);
-  REQUIRE_THROWS_AS(writer.finish(), std::logic_error);
+  REQUIRE_THROWS_AS(writer.write_bit(true), dacoexec::exception);
+  REQUIRE_THROWS_AS(writer.finish(), dacoexec::exception);
   REQUIRE(moved.finish() == 5);
   REQUIRE(out == std::vector<std::byte>{ std::byte{ 0xA0 } });
 }
@@ -1235,7 +1239,7 @@ TEST_CASE("move assignment discards the destination partial byte", "[bit_writer]
   destination = std::move(source);
   // Verify the documented moved-from state.
   // NOLINTNEXTLINE(bugprone-use-after-move,hicpp-invalid-access-moved,clang-analyzer-cplusplus.Move)
-  REQUIRE_THROWS_AS(source.finish(), std::logic_error);
+  REQUIRE_THROWS_AS(source.finish(), dacoexec::exception);
   REQUIRE(destination.finish() == 5);
   REQUIRE(sink_a.empty());
   REQUIRE(sink_b == std::vector<std::byte>{ std::byte{ 0xA0 } });
@@ -1287,8 +1291,8 @@ TEST_CASE("an output failure stops the writer without rolling back", "[bit_write
     dacoexec::bit_writer writer{ fail_sink_iterator{ &state } };
     REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0xFFFFU, .bit_count_ = 16U }), std::ios_base::failure);
     REQUIRE(state.bytes_.empty());
-    REQUIRE_THROWS_AS(writer.write_bit(true), std::logic_error);
-    REQUIRE_THROWS_AS(writer.finish(), std::logic_error);
+    REQUIRE_THROWS_AS(writer.write_bit(true), dacoexec::exception);
+    REQUIRE_THROWS_AS(writer.finish(), dacoexec::exception);
     REQUIRE(state.bytes_.empty());
   }
 
@@ -1299,8 +1303,8 @@ TEST_CASE("an output failure stops the writer without rolling back", "[bit_write
     REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0xFFFFFFFFU, .bit_count_ = 32U }), std::ios_base::failure);
     REQUIRE(state.bytes_.size() == 1);
     REQUIRE(state.bytes_.at(0) == std::byte{ 0xFF });
-    REQUIRE_THROWS_AS(writer.write_bit(false), std::logic_error);
-    REQUIRE_THROWS_AS(writer.finish(), std::logic_error);
+    REQUIRE_THROWS_AS(writer.write_bit(false), dacoexec::exception);
+    REQUIRE_THROWS_AS(writer.finish(), dacoexec::exception);
     REQUIRE(state.bytes_.size() == 1);
   }
 
@@ -1312,7 +1316,7 @@ TEST_CASE("an output failure stops the writer without rolling back", "[bit_write
     REQUIRE(state.bytes_.empty());
     REQUIRE_THROWS_AS(writer.finish(), std::ios_base::failure);
     REQUIRE(state.bytes_.empty());
-    REQUIRE_THROWS_AS(writer.finish(), std::logic_error);
+    REQUIRE_THROWS_AS(writer.finish(), dacoexec::exception);
   }
 
   {
@@ -1322,8 +1326,8 @@ TEST_CASE("an output failure stops the writer without rolling back", "[bit_write
     REQUIRE_THROWS_AS(writer.write_bits({ .value_ = 0xB280U, .bit_count_ = 16U }), std::ios_base::failure);
     REQUIRE(state.assignments_ == 1);
     REQUIRE(state.bytes_ == std::vector<std::byte>{ std::byte{ 0xB2 } });
-    REQUIRE_THROWS_AS(writer.write_bit(true), std::logic_error);
-    REQUIRE_THROWS_AS(writer.finish(), std::logic_error);
+    REQUIRE_THROWS_AS(writer.write_bit(true), dacoexec::exception);
+    REQUIRE_THROWS_AS(writer.finish(), dacoexec::exception);
     REQUIRE(state.bytes_.size() == 1);
   }
 }

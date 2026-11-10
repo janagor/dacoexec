@@ -1,13 +1,14 @@
+#include "error_test_utils.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <dacoexec/ans.hpp>
-#include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/ans/format.hpp>
 #include <dacoexec/detail/ans/model.hpp>
+#include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/execution/ordered_parallel.hpp>
-#include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/detail/huffman/format.hpp>
+#include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/views/ans_frames.hpp>
@@ -466,7 +467,9 @@ TEST_CASE("Invalid parallel options fail lazily", "[execution]")
     vector_sink sink;
     auto sender = huffman::encode_parallel_on(pool.get_scheduler(), input, sink, options);
     REQUIRE(sink.bytes_.empty());
-    REQUIRE_THROWS_AS(stdexec::sync_wait(std::move(sender)), std::invalid_argument);
+    REQUIRE_THROWS_MATCHES(stdexec::sync_wait(std::move(sender)),
+      dacoexec::exception,
+      dacoexec::test::error_is(dacoexec::errc::invalid_argument));
     REQUIRE(sink.bytes_.empty());
   }
 }
@@ -1291,7 +1294,7 @@ template<bool use_ans> auto check_public_failures() -> void
   std::ostream broken_stream(nullptr);
   REQUIRE_THROWS_AS(
     stdexec::sync_wait(public_parallel<use_ans>(pool.get_scheduler(), bytes(block_size), broken_stream)),
-    dacoexec::stream_error);
+    dacoexec::exception);
 }
 }// namespace
 
@@ -1342,6 +1345,29 @@ TEST_CASE("Parallel ANS rejects unknown coders before writing", "[ans][tans][exe
     // Deliberately pass an unsupported enumerator.
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     { .coder_ = static_cast<dacoexec::ans::entropy_coder>(std::numeric_limits<std::uint8_t>::max()) });
-  REQUIRE_THROWS_AS(stdexec::sync_wait(sender), std::invalid_argument);
+  REQUIRE_THROWS_MATCHES(
+    stdexec::sync_wait(sender), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::unsupported_coder));
   REQUIRE(output.empty());
+}
+
+TEST_CASE("Structured worker errors survive exception pointer completion", "[execution][error]")
+{
+  exec::static_thread_pool pool{ batch_size };
+  std::vector<std::size_t> committed;
+  auto process = [](std::size_t) -> std::size_t {
+    throw dacoexec::exception(dacoexec::errc::invalid_payload, "worker payload");
+  };
+  std::atomic<std::size_t> acquired{ 0 };
+  auto sender = dacoexec::detail::execution::ordered_parallel_on(pool.get_scheduler(),
+    integer_source{ .count_ = 1, .committed_ = &committed, .acquired_ = &acquired },
+    process,
+    batch_size);
+  try {
+    static_cast<void>(stdexec::sync_wait(std::move(sender)));
+    FAIL("Expected worker error");
+  } catch (dacoexec::exception const &error) {
+    CHECK(error.code() == dacoexec::errc::invalid_payload);
+    CHECK(std::string(error.what()).find("worker payload") != std::string::npos);
+  }
+  CHECK(committed.empty());
 }

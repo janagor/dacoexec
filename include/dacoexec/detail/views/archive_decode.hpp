@@ -7,6 +7,7 @@
 #include <dacoexec/detail/codec/verified_frame.hpp>
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/views/archive_bytes.hpp>
+#include <dacoexec/error.hpp>
 #include <iterator>
 #include <optional>
 #include <ranges>
@@ -61,7 +62,7 @@ public:
   explicit archive_decode_closure(options_type options) : options_(options)
   {
     if (options.max_frame_size_ == 0 || options.max_frame_size_ > Format::max_frame_size) {
-      throw std::invalid_argument("Invalid frame size limit");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid frame size limit");
     }
   }
 

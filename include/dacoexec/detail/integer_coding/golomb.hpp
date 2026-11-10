@@ -8,12 +8,13 @@
 #include <cstdint>
 #include <dacoexec/bit.hpp>
 #include <dacoexec/detail/integer_coding/common.hpp>
+#include <dacoexec/error.hpp>
 #include <limits>
 #include <stdexcept>
 
 namespace dacoexec::detail::integer_coding {
 
-/** Returns the encoded size; throws overflow_error if it cannot fit uint64_t. */
+/** Returns the encoded size; throws dacoexec::exception (errc::numeric_overflow) if it cannot fit uint64_t. */
 [[nodiscard]] constexpr auto golomb_bit_length(std::uint64_t value, std::uint32_t divisor) -> std::uint64_t
 {
   ::dacoexec::detail::integer_coding::validate_golomb(divisor);
@@ -23,7 +24,8 @@ namespace dacoexec::detail::integer_coding {
   auto const suffix_bits = std::uint64_t{ remainder_bits } + 1U;
   auto const quotient = value / divisor;
   if (quotient > std::numeric_limits<std::uint64_t>::max() - suffix_bits) {
-    throw std::overflow_error("dacoexec::detail::integer_coding Golomb size overflow");
+    throw ::dacoexec::exception(
+      ::dacoexec::errc::numeric_overflow, "dacoexec::detail::integer_coding Golomb size overflow");
   }
   return quotient + suffix_bits;
 }
@@ -39,9 +41,13 @@ constexpr auto golomb_value(golomb_parts parts, std::uint32_t divisor) -> std::u
 {
   auto const [quotient, remainder] = parts;
   auto const maximum = std::numeric_limits<std::uint64_t>::max();
-  if (quotient > maximum / divisor) { throw std::overflow_error("dacoexec::detail::integer_coding Golomb overflow"); }
+  if (quotient > maximum / divisor) {
+    throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "dacoexec::detail::integer_coding Golomb overflow");
+  }
   auto const base = quotient * divisor;
-  if (remainder > maximum - base) { throw std::overflow_error("dacoexec::detail::integer_coding Golomb overflow"); }
+  if (remainder > maximum - base) {
+    throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "dacoexec::detail::integer_coding Golomb overflow");
+  }
   return base + remainder;
 }
 

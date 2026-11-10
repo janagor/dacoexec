@@ -17,6 +17,7 @@ namespace dacoexec::views {
 [[nodiscard]] constexpr auto bits() { return ::dacoexec::detail::views::bits(); }
 
 //! Maximum unary prefix per decoded integer, excluding its terminating zero.
+//! Exceeding this bound reports errc::codeword_limit_exceeded.
 struct decode_limits
 {
   std::uint64_t max_unary_bits_ = std::numeric_limits<std::uint64_t>::max();

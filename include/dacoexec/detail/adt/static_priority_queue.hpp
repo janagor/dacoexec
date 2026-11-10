@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <dacoexec/error.hpp>
 #include <functional>
 #include <iterator>
 #include <stdexcept>
@@ -27,7 +28,9 @@ public:
 
   constexpr auto push(T value) -> void
   {
-    if (size_ == Capacity) { throw std::length_error("Priority queue capacity exceeded"); }
+    if (size_ == Capacity) {
+      throw ::dacoexec::exception(::dacoexec::errc::capacity_exceeded, "Priority queue capacity exceeded");
+    }
     entries_.at(size_) = std::move(value);
     ++size_;
     std::push_heap(entries_.begin(), end(), compare_);
@@ -35,7 +38,7 @@ public:
 
   [[nodiscard]] constexpr auto pop() -> T
   {
-    if (empty()) { throw std::out_of_range("Priority queue is empty"); }
+    if (empty()) { throw ::dacoexec::exception(::dacoexec::errc::invalid_state, "Priority queue is empty"); }
     std::pop_heap(entries_.begin(), end(), compare_);
     --size_;
     return std::move(entries_.at(size_));

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <dacoexec/detail/codec/frame_parser.hpp>
 #include <dacoexec/detail/huffman/format.hpp>
+#include <dacoexec/error.hpp>
 #include <span>
 #include <stdexcept>
 
@@ -40,10 +41,11 @@ struct huffman_frame_format
     try {
       if (std::ranges::all_of(block.lengths_, [](auto length) -> bool { return length == 0; })
           || !huffman::try_make_canonical_codebook(block.lengths_)) {
-        throw format_error("Invalid canonical lengths");
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Invalid canonical lengths");
       }
-    } catch (std::invalid_argument const &error) {
-      throw format_error(error.what());
+    } catch (::dacoexec::exception const &error) {
+      if (error.code() != errc::invalid_argument) { throw; }
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, error.what());
     }
   }
 };

@@ -25,7 +25,7 @@ template<class Format, std::ranges::viewable_range R, io::byte_output_sink S>
   -> stream_statistics
 {
   if (options.block_size_ == 0 || options.block_size_ > Format::max_frame_size) {
-    throw std::invalid_argument("Invalid block size");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid block size");
   }
   Format::validate_options(options);
   stream_statistics statistics{ .output_bytes_ = Format::archive_header_size + Format::frame_header_size };

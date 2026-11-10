@@ -6,6 +6,7 @@
 
 #include <dacoexec/detail/huffman/canonical_impl.hpp>
 #include <dacoexec/detail/huffman/tree.hpp>
+#include <dacoexec/error.hpp>
 
 #include <array>
 #include <cstddef>
@@ -63,11 +64,11 @@ private:
 /**
  * Unsupported widths return nullopt before structural validation. Supported
  * tables must be empty, a length-one singleton, or a complete prefix tree.
- * Invalid supported tables throw invalid_argument. No allocation is needed.
+ * Invalid supported tables throw dacoexec::exception (errc::invalid_argument). No allocation is needed.
  *
  * @param lengths Width for each byte symbol; zero means absent.
  * @return Validated codebook, or std::nullopt if any width exceeds 32 bits.
- * @throws std::invalid_argument For supported-width tables with an invalid
+ * @throws dacoexec::exception (errc::invalid_argument) For supported-width tables with an invalid
  *     singleton, oversubscribed lengths, or an incomplete prefix tree.
  * @see make_canonical_codebook
  */
@@ -89,14 +90,16 @@ private:
  *
  * @param lengths Width for each symbol; zero means absent.
  * @return Validated canonical codebook.
- * @throws std::length_error If any width exceeds max_canonical_bits.
- * @throws std::invalid_argument If a supported-width table is structurally invalid.
+ * @throws dacoexec::exception (errc::invalid_argument) If any width exceeds max_canonical_bits.
+ * @throws dacoexec::exception (errc::invalid_argument) If a supported-width table is structurally invalid.
  * @see try_make_canonical_codebook
  */
 [[nodiscard]] constexpr auto make_canonical_codebook(code_length_table const &lengths) -> canonical_codebook
 {
   auto result = try_make_canonical_codebook(lengths);
-  if (!result) { throw std::length_error("Huffman code length exceeds codeword width"); }
+  if (!result) {
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Huffman code length exceeds codeword width");
+  }
   return *result;
 }
 

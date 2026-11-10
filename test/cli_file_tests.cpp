@@ -1,4 +1,5 @@
 #include "../src/cli/temporary_output.hpp"
+#include "error_test_utils.hpp"
 #include <catch2/catch_test_macros.hpp>
 
 #include <dacoexec/error.hpp>
@@ -8,8 +9,8 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
-#include <iterator>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -52,7 +53,9 @@ auto read_file(fs::path const &path) -> std::string
 {
   std::ifstream file(path, std::ios::binary);
   REQUIRE(file.good());
-  return { std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>() };
+  std::ostringstream content;
+  content << file.rdbuf();
+  return content.str();
 }
 
 auto write_file(fs::path const &path, std::string const &content) -> void
@@ -97,7 +100,8 @@ TEST_CASE("CLI temporary output closes before publication and cleans up failures
     output.write(bytes);
     output.publish(destination, false);
     REQUIRE(read_file(destination) == "x");
-    REQUIRE_THROWS_AS(output.write(bytes), dacoexec::stream_error);
+    REQUIRE_THROWS_MATCHES(
+      output.write(bytes), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_state));
   }
   REQUIRE_FALSE(fs::exists(temporary_path));
   {
@@ -105,6 +109,15 @@ TEST_CASE("CLI temporary output closes before publication and cleans up failures
     output.write(bytes);
     temporary_path = output.path();
     // Model an exception that abandons processing before close/publication.
+  }
+  REQUIRE_FALSE(fs::exists(temporary_path));
+  {
+    dacoexec::cli::temporary_output output(destination);
+    temporary_path = output.path();
+    output.close();
+    REQUIRE_THROWS_MATCHES(
+      output.write(bytes), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_state));
+    REQUIRE_NOTHROW(output.close());
   }
   REQUIRE_FALSE(fs::exists(temporary_path));
   REQUIRE(read_file(destination) == "x");

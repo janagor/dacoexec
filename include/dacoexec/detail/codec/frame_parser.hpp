@@ -26,9 +26,11 @@ struct frame_parser
 
   auto read_byte() -> std::byte
   {
-    if (!input_.has_value()) { throw format_error(Format::cursor_message); }
+    if (!input_.has_value()) { throw ::dacoexec::exception(::dacoexec::errc::invalid_state, Format::cursor_message); }
     auto &cursor = input_.value();
-    if (cursor == std::ranges::end(base_)) { throw format_error(Format::truncated_message); }
+    if (cursor == std::ranges::end(base_)) {
+      throw ::dacoexec::exception(::dacoexec::errc::truncated_archive, Format::truncated_message);
+    }
     using source_value = std::ranges::range_value_t<V>;
     auto const value = ::dacoexec::detail::support::to_byte(static_cast<source_value>(*cursor));
     ++cursor;
@@ -58,14 +60,18 @@ struct frame_parser
 
   auto finish_archive() -> void
   {
-    if (!input_.has_value()) { throw format_error(Format::cursor_message); }
-    if (input_.value() != std::ranges::end(base_)) { throw format_error("Trailing bytes after END"); }
+    if (!input_.has_value()) { throw ::dacoexec::exception(::dacoexec::errc::invalid_state, Format::cursor_message); }
+    if (input_.value() != std::ranges::end(base_)) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_archive, "Trailing bytes after END");
+    }
     finished_ = true;
   }
 
   auto read_data_block(typename Format::frame_type &frame) -> void
   {
-    if (sequence_limit_reached_) { throw std::overflow_error(Format::sequence_message); }
+    if (sequence_limit_reached_) {
+      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, Format::sequence_message);
+    }
     auto &block = frame.block_;
     block.uncompressed_size_ = frame.header_.uncompressed_size_;
     Format::read_metadata(*this, frame);
