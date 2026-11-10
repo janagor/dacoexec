@@ -38,6 +38,32 @@ auto encode(std::span<interval const> intervals) -> std::vector<std::byte>
   return encoder.finish();
 }
 
+// Independent arbitrary-width lower endpoint, stored least-significant byte
+// first. Carry propagation is ordinary base-256 addition across the entire
+// number: no cached output byte, pending run, or production engine constants.
+auto reference_encode(std::span<interval const> intervals) -> std::vector<std::byte>
+{
+  std::vector<std::byte> low(5);
+  std::uint64_t range = 0xffffffffU;
+  for (auto [cumulative, frequency, total] : intervals) {
+    auto const unit = range / total;
+    auto carry = unit * cumulative;
+    for (auto &digit : low) {
+      carry += std::to_integer<unsigned>(digit);
+      digit = static_cast<std::byte>(carry & 255U);
+      carry >>= 8U;
+    }
+    REQUIRE(carry == 0);
+    range = unit * frequency;
+    while (range < 0x1000000U) {
+      range *= 256;
+      low.insert(low.begin(), std::byte{ 0 });
+    }
+  }
+  std::ranges::reverse(low);
+  return low;
+}
+
 void check_intervals(std::span<interval const> intervals, std::span<std::byte const> payload)
 {
   arithmetic::range_decoder decoder(payload);
@@ -130,6 +156,59 @@ TEST_CASE("Range engine decodes explicit cumulative tables", "[arithmetic][range
   for (unsigned index = 0; index < 65536; ++index) { symbols.push_back(index % 256); }
   auto const intervals = make_intervals(symbols, table);
   check_intervals(intervals, encode(intervals));
+}
+
+TEST_CASE("Range engine agrees with independent wide integer arithmetic", "[arithmetic][range]")
+{
+  // Exhaust every binary word through length 12. Include asymmetric models,
+  // the maximum total, and non-power-of-two division remainders.
+  for (auto const &table : { std::vector<std::uint32_t>{ 0, 1, 2 },
+         std::vector<std::uint32_t>{ 0, 1, 4096 },
+         std::vector<std::uint32_t>{ 0, 5, 7 },
+         std::vector<std::uint32_t>{ 0, 0xffffff, 0x1000000 } }) {
+    for (unsigned length = 0; length <= 12; ++length) {
+      for (unsigned word = 0; word < (1U << length); ++word) {
+        std::vector<unsigned> symbols;
+        for (unsigned bit = 0; bit < length; ++bit) { symbols.push_back((word >> bit) & 1U); }
+        auto const intervals = make_intervals(symbols, table);
+        auto const expected = reference_encode(intervals);
+        REQUIRE(encode(intervals) == expected);
+        check_intervals(intervals, expected);
+      }
+    }
+  }
+
+  std::mt19937 random{ 1729 };
+  for (unsigned trial = 0; trial < 128; ++trial) {
+    CAPTURE(trial);
+    std::vector<interval> intervals;
+    for (unsigned index = 0; index < 256; ++index) {
+      auto const total = 1U + static_cast<std::uint32_t>(random() % 0x1000000U);
+      auto const frequency = 1U + static_cast<std::uint32_t>(random() % total);
+      auto const cumulative = static_cast<std::uint32_t>(random() % (total - frequency + 1U));
+      intervals.push_back({ cumulative, frequency, total });
+    }
+    auto const expected = reference_encode(intervals);
+    REQUIRE(encode(intervals) == expected);
+    check_intervals(intervals, expected);
+  }
+
+  // Long deferred carry chains, with both carry and no-carry resolutions.
+  for (auto length : { 1U, 2U, 31U, 256U, 1024U }) {
+    for (auto final : { interval{ 0, 1, 2 }, interval{ 1, 1, 2 } }) {
+      std::vector<interval> intervals{ interval{ 255, 1, 256 } };
+      // After the first symbol, low cycles through FFFF0100, FF010000,
+      // and 01000000. Choosing cumulative 0, 0, 255 repeatedly leaves
+      // shift_low's high byte ambiguous on every step, without a carry.
+      for (unsigned index = 0; index < length; ++index) {
+        intervals.push_back(interval{ index % 3 == 2 ? 255U : 0U, 1, 256 });
+      }
+      intervals.push_back(final);
+      auto const expected = reference_encode(intervals);
+      REQUIRE(encode(intervals) == expected);
+      check_intervals(intervals, expected);
+    }
+  }
 }
 
 TEST_CASE("Range engine supports changing totals and extreme intervals", "[arithmetic][range]")

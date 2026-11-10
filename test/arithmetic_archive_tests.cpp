@@ -181,6 +181,100 @@ TEST_CASE("DAC1 mixed frames round trip deterministically through single pass in
   REQUIRE(sink.bytes_ == source);
 }
 
+TEST_CASE("DAC1 multi-symbol archive freezes normalization and model bytes", "[arithmetic][archive]")
+{
+  bytes source;
+  for (unsigned i = 0; i < 32; ++i) {
+    source.push_back(std::byte{ 0 });
+    source.push_back(std::byte{ 255 });
+  }
+  // Computed independently with an arbitrary-width lower endpoint and Python
+  // zlib.crc32, not by the archive writer. Both frequencies are exactly 2048.
+  std::array<unsigned char, 56> const golden{ 0x44,
+    0x41,
+    0x43,
+    0x31,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0x40,
+    0,
+    0,
+    0,
+    0x0d,
+    0,
+    0,
+    0,
+    0xf2,
+    0x82,
+    0x8e,
+    0x93,
+    12,
+    2,
+    0,
+    0,
+    0xff,
+    7,
+    0xff,
+    0xff,
+    7,
+    0,
+    0x55,
+    0x55,
+    0x32,
+    0xaa,
+    0xaa,
+    0xaa,
+    0xaa,
+    0xaa,
+    0x55,
+    0x58,
+    0,
+    0,
+    0xff,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0 };
+  bytes expected;
+  for (auto value : golden) { expected.push_back(static_cast<std::byte>(value)); }
+  REQUIRE(compress(source) == expected);
+  REQUIRE(decompress(expected) == source);
+
+  // Every single-bit payload corruption must fail before publishing the frame.
+  for (std::size_t offset = 30; offset < 43; ++offset) {
+    for (unsigned bit = 0; bit < 8; ++bit) {
+      CAPTURE(offset, bit);
+      auto corrupt = expected;
+      corrupt.at(offset) ^= static_cast<std::byte>(1U << bit);
+      recording_sink sink;
+      REQUIRE_THROWS_AS(codec::decompress_stream<arithmetic::stream_format>(corrupt, sink, {}), exception);
+      REQUIRE(sink.bytes_.empty());
+    }
+  }
+
+  // A model and engine reset at each frame must reproduce the entire wire
+  // frame, including model, payload, and CRC, regardless of earlier frames.
+  auto doubled = source;
+  doubled.insert(doubled.end(), source.begin(), source.end());
+  auto const archive = compress(doubled, { .block_size_ = source.size() });
+  auto const first = std::span(archive).subspan(8, 35);
+  auto const second = std::span(archive).subspan(43, 35);
+  REQUIRE(std::ranges::equal(first, second));
+  REQUIRE(std::ranges::equal(first, std::span(expected).subspan(8, 35)));
+  REQUIRE(decompress(archive) == doubled);
+}
+
 TEST_CASE("DAC1 multi-symbol models round trip across block boundaries", "[arithmetic][archive]")
 {
   std::mt19937 generator{ 77 };
