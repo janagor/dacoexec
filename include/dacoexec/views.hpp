@@ -9,6 +9,8 @@
 #include <dacoexec/detail/views/bits.hpp>
 #include <dacoexec/detail/views/integer_decode.hpp>
 #include <dacoexec/detail/views/integer_encode.hpp>
+#include <dacoexec/detail/views/positive.hpp>
+#include <dacoexec/detail/views/zigzag.hpp>
 #include <dacoexec/huffman.hpp>
 #include <limits>
 
@@ -36,6 +38,15 @@ struct decode_limits
 //! deferred until dereference, increment, or end comparison; these operations can
 //! throw. std::views::take(0) performs no producer work, even on invalid archives.
 namespace encode {
+  //! Maps signed integers to uint64_t, keeping values near zero small.
+  //! Mapping views use transform semantics: values are computed on dereference
+  //! without caching. Signed input types up to 64 bits are accepted.
+  [[nodiscard]] constexpr auto zigzag() { return ::dacoexec::detail::views::encode::zigzag(); }
+
+  //! Adds one to unsigned integers for Gamma/Delta coding. UINT64_MAX throws
+  //! errc::numeric_overflow on dereference. Yields uint64_t.
+  [[nodiscard]] constexpr auto positive() { return ::dacoexec::detail::views::encode::positive(); }
+
   //! Produces a complete DHF1 archive, buffering one frame plus codec workspace.
   //! First demand stages only the archive header. Exhaust the view to produce END.
   [[nodiscard]] inline auto huffman(::dacoexec::huffman::stream_options options = {})
@@ -64,6 +75,13 @@ namespace encode {
 }// namespace encode
 
 namespace decode {
+  //! Reverses ZigZag mapping of unsigned integers, yielding int64_t.
+  [[nodiscard]] constexpr auto zigzag() { return ::dacoexec::detail::views::decode::zigzag(); }
+
+  //! Subtracts one from positive unsigned integers, yielding uint64_t.
+  //! Zero throws errc::invalid_argument on dereference.
+  [[nodiscard]] constexpr auto positive() { return ::dacoexec::detail::views::decode::positive(); }
+
   //! Verifies each whole frame before yielding bytes. Full archive validation,
   //! including END and trailing-input checks, requires exhausting the view.
   //! Earlier verified bytes remain available to the consumer after later errors.

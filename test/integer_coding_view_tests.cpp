@@ -9,6 +9,7 @@
 #include <dacoexec/detail/views/integer_decode.hpp>
 #include <dacoexec/detail/views/integer_encode.hpp>
 #include <dacoexec/error.hpp>
+#include <dacoexec/views.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -19,6 +20,7 @@
 #include <iterator>
 #include <limits>
 #include <ranges>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -41,6 +43,7 @@ template<std::ranges::input_range R> auto bit_string(R &&range) -> std::string
 }
 
 namespace dv = dacoexec::detail::views;
+namespace pv = dacoexec::views;
 constexpr std::uint32_t golomb_divisor = 5;
 constexpr unsigned rice_shift = 2;
 constexpr auto maximum_integer = std::numeric_limits<std::uint64_t>::max();
@@ -56,7 +59,101 @@ static_assert(!std::copyable<decode_range>);
 static_assert(std::same_as<std::ranges::range_value_t<encode_range>, bool>);
 static_assert(std::same_as<std::ranges::range_value_t<decode_range>, std::uint64_t>);
 
+template<typename R, typename Adaptor>
+concept mapping_input = requires(R &&range, Adaptor adaptor) { std::forward<R>(range) | adaptor; };
+
+using zigzag_encoder = decltype(pv::encode::zigzag());
+using zigzag_decoder = decltype(pv::decode::zigzag());
+using positive_encoder = decltype(pv::encode::positive());
+using positive_decoder = decltype(pv::decode::positive());
+static_assert(mapping_input<std::vector<int> &, zigzag_encoder>);
+static_assert(mapping_input<std::vector<std::uint64_t> &, zigzag_decoder>);
+static_assert(mapping_input<std::vector<unsigned> &, positive_encoder>);
+static_assert(mapping_input<std::vector<unsigned> &, positive_decoder>);
+static_assert(!mapping_input<std::vector<unsigned> &, zigzag_encoder>);
+static_assert(!mapping_input<std::vector<int> &, zigzag_decoder>);
+static_assert(!mapping_input<std::vector<int> &, positive_encoder>);
+static_assert(!mapping_input<std::vector<int> &, positive_decoder>);
+static_assert(!mapping_input<std::vector<bool> &, positive_encoder>);
+static_assert(!mapping_input<std::vector<bool> &, zigzag_decoder>);
+static_assert(!mapping_input<std::vector<double> &, zigzag_encoder>);
+
+constexpr std::array signed_mapping_values{ 0, -1, 1, -2, 2 };
+constexpr auto mapped_values = signed_mapping_values | pv::encode::zigzag();
+static_assert(mapped_values[1] == 1U && mapped_values[3] == 3U);
+static_assert(std::same_as<std::ranges::range_value_t<decltype(mapped_values)>, std::uint64_t>);
+static_assert(std::same_as<std::ranges::range_value_t<decltype(mapped_values | pv::decode::zigzag())>, std::int64_t>);
+
 }// namespace
+
+TEST_CASE("public integer mappings preserve values and signed boundaries", "[integer_coding][views]")
+{
+  REQUIRE(collect(signed_mapping_values | pv::encode::zigzag()) == std::vector<std::uint64_t>{ 0, 1, 2, 3, 4 });
+  constexpr auto minimum = std::numeric_limits<std::int64_t>::min();
+  constexpr auto maximum = std::numeric_limits<std::int64_t>::max();
+  std::vector<std::int64_t> const values{ minimum, maximum, -1, 0, 1 };
+  auto mapped = pv::encode::zigzag()(values);
+  REQUIRE(*mapped.begin() == maximum_integer);
+  REQUIRE(collect(pv::decode::zigzag()(mapped)) == values);
+  REQUIRE(collect(std::vector<int>{ -1, 0, 1 } | pv::encode::zigzag()) == std::vector<std::uint64_t>{ 1, 0, 2 });
+  std::vector<std::uint64_t> const nonnegative{ 0, 1, maximum_integer - 1U };
+  REQUIRE(collect(pv::encode::positive()(nonnegative)) == std::vector<std::uint64_t>{ 1, 2, maximum_integer });
+  REQUIRE(collect(nonnegative | pv::encode::positive() | pv::decode::positive()) == nonnegative);
+}
+
+TEST_CASE("public mappings compose with integer bit codecs and single-pass sources", "[integer_coding][views]")
+{
+  std::vector<std::int64_t> const values{ -5, -1, 0, 1, 5, std::numeric_limits<std::int64_t>::max() };
+  REQUIRE(collect(values | pv::encode::zigzag() | pv::encode::positive() | pv::encode::gamma()
+                  | pv::decode::gamma(values.size()) | pv::decode::positive() | pv::decode::zigzag())
+          == values);
+  REQUIRE(collect(values | pv::encode::zigzag() | pv::encode::positive() | pv::encode::delta()
+                  | pv::decode::delta(values.size()) | pv::decode::positive() | pv::decode::zigzag())
+          == values);
+  std::vector<std::int64_t> const extremes{
+    std::numeric_limits<std::int64_t>::min(), std::numeric_limits<std::int64_t>::max(), 0
+  };
+  constexpr unsigned wide_shift = 63;
+  REQUIRE(collect(extremes | pv::encode::zigzag() | pv::encode::rice(wide_shift)
+                  | pv::decode::rice(wide_shift, extremes.size()) | pv::decode::zigzag())
+          == extremes);
+  std::istringstream source{ "-2 -1 0 1 2" };
+  REQUIRE(collect(std::ranges::istream_view<int>(source) | pv::encode::zigzag() | pv::encode::golomb(golomb_divisor)
+                  | pv::decode::golomb(golomb_divisor, signed_mapping_values.size()) | pv::decode::zigzag())
+          == std::vector<std::int64_t>{ -2, -1, 0, 1, 2 });
+}
+
+TEST_CASE("integer mapping views defer work and domain errors until dereference", "[integer_coding][views]")
+{
+  std::size_t reads = 0;
+  auto source = signed_mapping_values | std::views::transform([&](int value) {
+    ++reads;
+    return value;
+  });
+  auto mapped = source | pv::encode::zigzag();
+  auto cursor = mapped.begin();
+  REQUIRE(reads == 0);
+  REQUIRE(*cursor == 0U);
+  REQUIRE(reads == 1);
+  REQUIRE(collect(mapped | std::views::take(0)).empty());
+  REQUIRE(reads == 1);
+  REQUIRE(collect(std::vector<int>{} | pv::encode::zigzag()).empty());
+
+  std::array const maximum{ maximum_integer };
+  auto overflow = maximum | pv::encode::positive();
+  auto overflow_cursor = overflow.begin();
+  REQUIRE(collect(overflow | std::views::take(0)).empty());
+  REQUIRE_THROWS_MATCHES(
+    *overflow_cursor, dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::numeric_overflow));
+  std::array const zero{ std::uint64_t{ 0 } };
+  auto invalid = zero | pv::decode::positive();
+  REQUIRE_THROWS_MATCHES(
+    *invalid.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
+  std::array const minimum{ std::numeric_limits<std::int64_t>::min() };
+  auto signed_overflow = minimum | pv::encode::zigzag() | pv::encode::positive();
+  REQUIRE_THROWS_MATCHES(
+    *signed_overflow.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::numeric_overflow));
+}
 
 TEST_CASE("integer encoder views emit exact codewords", "[integer_coding][views]")
 {
