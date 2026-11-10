@@ -21,7 +21,7 @@ Only declarations documented in these facade headers are supported:
 | `<dacoexec/views.hpp>` | Archive, bit, and integer adaptors |
 | `<dacoexec/bit.hpp>` | MSB-first bit reader, writer, and output iterator |
 | `<dacoexec/error.hpp>` | Archive, I/O, and codec exceptions |
-| `<dacoexec/execution.hpp>` | Optional parallel compression with stdexec |
+| `<dacoexec/execution.hpp>` | Optional parallel compression and decompression with stdexec |
 
 Everything under `dacoexec/detail/` is unsupported implementation, including
 codec classes, trees, codebooks, frequency tables, probability models, block and
@@ -214,7 +214,7 @@ accepts an output iterator; call `finish()` to flush it and obtain the padding
 bit count. Retain that count when packing integer-encoded bits. Integer primitive
 functions and numeric mapping helpers are private.
 
-## Parallel compression
+## Parallel execution
 
 Enable `dacoexec_BUILD_EXECUTION`, request the installed `execution` component,
 and link `dacoexec::execution` to use `<dacoexec/execution.hpp>`.
@@ -228,8 +228,25 @@ auto sender = dacoexec::huffman::compress_parallel_on(scheduler, input, destinat
 auto result = stdexec::sync_wait(std::move(sender));
 ```
 
-The ANS namespace offers the same operation. Each lazy, single-use sender
-completes with the codec's public `stream_statistics`. Writes stay in source
+Both namespaces also provide verified parallel decompression:
+
+```cpp
+auto sender = dacoexec::huffman::decompress_parallel_on(scheduler, archive, destination,
+    { .max_frame_size_ = 16 * 1024 * 1024,
+      .max_output_bytes_ = 256 * 1024 * 1024,
+      .max_in_flight_ = 4 });
+auto result = stdexec::sync_wait(std::move(sender));
+```
+
+`parallel_decode_options` bounds each frame, total decoded output, and the number
+of frames per batch. Frames are parsed sequentially and decoded and checksum
+verified concurrently. Output limits are reserved before decoding. Each batch
+is written only after all its frames verify; parsing or worker errors discard
+that batch. END and exact EOF are required. A sink error may leave partial output.
+
+The ANS namespace offers the same operations, including rANS and tANS decoding.
+Each lazy, single-use sender completes with the codec's public
+`stream_statistics`. Writes stay in source
 order; outstanding work drains on failure or cancellation. Earlier writes remain.
 Lvalue sources, sink/ostream objects, output storage, and scheduler contexts must
 outlive completion. Output iterator adapters are owned by the sender. The generic

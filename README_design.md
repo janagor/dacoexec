@@ -117,7 +117,11 @@ sources live in `detail/codec/` and are used by both Huffman and ANS. Format
 policies retain codec metadata parsing, tag validation, encoding/decoding, archive
 writes, and diagnostics.
 Sequential and parallel compression share format hooks for metadata costs and
-serialization; frame views retain their individual iterator ownership semantics.
+serialization. Parallel decompression shares frame verification with the sequential
+loop, reserves cumulative output limits before scheduling, and commits verified
+batches in input order. Shared parallel sources live in `detail/codec/parallel_execution.hpp`;
+codec-specific scheduler adapters live in `detail/{ans,huffman}/parallel_execution.hpp`.
+Frame views retain their individual iterator ownership semantics.
 The constexpr fixed-capacity priority queue lives in `detail/adt/`. Typed node ownership lives
 in `detail/memory/`; it has no codec dependency. Huffman keeps its tree-specific
 storage aliases beside tree construction. Byte-frequency counting, normalized frequency
