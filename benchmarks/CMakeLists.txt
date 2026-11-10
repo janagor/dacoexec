@@ -35,6 +35,11 @@ dacoexec_configure_linker(dacoexec_arithmetic_model_benchmarks)
 target_link_libraries(dacoexec_arithmetic_model_benchmarks PRIVATE dacoexec::dacoexec benchmark::benchmark
                                                                    dacoexec_warnings)
 
+add_executable(dacoexec_arithmetic_adaptive_model_benchmarks arithmetic_adaptive_model_bench.cpp)
+dacoexec_configure_linker(dacoexec_arithmetic_adaptive_model_benchmarks)
+target_link_libraries(dacoexec_arithmetic_adaptive_model_benchmarks PRIVATE dacoexec::dacoexec benchmark::benchmark
+                                                                            dacoexec_warnings)
+
 add_executable(dacoexec_arithmetic_benchmarks arithmetic_bench.cpp)
 dacoexec_configure_linker(dacoexec_arithmetic_benchmarks)
 target_link_libraries(dacoexec_arithmetic_benchmarks PRIVATE dacoexec::dacoexec benchmark::benchmark
