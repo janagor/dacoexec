@@ -18,6 +18,7 @@
 
 namespace dacoexec::detail::arithmetic {
 using static_model = model::frequency_model<model::alphabet_size>;
+inline constexpr std::size_t static_model_min_metadata_size = 6;// Precision, count, and one entry.
 
 //! Optional direct cumulative-slot lookup: 2^precision bytes, built per model.
 [[nodiscard]] inline auto make_symbol_lookup(static_model const &probabilities) -> std::vector<std::uint8_t>
@@ -102,7 +103,14 @@ template<byte_input_range R>
     frequencies.at(symbol) = frequency;
   }
   if (sum != total) { invalid(); }
-  return static_model{ frequencies, precision };
+  try {
+    return static_model{ frequencies, precision };
+  } catch (::dacoexec::exception const &error) {
+    // Keep the wire deserializer's error contract independent of constructor
+    // validation, which reports invalid user-supplied models as argument errors.
+    if (error.code() != errc::invalid_argument) { throw; }
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, error.what());
+  }
 }
 }// namespace dacoexec::detail::arithmetic
 #endif// DACOEXEC_ARITHMETIC_STATIC_MODEL_HPP

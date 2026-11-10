@@ -5,6 +5,9 @@ operate on caller-supplied cumulative intervals. They do not count frequencies,
 choose symbols, serialize models, or frame archives. A fresh object starts an
 independent stream. The decoder borrows its input span.
 
+The internal archive adapter wraps static range blocks in [DAC1](dac1.md),
+using shared RAW fallback, bounded framing, and verified stream output.
+
 For each symbol, supply a total `T` in `[1, 2^24]`, a positive frequency `f`,
 and a cumulative frequency `C` with `C + f <= T`. The caller's model must
 partition `[0, T)` into nonoverlapping symbol intervals. Totals need not be
