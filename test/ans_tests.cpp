@@ -3,11 +3,11 @@
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
 #include <dacoexec/detail/ans/format.hpp>
-#include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/ans/model_wire.hpp>
 #include <dacoexec/detail/ans/rans/codec.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/model/frequency_model.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 #include <dacoexec/detail/support/crc32.hpp>
 #include <dacoexec/detail/support/endian.hpp>
@@ -63,48 +63,12 @@ auto restore(bytes const &input, std::uint64_t limit = std::numeric_limits<std::
 }
 }// namespace
 
-TEST_CASE("ANS normalization preserves support and handles full-width counts", "[ans]")
-{
-  constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
-  auto const model = ans::make_model(std::array<std::uint64_t, 2>{ maximum - 1, 1 });
-  REQUIRE(model.frequencies().front() == model.total() - 1);
-  REQUIRE(model.frequencies().back() == 1);
-  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ maximum, 1 })),
-    dacoexec::exception,
-    dacoexec::test::error_is(dacoexec::errc::numeric_overflow));
-  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ 0, 0 })),
-    dacoexec::exception,
-    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
-  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, 0)),
-    dacoexec::exception,
-    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
-  REQUIRE_THROWS_MATCHES((ans::make_model(std::array<std::uint64_t, 2>{ 1, 1 }, ans::max_precision_bits + 1)),
-    dacoexec::exception,
-    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
-  ans::frequency_table counts{};
-  counts.fill(1);
-  REQUIRE_THROWS_MATCHES(
-    ans::make_model(counts, 1), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
-  for (unsigned precision = dacoexec::detail::support::bits_per_byte; precision <= ans::max_precision_bits;
-    ++precision) {
-    auto const normalized = ans::make_model(counts, precision);
-    std::uint32_t sum = 0;
-    for (std::size_t symbol = 0; symbol < counts.size(); ++symbol) {
-      REQUIRE(normalized.cumulative().at(symbol) == sum);
-      REQUIRE(normalized.frequencies().at(symbol) > 0);
-      sum += normalized.frequencies().at(symbol);
-    }
-    REQUIRE(sum == normalized.total());
-    REQUIRE(ans::make_model(counts, precision).frequencies() == normalized.frequencies());
-  }
-}
-
 TEST_CASE("rANS has a stable wire vector and rejects symbols absent from its model", "[ans]")
 {
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at(0) = 1;
   counts.at(1) = 1;
-  auto const model = ans::make_model(counts, 1);
+  auto const model = dacoexec::detail::model::make_model(counts, 1);
   bytes input{ std::byte{ 0 }, std::byte{ 1 }, std::byte{ 0 }, std::byte{ 1 } };
   bytes const expected{ std::byte{ 0x0a }, std::byte{ 0 }, std::byte{ 0 }, std::byte{ 0x08 } };
   auto const encoded = ans::rans::encode_block(input, model);
@@ -115,7 +79,7 @@ TEST_CASE("rANS has a stable wire vector and rejects symbols absent from its mod
     dacoexec::exception,
     dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   counts.at(1) = 0;
-  auto const single = ans::make_model(counts);
+  auto const single = dacoexec::detail::model::make_model(counts);
   REQUIRE_THROWS_MATCHES(ans::rans::encode_block(input, single),
     dacoexec::exception,
     dacoexec::test::error_is(dacoexec::errc::invalid_argument));
@@ -130,9 +94,11 @@ TEST_CASE("rANS round trips byte alphabets at every supported precision", "[ans]
   std::mt19937 random{ seed };
   bytes input(block_size);
   std::ranges::generate(input, [&random]() -> std::byte { return static_cast<std::byte>(random()); });
-  for (unsigned precision = dacoexec::detail::support::bits_per_byte; precision <= ans::max_precision_bits;
+  for (unsigned precision = dacoexec::detail::support::bits_per_byte;
+    precision <= dacoexec::detail::model::max_precision_bits;
     ++precision) {
-    auto const model = ans::make_model(ans::count_frequencies(input), precision);
+    auto const model =
+      dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input), precision);
     auto const encoded = ans::rans::encode_block(input, model);
     REQUIRE(ans::rans::decode_block(encoded, model, input.size()) == input);
     REQUIRE_THROWS_MATCHES(ans::rans::decode_block(encoded, model, input.size(), input.size() - 1),
@@ -206,7 +172,7 @@ TEST_CASE("DAN1 validates framing, checksums, models and output limits", "[ans]"
 TEST_CASE("ANS adaptors consume independent owned blocks", "[ans]")
 {
   bytes input(block_size + 1, std::byte{ 'A' });
-  auto model = ans::make_model(ans::count_frequencies(input));
+  auto model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input));
   auto blocks = input | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model)
                 | dacoexec::detail::views::decode::rans(block_size);
   bytes decoded;
@@ -218,16 +184,12 @@ TEST_CASE("ANS adaptors consume independent owned blocks", "[ans]")
   REQUIRE(decoded == input);
 }
 
-TEST_CASE("ANS rejects inconsistent normalized models and decoder states", "[ans]")
+TEST_CASE("rANS rejects invalid decoder states", "[ans]")
 {
-  using model_type = ans::frequency_model<ans::alphabet_size>;
-  REQUIRE_THROWS_MATCHES(model_type(model_type::table_type{}, ans::default_precision_bits),
-    dacoexec::exception,
-    dacoexec::test::error_is(dacoexec::errc::invalid_argument));
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at(0) = 1;
   counts.at(1) = 1;
-  auto const model = ans::make_model(counts);
+  auto const model = dacoexec::detail::model::make_model(counts);
   bytes const empty;
   auto const encoded_empty = ans::rans::encode_block(empty, model);
   REQUIRE(ans::rans::decode_block(encoded_empty, model, 0).empty());
@@ -250,7 +212,7 @@ TEST_CASE("ANS rejects inconsistent normalized models and decoder states", "[ans
 TEST_CASE("ANS block views stage once and preserve borrowed dereferences", "[ans][ranges]")
 {
   bytes input(block_size + 1, std::byte{ 'A' });
-  auto const model = ans::make_model(ans::count_frequencies(input));
+  auto const model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input));
   std::size_t reads = 0;
   auto source = input | std::views::transform([&reads](std::byte value) -> std::byte {
     ++reads;
@@ -279,7 +241,7 @@ TEST_CASE("ANS block views stage once and preserve borrowed dereferences", "[ans
 TEST_CASE("ANS decoded views preserve the staged decoded block", "[ans][ranges]")
 {
   bytes input(block_size, std::byte{ 'A' });
-  auto const model = ans::make_model(ans::count_frequencies(input));
+  auto const model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input));
   auto view = input | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model)
               | dacoexec::detail::views::decode::rans(block_size);
   auto cursor = view.begin();
@@ -297,11 +259,12 @@ TEST_CASE("DAN1 sparse model cost includes only present symbols", "[ans]")
 {
   constexpr std::size_t single_symbol_model_size = 6;
   constexpr std::size_t dense_model_size = 771;
-  auto const single = ans::make_model(ans::count_frequencies(bytes{ std::byte{ 'A' } }));
+  auto const single =
+    dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(bytes{ std::byte{ 'A' } }));
   REQUIRE(ans::model_wire_size(single) == single_symbol_model_size);
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.fill(1);
-  REQUIRE(ans::model_wire_size(ans::make_model(counts)) == dense_model_size);
+  REQUIRE(ans::model_wire_size(dacoexec::detail::model::make_model(counts)) == dense_model_size);
   bytes input(block_size, std::byte{ 'A' });
   auto const encoded = archive(input);
   REQUIRE(
@@ -313,7 +276,8 @@ TEST_CASE("DAN1 sparse model cost includes only present symbols", "[ans]")
   corrupt.at(entry_count_offset) = std::byte{ 0 };
   REQUIRE_THROWS_MATCHES(
     restore(corrupt), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
-  auto const maximum_model = ans::make_model(ans::count_frequencies(input), ans::max_precision_bits);
+  auto const maximum_model = dacoexec::detail::model::make_model(
+    dacoexec::detail::model::count_frequencies(input), dacoexec::detail::model::max_precision_bits);
   ans::encoded_frame frame;
   frame.block_ = { .encoding_ = ans::block_encoding::rans,
     .uncompressed_size_ = input.size(),
@@ -351,7 +315,7 @@ TEST_CASE("DAN1 sparse models require unique sorted symbols", "[ans]")
   auto oversized = encoded;
   auto const count_offset = model_offset + sizeof(std::uint8_t);
   auto const invalid_count =
-    dacoexec::detail::support::write_u16_le(static_cast<std::uint16_t>(ans::alphabet_size + 1));
+    dacoexec::detail::support::write_u16_le(static_cast<std::uint16_t>(dacoexec::detail::model::alphabet_size + 1));
   std::ranges::copy(invalid_count, oversized.begin() + static_cast<std::ptrdiff_t>(count_offset));
   REQUIRE_THROWS_MATCHES(
     restore(oversized), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
@@ -360,7 +324,8 @@ TEST_CASE("DAN1 sparse models require unique sorted symbols", "[ans]")
 TEST_CASE("ANS staged views leave failed passes ended", "[ans][ranges]")
 {
   bytes input(block_size, std::byte{ 'B' });
-  auto const model = ans::make_model(ans::count_frequencies(bytes{ std::byte{ 'A' } }));
+  auto const model =
+    dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(bytes{ std::byte{ 'A' } }));
   auto view = input | dacoexec::detail::views::blocks(block_size) | dacoexec::detail::views::encode::rans(model);
   REQUIRE_THROWS_MATCHES(view.begin(), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_argument));
   REQUIRE(view.begin() == view.end());
@@ -533,10 +498,10 @@ TEST_CASE("DAN1 serialization matches golden wire vectors", "[ans][wire]")
   REQUIRE(restore(repeated_wire) == bytes(block_size, std::byte{ 'A' }));
 
   bytes const input{ std::byte{ 'A' }, std::byte{ 'B' }, std::byte{ 'A' } };
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at('A') = 1;
   counts.at('B') = 1;
-  auto const model = ans::make_model(counts, 1);
+  auto const model = dacoexec::detail::model::make_model(counts, 1);
   ans::encoded_frame frame;
   frame.block_ = { .encoding_ = ans::block_encoding::rans,
     .uncompressed_size_ = input.size(),
@@ -583,9 +548,9 @@ TEST_CASE("rANS produces identical payloads across range categories", "[ans][ran
 {
   bytes input(block_size);
   for (std::size_t index = 0; index < input.size(); ++index) {
-    input.at(index) = static_cast<std::byte>(index % ans::alphabet_size);
+    input.at(index) = static_cast<std::byte>(index % dacoexec::detail::model::alphabet_size);
   }
-  auto const model = ans::make_model(ans::count_frequencies(input));
+  auto const model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input));
   auto const expected = ans::rans::encode_block(input, model);
   std::list<std::byte> linked(input.begin(), input.end());
   REQUIRE(ans::rans::encode_block(linked, model) == expected);

@@ -210,7 +210,7 @@ template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame 
   }
   write_frame_header(sink, frame.header_);
   if (frame.header_.kind_ == frame_kind::huffman) {
-    std::array<std::byte, alphabet_size> lengths{};
+    std::array<std::byte, model::alphabet_size> lengths{};
     std::ranges::transform(
       block.lengths_, lengths.begin(), [](auto length) -> std::byte { return static_cast<std::byte>(length); });
     sink.write(lengths);

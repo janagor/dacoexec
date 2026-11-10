@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <dacoexec/detail/huffman/canonical.hpp>
 #include <dacoexec/detail/huffman/decode_view.hpp>
-#include <dacoexec/detail/huffman/frequency.hpp>
 #include <dacoexec/detail/huffman/tree.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 #include <dacoexec/detail/views/buffered_bytes.hpp>
 #include <iterator>
@@ -26,7 +26,7 @@ namespace {
 using dacoexec::detail::huffman::build_code_lengths;
 using dacoexec::detail::huffman::canonical_codebook;
 using dacoexec::detail::huffman::code_length_table;
-using dacoexec::detail::huffman::count_frequencies;
+using dacoexec::detail::model::count_frequencies;
 using dacoexec::exception;
 using dacoexec::detail::huffman::make_canonical_codebook;
 using dacoexec::detail::huffman::max_canonical_bits;

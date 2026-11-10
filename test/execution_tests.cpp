@@ -3,7 +3,6 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <dacoexec/ans.hpp>
 #include <dacoexec/detail/ans/format.hpp>
-#include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/execution/ordered_parallel.hpp>
@@ -11,6 +10,7 @@
 #include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/model/frequency_model.hpp>
 #include <dacoexec/detail/views/ans_frames.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
 #include <dacoexec/error.hpp>
@@ -993,7 +993,7 @@ TEST_CASE("Parallel ANS preserves mixed frame kinds and short final blocks", "[a
   constexpr std::array workers{ 1U, 2U, 4U };
   bytes input(ans_block_size, std::byte{ 'A' });
   for (std::size_t index = 0; index < ans_block_size; ++index) {
-    input.push_back(static_cast<std::byte>(index % ans::alphabet_size));
+    input.push_back(static_cast<std::byte>(index % dacoexec::detail::model::alphabet_size));
   }
   input.insert(input.end(), final_size, std::byte{ 'Z' });
   vector_sink sequential;

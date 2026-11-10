@@ -28,7 +28,7 @@ class canonical_codebook;
  * No dynamic allocation is needed.
  *
  * @code
- * auto frequencies = huffman::count_frequencies(bytes);
+ * auto frequencies = model::count_frequencies(bytes);
  * auto lengths = huffman::build_code_lengths(frequencies);
  * auto book = huffman::make_canonical_codebook(lengths);
  * @endcode
@@ -58,7 +58,7 @@ private:
   constexpr canonical_codebook() = default;
 
   code_length_table lengths_{};
-  std::array<codeword, alphabet_size> words_{};
+  std::array<codeword, model::alphabet_size> words_{};
 };
 
 /**

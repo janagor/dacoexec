@@ -6,11 +6,11 @@
 #include <dacoexec/ans.hpp>
 #include <dacoexec/detail/ans/encoder.hpp>
 #include <dacoexec/detail/ans/format.hpp>
-#include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/ans/tans/codec.hpp>
 #include <dacoexec/detail/ans/tans/table.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/model/frequency_model.hpp>
 #include <dacoexec/detail/support/endian.hpp>
 #include <dacoexec/error.hpp>
 #include <iterator>
@@ -28,9 +28,9 @@ TEST_CASE("tANS transitions invert every state and present symbol", "[ans][tans]
 {
   namespace ans = dacoexec::detail::ans;
   for (unsigned precision = 8; precision <= 12; ++precision) {
-    ans::frequency_table counts{};
+    dacoexec::detail::model::frequency_table counts{};
     for (std::size_t symbol = 0; symbol < counts.size(); ++symbol) { counts.at(symbol) = symbol + 1; }
-    auto model = ans::make_model(counts, precision);
+    auto model = dacoexec::detail::model::make_model(counts, precision);
     ans::tans::tables const table(model);
     for (unsigned symbol = 0; symbol < 256; ++symbol) {
       for (std::uint32_t state = 0; state < model.total(); ++state) {
@@ -58,7 +58,7 @@ TEST_CASE("tANS standalone and archive round trips", "[ans][tans]")
         constexpr std::array alphabets{ 1U, 2U, 17U, 256U };
         value = static_cast<std::byte>(random() % alphabets.at(distribution));
       }
-      auto model = ans::make_model(ans::count_frequencies(input), precision);
+      auto model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input), precision);
       auto payload = ans::tans::encode_block(input, model);
       REQUIRE(ans::tans::decode_block(payload, model, input.size()) == input);
       REQUIRE(payload == ans::tans::encode_block(input, model));
@@ -77,9 +77,9 @@ TEST_CASE("tANS standalone and archive round trips", "[ans][tans]")
     }
   }
   std::vector<std::byte> empty;
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at(0) = 1;
-  auto byte_model = ans::make_model(counts, 10);
+  auto byte_model = dacoexec::detail::model::make_model(counts, 10);
   REQUIRE(ans::tans::decode_block(ans::tans::encode_block(empty, byte_model), byte_model, 0).empty());
   REQUIRE(dacoexec::ans::decompress(dacoexec::ans::compress(empty, { .coder_ = dacoexec::ans::entropy_coder::tans }))
       .empty());
@@ -92,9 +92,9 @@ TEST_CASE("tANS standalone and archive round trips", "[ans][tans]")
 TEST_CASE("tANS canonical payload and malformed state", "[ans][tans]")
 {
   namespace ans = dacoexec::detail::ans;
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at(42) = 1;
-  auto model = ans::make_model(counts, 10);
+  auto model = dacoexec::detail::model::make_model(counts, 10);
   std::vector<std::byte> input(3, std::byte{ 42 });
   auto payload = ans::tans::encode_block(input, model);
   REQUIRE(payload == std::vector<std::byte>(8, std::byte{ 0 }));
@@ -116,7 +116,7 @@ TEST_CASE("tANS frames verify checksum padding and output bounds", "[ans][tans]"
   namespace ans = dacoexec::detail::ans;
   std::vector<std::byte> input(4096, std::byte{ 7 });
   input.at(0) = std::byte{ 8 };
-  auto model = ans::make_model(ans::count_frequencies(input), 10);
+  auto model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input), 10);
   auto payload = ans::tans::encode_block(input, model);
   auto bits = dacoexec::detail::support::read_u32_le(std::span<std::byte const>{ payload }.subspan<4, 4>());
   if (bits % 8U != 0) {
@@ -143,10 +143,10 @@ TEST_CASE("tANS frames verify checksum padding and output bounds", "[ans][tans]"
 TEST_CASE("tANS two-symbol golden payload", "[ans][tans]")
 {
   namespace ans = dacoexec::detail::ans;
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at(0) = 1;
   counts.at(1) = 1;
-  auto model = ans::make_model(counts, 8);
+  auto model = dacoexec::detail::model::make_model(counts, 8);
   std::vector<std::byte> input{ std::byte{ 0 }, std::byte{ 1 }, std::byte{ 1 }, std::byte{ 0 }, std::byte{ 1 } };
   std::vector<std::byte> golden{ std::byte{ 9 },
     std::byte{ 0 },
@@ -163,7 +163,7 @@ TEST_CASE("tANS two-symbol golden payload", "[ans][tans]")
 
 namespace {
 // Slow specification packer, retained to detect wire changes in optimized packing.
-auto reference_payload(std::span<std::byte const> input, dacoexec::detail::ans::frequency_model<256> const &model)
+auto reference_payload(std::span<std::byte const> input, dacoexec::detail::model::frequency_model<256> const &model)
   -> std::vector<std::byte>
 {
   namespace ans = dacoexec::detail::ans;
@@ -195,12 +195,12 @@ TEST_CASE("tANS randomized models and packing match the specification", "[ans][t
   for (unsigned precision = 8; precision <= 12; ++precision) {
     for (unsigned const alphabet : { 1U, 2U, 17U, 256U }) {
       for (unsigned trial = 0; trial < 3; ++trial) {
-        ans::frequency_table counts{};
+        dacoexec::detail::model::frequency_table counts{};
         // Coprime permutation also exercises sparse noncontiguous alphabets.
         for (unsigned symbol = 0; symbol < alphabet; ++symbol) {
           counts.at(((symbol * 73U) + 19U) % 256U) = 1U + (random() % 100000U);
         }
-        auto model = ans::make_model(counts, precision);
+        auto model = dacoexec::detail::model::make_model(counts, precision);
         ans::tans::tables const table(model);
         std::array<unsigned, 256> slots{};
         for (std::uint32_t state = 0; state < model.total(); ++state) { ++slots.at(table.decode(state).symbol_); }
@@ -295,7 +295,7 @@ TEST_CASE("tANS archive metadata rejects invalid precision counts and frequencie
 TEST_CASE("tANS skewed golden vectors retain the original wire format", "[ans][tans]")
 {
   namespace ans = dacoexec::detail::ans;
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at(0) = 1;
   counts.at(1) = 3;
   counts.at(2) = 5;
@@ -307,7 +307,7 @@ TEST_CASE("tANS skewed golden vectors retain the original wire format", "[ans][t
     { 7, 2, 0, 0, 18, 0, 0, 0, 229, 203, 128 },
     { 103, 8, 0, 0, 18, 0, 0, 0, 131, 241, 128 } } };
   for (std::size_t index = 0; index < logs.size(); ++index) {
-    auto model = ans::make_model(counts, logs.at(index));
+    auto model = dacoexec::detail::model::make_model(counts, logs.at(index));
     std::vector<std::byte> golden;
     for (auto value : vectors.at(index)) { golden.push_back(static_cast<std::byte>(value)); }
     REQUIRE(ans::tans::encode_block(input, model) == golden);
@@ -318,10 +318,10 @@ TEST_CASE("tANS skewed golden vectors retain the original wire format", "[ans][t
 TEST_CASE("tANS rejects nonterminal states and excess valid bits", "[ans][tans]")
 {
   namespace ans = dacoexec::detail::ans;
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts.at(0) = 1;
   counts.at(1) = 1;
-  auto model = ans::make_model(counts, 8);
+  auto model = dacoexec::detail::model::make_model(counts, 8);
   std::vector<std::byte> input{ std::byte{ 0 }, std::byte{ 1 } };
   auto payload = ans::tans::encode_block(input, model);
   auto damaged = payload;

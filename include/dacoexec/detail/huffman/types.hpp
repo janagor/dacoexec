@@ -4,7 +4,7 @@
 
 #include <array>
 #include <cstdint>
-#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
 #include <limits>
 
 namespace dacoexec::detail::huffman {
@@ -14,9 +14,9 @@ namespace dacoexec::detail::huffman {
  * are stored in full: a 256-symbol tree can reach depth 255, which still
  * fits in std::uint8_t.
  */
-using code_length_table = std::array<std::uint8_t, alphabet_size>;
+using code_length_table = std::array<std::uint8_t, model::alphabet_size>;
 
-static_assert(alphabet_size == static_cast<std::size_t>(std::numeric_limits<std::uint8_t>::max()) + 1U);
+static_assert(model::alphabet_size == static_cast<std::size_t>(std::numeric_limits<std::uint8_t>::max()) + 1U);
 
 /**
  * Largest codeword width supported by canonical_codebook and bit_writer.

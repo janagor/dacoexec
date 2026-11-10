@@ -88,13 +88,12 @@ void archive(benchmark::State &state)
 
 void table_setup(benchmark::State &state)
 {
-  namespace ans = dacoexec::detail::ans;
-  ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   auto const table_log = static_cast<unsigned>(state.range(0));
   auto const alphabet = static_cast<unsigned>(state.range(1));
   bool const skewed = state.range(2) != 0;
   for (unsigned symbol = 0; symbol < alphabet; ++symbol) { counts.at(symbol) = skewed && symbol == 0 ? 1000000U : 1U; }
-  auto model = ans::make_model(counts, table_log);
+  auto model = dacoexec::detail::model::make_model(counts, table_log);
   for (auto iteration : state) {
     static_cast<void>(iteration);
     dacoexec::detail::ans::tans::tables table(model);
@@ -125,7 +124,7 @@ void frequency_count(benchmark::State &state)
   auto input = corpus(static_cast<std::size_t>(state.range(0)), 17);
   for (auto iteration : state) {
     static_cast<void>(iteration);
-    auto counts = dacoexec::detail::ans::count_frequencies(input);
+    auto counts = dacoexec::detail::model::count_frequencies(input);
     benchmark::DoNotOptimize(counts);
   }
 }
@@ -133,10 +132,10 @@ void frequency_count(benchmark::State &state)
 void normalization(benchmark::State &state)
 {
   auto input = corpus(static_cast<std::size_t>(state.range(0)), 17);
-  auto counts = dacoexec::detail::ans::count_frequencies(input);
+  auto counts = dacoexec::detail::model::count_frequencies(input);
   for (auto iteration : state) {
     static_cast<void>(iteration);
-    auto model = dacoexec::detail::ans::make_model(counts, 10);
+    auto model = dacoexec::detail::model::make_model(counts, 10);
     benchmark::DoNotOptimize(model);
   }
 }
@@ -145,7 +144,7 @@ void normalization(benchmark::State &state)
 void symbol_encode(benchmark::State &state)
 {
   auto input = corpus(static_cast<std::size_t>(state.range(0)), static_cast<unsigned>(state.range(1)));
-  auto model = dacoexec::detail::ans::make_model(dacoexec::detail::ans::count_frequencies(input), 10);
+  auto model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input), 10);
   dacoexec::detail::ans::tans::tables table(model);
   for (auto iteration : state) {
     static_cast<void>(iteration);
@@ -158,7 +157,7 @@ void symbol_encode(benchmark::State &state)
 void symbol_decode(benchmark::State &state)
 {
   auto input = corpus(static_cast<std::size_t>(state.range(0)), static_cast<unsigned>(state.range(1)));
-  auto model = dacoexec::detail::ans::make_model(dacoexec::detail::ans::count_frequencies(input), 10);
+  auto model = dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(input), 10);
   dacoexec::detail::ans::tans::tables table(model);
   auto payload = dacoexec::detail::ans::tans::encode_block(input, table);
   for (auto iteration : state) {

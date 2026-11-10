@@ -38,10 +38,10 @@ struct ans_frame_format
     block.encoding_ = ans::block_encoding::rans;
     auto const precision = std::to_integer<unsigned>(reader.read_byte());
     auto const count = dacoexec::detail::support::read_u16_le(reader.template read_array<sizeof(std::uint16_t)>());
-    if (count == 0 || count > ans::alphabet_size) {
+    if (count == 0 || count > model::alphabet_size) {
       throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Invalid ANS model entry count");
     }
-    ans::frequency_model<ans::alphabet_size>::table_type frequencies{};
+    model::frequency_model<model::alphabet_size>::table_type frequencies{};
     unsigned previous = 0;
     for (std::uint16_t entry = 0; entry < count; ++entry) {
       auto const symbol = std::to_integer<unsigned>(reader.read_byte());

@@ -17,7 +17,7 @@
 namespace dacoexec::detail::views {
 struct rans_block_encoder
 {
-  ans::frequency_model<ans::alphabet_size> model_;
+  model::frequency_model<model::alphabet_size> model_;
 
   auto operator()(byte_block block) const -> ans::encoded_block
   {
@@ -170,7 +170,7 @@ template<class Operation> struct ans_closure
 }// namespace dacoexec::detail::views
 
 namespace dacoexec::detail::views::encode {
-[[nodiscard]] inline auto rans(ans::frequency_model<ans::alphabet_size> model)
+[[nodiscard]] inline auto rans(model::frequency_model<model::alphabet_size> model)
   -> ::dacoexec::detail::views::ans_closure<::dacoexec::detail::views::rans_block_encoder>
 { return { ::dacoexec::detail::views::rans_block_encoder{ model } }; }
 }// namespace dacoexec::detail::views::encode

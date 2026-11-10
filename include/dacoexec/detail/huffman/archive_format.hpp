@@ -88,7 +88,7 @@ struct stream_format
   template<class Options> static auto validate_options(Options const & /*options*/) -> void {}
 
   [[nodiscard]] static auto metadata_size(encoded_frame const &frame) -> std::size_t
-  { return frame.header_.kind_ == frame_kind::huffman ? alphabet_size : 0U; }
+  { return frame.header_.kind_ == frame_kind::huffman ? model::alphabet_size : 0U; }
 
   template<io::byte_output_sink Sink> static auto write_archive_header(Sink &sink) -> void
   { huffman::write_archive_header(sink); }

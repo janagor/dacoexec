@@ -3,10 +3,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <dacoexec/detail/huffman/block.hpp>
 #include <dacoexec/detail/huffman/format.hpp>
-#include <dacoexec/detail/huffman/frequency.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 #include <dacoexec/detail/huffman/types.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 #include <dacoexec/detail/support/crc32.hpp>
 #include <dacoexec/detail/support/endian.hpp>
@@ -187,7 +187,8 @@ TEST_CASE("DHF1 Huffman validation and inferred padding", "[streaming]")
   bytes const input(test_block_size + 1, std::byte{ 'a' });
   auto const valid = compress(input, input.size());
   REQUIRE(decompress(valid) == input);
-  constexpr auto payload_offset = huffman::archive_header_size + huffman::frame_header_size + huffman::alphabet_size;
+  constexpr auto payload_offset =
+    huffman::archive_header_size + huffman::frame_header_size + dacoexec::detail::model::alphabet_size;
   auto padding = valid;
   auto const payload_size =
     (input.size() + dacoexec::detail::support::bits_per_byte - 1U) / dacoexec::detail::support::bits_per_byte;
@@ -344,8 +345,8 @@ TEST_CASE("DHF1 discards a failed later frame without writing it", "[streaming]"
   auto frames = archive | dacoexec::detail::views::frames();
   auto cursor = frames.begin();
   auto first = *cursor;
-  auto const second_offset =
-    huffman::archive_header_size + huffman::frame_header_size + huffman::alphabet_size + first.header_.payload_size_;
+  auto const second_offset = huffman::archive_header_size + huffman::frame_header_size
+                             + dacoexec::detail::model::alphabet_size + first.header_.payload_size_;
   archive.at(second_offset + huffman::crc_field_offset) ^= std::byte{ 1 };
   bytes output;
   dacoexec::detail::io::iterator_sink sink(std::back_inserter(output));

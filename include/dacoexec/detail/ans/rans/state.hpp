@@ -4,7 +4,7 @@
 #define DACOEXEC_ANS_RANS_STATE_HPP
 
 #include <algorithm>
-#include <dacoexec/detail/ans/model.hpp>
+#include <dacoexec/detail/model/frequency_model.hpp>
 #include <dacoexec/detail/support/endian.hpp>
 #include <dacoexec/error.hpp>
 #include <iterator>
@@ -21,9 +21,9 @@ inline constexpr std::uint32_t byte_mask = radix - 1;
 inline constexpr std::size_t state_bytes = sizeof(std::uint32_t);
 
 template<std::ranges::bidirectional_range R, std::size_t symbol_count>
-[[nodiscard]] auto encode(R &&source, frequency_model<symbol_count> const &model) -> std::vector<std::byte>
+[[nodiscard]] auto encode(R &&source, model::frequency_model<symbol_count> const &model) -> std::vector<std::byte>
 {
-  static_assert(symbol_count <= alphabet_size);
+  static_assert(symbol_count <= model::alphabet_size);
   std::uint32_t state = lower_bound;
   std::vector<std::byte> output(state_bytes);
   auto &&input = std::forward<R>(source);
@@ -53,11 +53,11 @@ template<std::ranges::bidirectional_range R, std::size_t symbol_count>
 
 template<class Symbol = std::uint8_t, std::size_t symbol_count>
 [[nodiscard]] auto decode(std::span<std::byte const> payload,
-  frequency_model<symbol_count> const &model,
+  model::frequency_model<symbol_count> const &model,
   std::size_t count,
   std::size_t limit) -> std::vector<Symbol>
 {
-  static_assert(symbol_count <= alphabet_size);
+  static_assert(symbol_count <= model::alphabet_size);
   if (count > limit) {
     throw ::dacoexec::exception(::dacoexec::errc::output_limit_exceeded, "ANS output exceeds configured limit");
   }

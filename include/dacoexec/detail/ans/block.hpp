@@ -1,5 +1,6 @@
 //! \file
 //! ANS block support.
+
 #ifndef DACOEXEC_ANS_BLOCK_HPP
 #define DACOEXEC_ANS_BLOCK_HPP
 

@@ -4,16 +4,16 @@
 #include <benchmark/benchmark.h>
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
-#include <dacoexec/detail/ans/model.hpp>
 #include <dacoexec/detail/ans/parallel_compression.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/execution/ordered_parallel.hpp>
 #include <dacoexec/detail/huffman/block.hpp>
 #include <dacoexec/detail/huffman/encoded_block.hpp>
-#include <dacoexec/detail/huffman/frequency.hpp>
 #include <dacoexec/detail/huffman/parallel_compression.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
+#include <dacoexec/detail/model/frequency_model.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
@@ -77,7 +77,8 @@ auto bm_huffman_compress_block(benchmark::State &state) -> void
   metrics(state,
     input.size(),
     reference.payload_.size()
-      + (reference.encoding_ == huffman::block_encoding::canonical_huffman ? huffman::alphabet_size : 0U));
+      + (reference.encoding_ == huffman::block_encoding::canonical_huffman ? dacoexec::detail::model::alphabet_size
+                                                                           : 0U));
 }
 
 auto bm_huffman_decompress_block(benchmark::State &state) -> void
@@ -100,7 +101,8 @@ auto bm_huffman_decompress_block(benchmark::State &state) -> void
   metrics(state,
     input.size(),
     encoded.payload_.size()
-      + (encoded.encoding_ == huffman::block_encoding::canonical_huffman ? huffman::alphabet_size : 0U));
+      + (encoded.encoding_ == huffman::block_encoding::canonical_huffman ? dacoexec::detail::model::alphabet_size
+                                                                         : 0U));
 }
 
 auto bm_huffman_compress_stream(benchmark::State &state) -> void
@@ -137,10 +139,10 @@ auto bm_huffman_decompress_stream(benchmark::State &state) -> void
 auto bm_ans_normalize(benchmark::State &state) -> void
 {
   auto const input = fixture(state, static_cast<std::size_t>(state.range(block_parameter)));
-  auto const counts = ans::count_frequencies(input);
+  auto const counts = dacoexec::detail::model::count_frequencies(input);
   for (auto iteration : state) {
     static_cast<void>(iteration);
-    auto model = ans::make_model(counts);
+    auto model = dacoexec::detail::model::make_model(counts);
     benchmark::DoNotOptimize(model.frequencies().data());
   }
 }
@@ -315,7 +317,7 @@ auto bm_ans_compress_parallel(benchmark::State &state) -> void
 struct frequency_source
 {
   using input_type = std::span<std::byte const>;
-  using result_type = huffman::frequency_table;
+  using result_type = dacoexec::detail::model::frequency_table;
   std::span<std::byte const> input_;
   std::size_t block_size_;
   std::uint64_t committed_ = 0;
@@ -343,8 +345,8 @@ auto bm_huffman_scheduling_overhead(benchmark::State &state) -> void
   auto const input = fixture(state, fixtures::stream_size);
   auto const block_size = static_cast<std::size_t>(state.range(block_parameter));
   exec::static_thread_pool pool{ static_cast<std::uint32_t>(state.range(workers_parameter)) };
-  auto process = [](std::span<std::byte const> block) -> huffman::frequency_table {
-    return huffman::count_frequencies(block);
+  auto process = [](std::span<std::byte const> block) -> dacoexec::detail::model::frequency_table {
+    return dacoexec::detail::model::count_frequencies(block);
   };
   for (auto iteration : state) {
     static_cast<void>(iteration);

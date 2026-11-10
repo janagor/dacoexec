@@ -1,23 +1,21 @@
 //! \file
-//! Immutable integer probability models for the ANS family.
-#ifndef DACOEXEC_ANS_MODEL_HPP
-#define DACOEXEC_ANS_MODEL_HPP
+//! Immutable normalized integer probability models for entropy codecs.
+#ifndef DACOEXEC_MODEL_FREQUENCY_MODEL_HPP
+#define DACOEXEC_MODEL_FREQUENCY_MODEL_HPP
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/ans/model_normalization.hpp>
-#include <dacoexec/detail/codec/frequency.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
+#include <dacoexec/detail/model/normalization.hpp>
 #include <dacoexec/error.hpp>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
-namespace dacoexec::detail::ans {
-using codec::alphabet_size;
+namespace dacoexec::detail::model {
 inline constexpr unsigned default_precision_bits = 12;
 inline constexpr unsigned max_precision_bits = 16;
-using codec::frequency_table;
 
 template<std::size_t symbol_count> class frequency_model
 {
@@ -28,18 +26,18 @@ public:
     : frequencies_(frequencies), precision_bits_(precision)
   {
     if (precision == 0 || precision > max_precision_bits) {
-      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS precision");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid model precision");
     }
     std::uint64_t sum = 0;
     for (std::size_t symbol = 0; symbol < symbol_count; ++symbol) {
       cumulative_.at(symbol) = static_cast<std::uint32_t>(sum);
       sum += frequencies_.at(symbol);
       if (sum > total()) {
-        throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS frequency sum");
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid model frequency sum");
       }
     }
     if (sum != total()) {
-      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS frequency sum");
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid model frequency sum");
     }
   }
 
@@ -64,20 +62,20 @@ template<std::size_t symbol_count>
   unsigned precision = default_precision_bits) -> frequency_model<symbol_count>
 {
   if (precision == 0 || precision > max_precision_bits) {
-    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid ANS precision");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Invalid model precision");
   }
   std::uint64_t sum = 0;
   std::uint32_t present = 0;
   for (auto count : counts) {
     if (count > std::numeric_limits<std::uint64_t>::max() - sum) {
-      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "ANS count overflow");
+      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "Model count overflow");
     }
     sum += count;
     present += count != 0 ? 1U : 0U;
   }
   auto const total = std::uint32_t{ 1 } << precision;
   if (sum == 0 || present > total) {
-    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "ANS model cannot represent alphabet");
+    throw ::dacoexec::exception(::dacoexec::errc::invalid_argument, "Model cannot represent alphabet");
   }
   auto const slots = total - present;
   typename frequency_model<symbol_count>::table_type frequencies{};
@@ -86,7 +84,7 @@ template<std::size_t symbol_count>
   for (std::size_t symbol = 0; symbol < symbol_count; ++symbol) {
     auto const count = counts.at(symbol);
     if (count == 0) { continue; }
-    auto const [quotient, remainder] = ::dacoexec::detail::ans::proportional_share(
+    auto const [quotient, remainder] = ::dacoexec::detail::model::proportional_share(
       { .count_ = count, .slots_ = slots, .sum_ = sum, .precision_ = precision });
     frequencies.at(symbol) = quotient + 1;
     remainders.at(symbol) = remainder;
@@ -104,7 +102,5 @@ template<std::size_t symbol_count>
   return frequency_model<symbol_count>{ frequencies, precision };
 }
 
-template<byte_input_range R> [[nodiscard]] constexpr auto count_frequencies(R &&source) -> frequency_table
-{ return codec::count_frequencies(std::forward<R>(source), "ANS count overflow"); }
-}// namespace dacoexec::detail::ans
-#endif// DACOEXEC_ANS_MODEL_HPP
+}// namespace dacoexec::detail::model
+#endif// DACOEXEC_MODEL_FREQUENCY_MODEL_HPP

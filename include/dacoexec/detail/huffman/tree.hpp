@@ -4,9 +4,9 @@
 #ifndef DACOEXEC_HUFFMAN_TREE_HPP
 #define DACOEXEC_HUFFMAN_TREE_HPP
 
-#include <dacoexec/detail/huffman/frequency.hpp>
 #include <dacoexec/detail/huffman/tree_builder.hpp>
 #include <dacoexec/detail/memory/node_storage.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
 
 #include <algorithm>
 #include <array>
@@ -40,7 +40,7 @@ namespace dacoexec::detail::huffman {
  * @throws dacoexec::exception (errc::numeric_overflow) If a merged frequency exceeds std::uint64_t.
  * @see make_canonical_codebook
  */
-[[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies) -> code_length_table;
+[[nodiscard]] constexpr auto build_code_lengths(model::frequency_table const &frequencies) -> code_length_table;
 
 
 /** Fixed-capacity typed storage for one complete Huffman tree. */
@@ -57,11 +57,11 @@ using dynamic_tree_allocator = memory::dynamic_node_allocator<::dacoexec::detail
  * Allocation failures propagate, and storage retains nodes already created.
  */
 template<class NodeStorage>
-[[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies, NodeStorage &storage)
+[[nodiscard]] constexpr auto build_code_lengths(model::frequency_table const &frequencies, NodeStorage &storage)
   -> code_length_table
 { return ::dacoexec::detail::huffman::length_builder<NodeStorage>{ storage }.build(frequencies); }
 
-[[nodiscard]] constexpr auto build_code_lengths(frequency_table const &frequencies) -> code_length_table
+[[nodiscard]] constexpr auto build_code_lengths(model::frequency_table const &frequencies) -> code_length_table
 {
   static_tree_arena storage;
   return build_code_lengths(frequencies, storage);

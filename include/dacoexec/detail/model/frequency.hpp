@@ -1,8 +1,8 @@
 //! \file
 //! Byte frequency counting with checked counters.
 
-#ifndef DACOEXEC_CODEC_FREQUENCY_HPP
-#define DACOEXEC_CODEC_FREQUENCY_HPP
+#ifndef DACOEXEC_MODEL_FREQUENCY_HPP
+#define DACOEXEC_MODEL_FREQUENCY_HPP
 
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/support/byte.hpp>
@@ -16,7 +16,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace dacoexec::detail::codec {
+namespace dacoexec::detail::model {
 
 /**
  * Number of distinct byte values. Index 0 is the byte 0x00 and index 255 is 0xFF.
@@ -46,10 +46,7 @@ using frequency_table = std::array<std::uint64_t, alphabet_size>;
  * @throws dacoexec::exception (errc::numeric_overflow) If an increment cannot fit in std::uint64_t.
  * @see count_frequencies
  */
-template<byte_input_range R>
-constexpr auto accumulate_frequencies(frequency_table &frequencies,
-  R &&input,
-  char const *overflow_message = "Byte frequency counter overflow") -> void
+template<byte_input_range R> constexpr auto accumulate_frequencies(frequency_table &frequencies, R &&input) -> void
 {
   auto &&range = std::forward<R>(input);
   auto cursor = std::ranges::begin(range);
@@ -60,7 +57,7 @@ constexpr auto accumulate_frequencies(frequency_table &frequencies,
     std::size_t const symbol = std::to_integer<unsigned char>(value);
     auto &count = frequencies.at(symbol);
     if (count == std::numeric_limits<std::uint64_t>::max()) {
-      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, overflow_message);
+      throw ::dacoexec::exception(::dacoexec::errc::numeric_overflow, "Byte frequency counter overflow");
     }
     ++count;
     std::ranges::advance(cursor, 1);
@@ -78,15 +75,13 @@ constexpr auto accumulate_frequencies(frequency_table &frequencies,
  * Source exceptions propagate.
  * @see accumulate_frequencies
  */
-template<byte_input_range R>
-[[nodiscard]] constexpr auto count_frequencies(R &&input,
-  char const *overflow_message = "Byte frequency counter overflow") -> frequency_table
+template<byte_input_range R> [[nodiscard]] constexpr auto count_frequencies(R &&input) -> frequency_table
 {
   frequency_table frequencies{};
-  ::dacoexec::detail::codec::accumulate_frequencies(frequencies, std::forward<R>(input), overflow_message);
+  ::dacoexec::detail::model::accumulate_frequencies(frequencies, std::forward<R>(input));
   return frequencies;
 }
 
-}// namespace dacoexec::detail::codec
+}// namespace dacoexec::detail::model
 
-#endif// DACOEXEC_CODEC_FREQUENCY_HPP
+#endif// DACOEXEC_MODEL_FREQUENCY_HPP

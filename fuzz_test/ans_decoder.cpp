@@ -27,10 +27,10 @@ extern "C" auto LLVMFuzzerTestOneInput(std::uint8_t const *data, std::size_t siz
     if (!dacoexec::fuzz::expected_archive_error(error.code())) { throw; }
   }
   if (bytes.empty()) { return 0; }
-  dacoexec::detail::ans::frequency_table counts{};
+  dacoexec::detail::model::frequency_table counts{};
   counts[0] = 1;
   counts[1] = 3;
-  auto byte_model = dacoexec::detail::ans::make_model(counts, 10);
+  auto byte_model = dacoexec::detail::model::make_model(counts, 10);
   try {
     static_cast<void>(dacoexec::detail::ans::tans::decode_block(bytes, byte_model, 1024, output_limit));
   } catch (dacoexec::exception const &error) {

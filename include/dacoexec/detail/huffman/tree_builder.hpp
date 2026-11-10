@@ -13,7 +13,7 @@ namespace dacoexec::detail::huffman {
 
 
 // 256 leaves plus at most 255 internal nodes.
-inline constexpr std::size_t max_tree_nodes = (alphabet_size * 2U) - 1U;
+inline constexpr std::size_t max_tree_nodes = (model::alphabet_size * 2U) - 1U;
 
 // An internal node has no symbol.
 inline constexpr std::uint16_t invalid_symbol = std::numeric_limits<std::uint16_t>::max();
@@ -21,7 +21,7 @@ inline constexpr std::uint16_t invalid_symbol = std::numeric_limits<std::uint16_
 inline constexpr std::size_t expected_tree_nodes = 511U;
 static_assert(max_tree_nodes == expected_tree_nodes);
 static_assert(max_tree_nodes < invalid_symbol);
-static_assert(alphabet_size - 1U <= std::numeric_limits<std::uint8_t>::max());
+static_assert(model::alphabet_size - 1U <= std::numeric_limits<std::uint8_t>::max());
 
 // Temporary node used only while deriving code lengths.
 struct tree_node
@@ -56,8 +56,8 @@ struct heap_order
 };
 
 // C++20 std::priority_queue is not constexpr. Fixed storage also preserves
-// allocation-free construction; the forest never exceeds alphabet_size entries.
-using tree_priority_queue = adt::static_priority_queue<heap_entry, alphabet_size, heap_order>;
+// allocation-free construction; the forest never exceeds model::alphabet_size entries.
+using tree_priority_queue = adt::static_priority_queue<heap_entry, model::alphabet_size, heap_order>;
 
 // Builds a Huffman forest in caller-owned storage for one length computation.
 template<class NodeStorage> class length_builder
@@ -65,9 +65,9 @@ template<class NodeStorage> class length_builder
 public:
   constexpr explicit length_builder(NodeStorage &nodes) noexcept : nodes_(&nodes) {}
 
-  [[nodiscard]] constexpr auto build(frequency_table const &frequencies) -> code_length_table
+  [[nodiscard]] constexpr auto build(model::frequency_table const &frequencies) -> code_length_table
   {
-    for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+    for (std::size_t symbol = 0; symbol < model::alphabet_size; ++symbol) {
       std::uint64_t const frequency = frequencies.at(symbol);
       if (frequency == 0) { continue; }
       add_leaf(static_cast<std::uint16_t>(symbol), frequency);

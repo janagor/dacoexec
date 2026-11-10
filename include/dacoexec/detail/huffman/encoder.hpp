@@ -24,14 +24,14 @@ public:
 
   [[nodiscard]] static auto try_encode(std::span<std::byte const> input) -> std::optional<encoded_block>
   {
-    auto const frequencies = count_frequencies(input);
+    auto const frequencies = model::count_frequencies(input);
     auto const lengths = build_code_lengths(frequencies);
     auto const bits = ::dacoexec::detail::huffman::encoded_bit_count(frequencies, lengths);
     if (bits && *bits != 0) {
       constexpr auto byte_bits = dacoexec::detail::support::bits_per_byte;
       auto const packed_size = (*bits / byte_bits) + (*bits % byte_bits != 0 ? 1U : 0U);
       // Reject before building the codebook or allocating compressed output.
-      if (input.size() > alphabet_size && packed_size < input.size() - alphabet_size) {
+      if (input.size() > model::alphabet_size && packed_size < input.size() - model::alphabet_size) {
         encoded_block result;
         auto const book = make_canonical_codebook(lengths);
         result.payload_.reserve(static_cast<std::size_t>(packed_size));
@@ -49,7 +49,7 @@ public:
   }
 
   [[nodiscard]] static auto metadata_size(encoded_block const & /*block*/) noexcept -> std::size_t
-  { return alphabet_size; }
+  { return model::alphabet_size; }
 };
 
 }// namespace dacoexec::detail::huffman

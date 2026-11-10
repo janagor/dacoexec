@@ -65,8 +65,8 @@ inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
   return result;
 }
 
-[[nodiscard]] inline auto encode_block(std::span<std::byte const> input, frequency_model<alphabet_size> const &model)
-  -> std::vector<std::byte>
+[[nodiscard]] inline auto encode_block(std::span<std::byte const> input,
+  model::frequency_model<model::alphabet_size> const &model) -> std::vector<std::byte>
 { return encode_block(input, tables{ model }); }
 
 [[nodiscard]] inline auto decode_block(std::span<std::byte const> payload,
@@ -128,7 +128,7 @@ inline constexpr std::size_t payload_prefix_size = 2 * sizeof(std::uint32_t);
 }
 
 [[nodiscard]] inline auto decode_block(std::span<std::byte const> payload,
-  frequency_model<alphabet_size> const &model,
+  model::frequency_model<model::alphabet_size> const &model,
   std::size_t count,
   std::size_t limit = std::numeric_limits<std::size_t>::max()) -> std::vector<std::byte>
 {

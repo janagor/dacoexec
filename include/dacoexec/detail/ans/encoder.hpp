@@ -24,8 +24,8 @@ public:
   {
     if (input.size() <= ::dacoexec::detail::ans::min_model_wire_size) { return std::nullopt; }
     encoded_block result;
-    auto const model =
-      make_model(count_frequencies(input), coder_ == entropy_coder::tans ? precision_ : default_precision_bits);
+    auto const model = model::make_model(
+      model::count_frequencies(input), coder_ == entropy_coder::tans ? precision_ : model::default_precision_bits);
     result.payload_ =
       coder_ == entropy_coder::tans ? tans::encode_block(input, model) : rans::encode_block(input, model);
     result.encoding_ = coder_ == entropy_coder::tans ? block_encoding::tans : block_encoding::rans;

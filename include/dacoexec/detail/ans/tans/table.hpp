@@ -4,7 +4,7 @@
 #include <array>
 #include <bit>
 #include <cstdint>
-#include <dacoexec/detail/ans/model.hpp>
+#include <dacoexec/detail/model/frequency_model.hpp>
 #include <dacoexec/error.hpp>
 #include <vector>
 
@@ -33,7 +33,7 @@ static_assert(sizeof(decode_entry) == 4);
 class tables
 {
 public:
-  explicit tables(frequency_model<alphabet_size> const &model) : model_(model)
+  explicit tables(model::frequency_model<model::alphabet_size> const &model) : model_(model)
   {
     validate_precision(model.precision_bits());
     auto const size = model.total();
@@ -42,7 +42,7 @@ public:
     auto next = model.frequencies();
     std::uint32_t position = 0;
     auto const step = (size >> 1U) + (size >> 3U) + 3U;
-    for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+    for (std::size_t symbol = 0; symbol < model::alphabet_size; ++symbol) {
       auto const frequency = model.frequencies().at(symbol);
       if (frequency == 0) { continue; }
       // For x in [M, 2M), the output width is max_bits - 1 below
@@ -104,8 +104,8 @@ private:
     std::int32_t delta_find_state_ = 0;
   };
 
-  frequency_model<alphabet_size> model_;
-  std::array<symbol_transform, alphabet_size> transforms_{};
+  model::frequency_model<model::alphabet_size> model_;
+  std::array<symbol_transform, model::alphabet_size> transforms_{};
   std::vector<decode_entry> decode_;
   std::vector<std::uint16_t> encode_;
 };

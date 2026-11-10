@@ -51,7 +51,7 @@ constexpr auto validate_canonical_lengths(canonical_length_counts const &lengths
 }
 
 [[nodiscard]] constexpr auto assign_canonical_codewords(code_length_table const &lengths,
-  canonical_length_counts const &counts) -> std::array<codeword, alphabet_size>
+  canonical_length_counts const &counts) -> std::array<codeword, model::alphabet_size>
 {
   std::array<std::uint64_t, max_canonical_bits + 1U> next_code{};
   std::uint64_t code = 0;
@@ -60,8 +60,8 @@ constexpr auto validate_canonical_lengths(canonical_length_counts const &lengths
     next_code.at(length) = code;
   }
 
-  std::array<codeword, alphabet_size> words{};
-  for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+  std::array<codeword, model::alphabet_size> words{};
+  for (std::size_t symbol = 0; symbol < model::alphabet_size; ++symbol) {
     auto const length = lengths.at(symbol);
     if (length == 0) { continue; }
     words.at(symbol) = codeword{ .bits_ = static_cast<std::uint32_t>(next_code.at(length)), .length_ = length };

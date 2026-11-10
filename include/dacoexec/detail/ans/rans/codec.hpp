@@ -9,7 +9,8 @@
 
 namespace dacoexec::detail::ans::rans {
 template<byte_input_range R>
-[[nodiscard]] auto encode_block(R &&source, frequency_model<alphabet_size> const &model) -> std::vector<std::byte>
+[[nodiscard]] auto encode_block(R &&source, model::frequency_model<model::alphabet_size> const &model)
+  -> std::vector<std::byte>
 {
   if constexpr (std::ranges::bidirectional_range<R>) {
     return ::dacoexec::detail::ans::rans::encode(std::forward<R>(source), model);
@@ -26,7 +27,7 @@ template<byte_input_range R>
 }
 
 [[nodiscard]] inline auto decode_block(std::span<std::byte const> payload,
-  frequency_model<alphabet_size> const &model,
+  model::frequency_model<model::alphabet_size> const &model,
   std::size_t count,
   std::size_t limit = std::numeric_limits<std::size_t>::max()) -> std::vector<std::byte>
 { return ::dacoexec::detail::ans::rans::decode<std::byte>(payload, model, count, limit); }

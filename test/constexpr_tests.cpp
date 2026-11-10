@@ -10,7 +10,7 @@
 #include <dacoexec/detail/support/byte.hpp>
 #include <utility>
 
-#include <dacoexec/detail/huffman/frequency.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
 
 #include <dacoexec/detail/huffman/tree.hpp>
 
@@ -179,14 +179,14 @@ static_assert(can_make_writer<byte_out>);
 static_assert(!can_make_writer<std::vector<std::byte>::const_iterator>);
 static_assert(!can_make_writer<int>);
 
-static_assert(dacoexec::detail::huffman::alphabet_size == expected_alphabet_size);
+static_assert(dacoexec::detail::model::alphabet_size == expected_alphabet_size);
 static_assert(
-  std::is_same_v<dacoexec::detail::huffman::frequency_table, std::array<std::uint64_t, expected_alphabet_size>>);
+  std::is_same_v<dacoexec::detail::model::frequency_table, std::array<std::uint64_t, expected_alphabet_size>>);
 static_assert(
   std::is_same_v<dacoexec::detail::huffman::code_length_table, std::array<std::uint8_t, expected_alphabet_size>>);
 
 constexpr std::string_view huffman_sample = "AAAAABBCD";
-constexpr auto huffman_frequencies = dacoexec::detail::huffman::count_frequencies(huffman_sample);
+constexpr auto huffman_frequencies = dacoexec::detail::model::count_frequencies(huffman_sample);
 static_assert(huffman_frequencies.at(static_cast<unsigned char>('A')) == sample_a_count);
 static_assert(huffman_frequencies.at(static_cast<unsigned char>('B')) == 2);
 static_assert(huffman_frequencies.at(static_cast<unsigned char>('C')) == 1);
@@ -201,17 +201,17 @@ static_assert(huffman_lengths.at(static_cast<unsigned char>('D')) == 3);
 static_assert(huffman_lengths.at(0) == 0);
 
 static_assert(
-  dacoexec::detail::huffman::count_frequencies(std::string_view{}) == dacoexec::detail::huffman::frequency_table{});
+  dacoexec::detail::model::count_frequencies(std::string_view{}) == dacoexec::detail::model::frequency_table{});
 static_assert(dacoexec::detail::huffman::build_code_lengths({}) == dacoexec::detail::huffman::code_length_table{});
 
 constexpr auto only_a_lengths =
-  dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(std::string_view{ "A" }));
+  dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(std::string_view{ "A" }));
 
 constexpr auto single_symbol_length(dacoexec::detail::huffman::code_length_table const &lengths, unsigned char symbol)
   -> bool
 {
   if (lengths.at(symbol) != 1) { return false; }
-  for (std::size_t index = 0; index < dacoexec::detail::huffman::alphabet_size; ++index) {
+  for (std::size_t index = 0; index < dacoexec::detail::model::alphabet_size; ++index) {
     if (index == symbol) { continue; }
     if (lengths.at(index) != 0) { return false; }
   }
@@ -222,13 +222,13 @@ static_assert(single_symbol_length(only_a_lengths, static_cast<unsigned char>('A
 
 constexpr std::array<char, 2> huffman_pair{ { 'X', 'Y' } };
 constexpr auto pair_lengths =
-  dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(huffman_pair));
+  dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(huffman_pair));
 static_assert(pair_lengths.at(static_cast<unsigned char>('X')) == 1);
 static_assert(pair_lengths.at(static_cast<unsigned char>('Y')) == 1);
 static_assert(pair_lengths.at(static_cast<unsigned char>('Z')) == 0);
 
 constexpr std::array<unsigned char, 3> huffman_bytes{ { 0x00, 0x80, 0xFF } };
-constexpr auto byte_frequencies = dacoexec::detail::huffman::count_frequencies(huffman_bytes);
+constexpr auto byte_frequencies = dacoexec::detail::model::count_frequencies(huffman_bytes);
 static_assert(byte_frequencies.at(0x00) == 1);
 static_assert(byte_frequencies.at(high_bit_value) == 1);
 static_assert(byte_frequencies.at(all_bits_value) == 1);
@@ -236,14 +236,14 @@ static_assert(byte_frequencies.at(1) == 0);
 
 constexpr auto signed_all_ones = std::bit_cast<signed char>(static_cast<unsigned char>(0xFF));
 constexpr std::array<signed char, 1> signed_bytes{ { signed_all_ones } };
-constexpr auto signed_frequencies = dacoexec::detail::huffman::count_frequencies(signed_bytes);
+constexpr auto signed_frequencies = dacoexec::detail::model::count_frequencies(signed_bytes);
 static_assert(signed_frequencies.at(all_bits_value) == 1);
 static_assert(signed_frequencies.at(0) == 0);
 
-constexpr auto accumulated_frequencies = []() -> dacoexec::detail::huffman::frequency_table {
-  dacoexec::detail::huffman::frequency_table table{};
-  dacoexec::detail::huffman::accumulate_frequencies(table, std::string_view{ "AA" });
-  dacoexec::detail::huffman::accumulate_frequencies(table, std::string_view{ "ABB" });
+constexpr auto accumulated_frequencies = []() -> dacoexec::detail::model::frequency_table {
+  dacoexec::detail::model::frequency_table table{};
+  dacoexec::detail::model::accumulate_frequencies(table, std::string_view{ "AA" });
+  dacoexec::detail::model::accumulate_frequencies(table, std::string_view{ "ABB" });
   return table;
 }();
 static_assert(accumulated_frequencies.at(static_cast<unsigned char>('A')) == 3);
@@ -271,7 +271,7 @@ static_assert([]() -> bool {
   constexpr std::uint8_t byte_width = 8;
   lengths.fill(byte_width);
   auto const book = dacoexec::detail::huffman::make_canonical_codebook(lengths);
-  for (std::size_t symbol = 0; symbol < dacoexec::detail::huffman::alphabet_size; ++symbol) {
+  for (std::size_t symbol = 0; symbol < dacoexec::detail::model::alphabet_size; ++symbol) {
     if (test_detail::canonical_word(book, static_cast<std::uint8_t>(symbol))
         != dacoexec::detail::huffman::codeword{ .bits_ = static_cast<std::uint32_t>(symbol), .length_ = byte_width }) {
       return false;

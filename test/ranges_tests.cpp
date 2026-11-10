@@ -3,9 +3,9 @@
 #include <dacoexec/detail/concepts.hpp>
 #include <dacoexec/detail/huffman/canonical.hpp>
 #include <dacoexec/detail/huffman/codewords_view.hpp>
-#include <dacoexec/detail/huffman/frequency.hpp>
 #include <dacoexec/detail/huffman/tree.hpp>
 #include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
 #include <dacoexec/detail/support/buffer.hpp>
 #include <dacoexec/detail/views/blocks.hpp>
 #include <dacoexec/error.hpp>
@@ -752,8 +752,7 @@ static_assert(!can_adapt_codewords<std::vector<std::uint16_t> &>);
 TEST_CASE("codewords stages once and preserves single-pass state across moves", "[huffman][codewords]")
 {
   auto const input = make_bytes(3);
-  auto const lengths =
-    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input));
+  auto const lengths = dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(input));
   auto const expected = dacoexec::detail::huffman::make_canonical_codebook(lengths);
   auto stats = std::make_shared<source_stats>();
   auto view = byte_source{ input,
@@ -789,7 +788,7 @@ TEST_CASE("codewords closures own independent codebooks and accept proxy bytes",
 {
   auto const input = make_bytes(3);
   auto const book = dacoexec::detail::huffman::make_canonical_codebook(
-    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(input)));
   auto closure = dacoexec::detail::huffman::views::codewords(book);
   auto copy = closure;
   auto first = closure(input);
@@ -821,7 +820,7 @@ TEST_CASE("codewords failures are terminal without emitting absent symbols", "[h
 {
   auto const input = make_bytes(3);
   auto const book = dacoexec::detail::huffman::make_canonical_codebook(
-    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(input)));
   for (std::size_t failure_read : { std::size_t{ 1 }, std::size_t{ 2 } }) {
     auto stats = std::make_shared<source_stats>();
     stats->fail_at_dereference_ = failure_read;
@@ -861,7 +860,7 @@ TEST_CASE("canonical byte blocks encode the golden bytes without intermediate bi
   std::vector<std::byte> const expected{ std::byte{ 0x05 }, std::byte{ 0x6E } };
   for (auto block : input | dacoexec::detail::views::blocks(input.size())) {
     auto const lengths =
-      dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(block.bytes_));
+      dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(block.bytes_));
     auto const book = dacoexec::detail::huffman::make_canonical_codebook(lengths);
     auto const saved = book.lengths();
     for (auto const &candidate : { book, dacoexec::detail::huffman::make_canonical_codebook(saved) }) {
@@ -882,7 +881,7 @@ TEST_CASE("codewords source begin and increment failures permanently end iterati
 {
   auto const input = make_bytes(3);
   auto const book = dacoexec::detail::huffman::make_canonical_codebook(
-    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(input)));
 
   SECTION("begin failure")
   {
@@ -925,7 +924,7 @@ TEST_CASE("codewords preserves negative signed character byte values", "[huffman
   REQUIRE(input.front() < 0);
   REQUIRE(input.back() < 0);
   auto const book = dacoexec::detail::huffman::make_canonical_codebook(
-    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::huffman::count_frequencies(input)));
+    dacoexec::detail::huffman::build_code_lengths(dacoexec::detail::model::count_frequencies(input)));
   auto view = input | dacoexec::detail::huffman::views::codewords(book);
   auto cursor = view.begin();
   REQUIRE(*cursor == dacoexec::detail::huffman::codeword{ .bits_ = 0U, .length_ = 1 });

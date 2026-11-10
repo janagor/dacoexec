@@ -1,10 +1,10 @@
 //! \file
-#ifndef DACOEXEC_ANS_DETAIL_MODEL_NORMALIZATION_HPP
-#define DACOEXEC_ANS_DETAIL_MODEL_NORMALIZATION_HPP
+#ifndef DACOEXEC_MODEL_NORMALIZATION_HPP
+#define DACOEXEC_MODEL_NORMALIZATION_HPP
 
 #include <cstdint>
 
-namespace dacoexec::detail::ans {
+namespace dacoexec::detail::model {
 
 struct frequency_share
 {
@@ -47,5 +47,5 @@ struct proportional_share_parameters
   return { .quotient_ = quotient, .remainder_ = remainder };
 }
 
-}// namespace dacoexec::detail::ans
-#endif// DACOEXEC_ANS_DETAIL_MODEL_NORMALIZATION_HPP
+}// namespace dacoexec::detail::model
+#endif// DACOEXEC_MODEL_NORMALIZATION_HPP

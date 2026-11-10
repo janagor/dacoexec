@@ -4,9 +4,9 @@
 #include <dacoexec/detail/huffman/block.hpp>
 #include <dacoexec/detail/huffman/encode_cost.hpp>
 #include <dacoexec/detail/huffman/encoded_block.hpp>
-#include <dacoexec/detail/huffman/frequency.hpp>
 #include <dacoexec/detail/huffman/tree.hpp>
 #include <dacoexec/detail/huffman/types.hpp>
+#include <dacoexec/detail/model/frequency.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 #include <dacoexec/error.hpp>
 #include <utility>
@@ -20,16 +20,16 @@
 #include <string_view>
 
 namespace {
-using dacoexec::detail::huffman::alphabet_size;
+using dacoexec::detail::model::alphabet_size;
 using dacoexec::detail::huffman::block_encoding;
 using dacoexec::detail::huffman::build_code_lengths;
 using dacoexec::detail::huffman::code_length_table;
 using dacoexec::detail::huffman::compress_block;
-using dacoexec::detail::huffman::count_frequencies;
+using dacoexec::detail::model::count_frequencies;
 using dacoexec::exception;
 using dacoexec::detail::huffman::decompress_block;
 using dacoexec::detail::huffman::encoded_block;
-using dacoexec::detail::huffman::frequency_table;
+using dacoexec::detail::model::frequency_table;
 using dacoexec::detail::huffman::max_canonical_bits;
 namespace huffman_detail = dacoexec::detail::huffman;
 constexpr std::size_t large_block = 4096;

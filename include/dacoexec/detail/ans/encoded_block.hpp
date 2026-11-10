@@ -22,7 +22,7 @@ struct encoded_block
   block_encoding encoding_ = block_encoding::raw;
   std::uint64_t uncompressed_size_ = 0;
   std::vector<std::byte> payload_;
-  std::optional<frequency_model<alphabet_size>> model_;
+  std::optional<model::frequency_model<model::alphabet_size>> model_;
 };
 
 [[nodiscard]] inline auto model_metadata_size(encoded_block const &block) -> std::size_t

@@ -20,7 +20,7 @@ struct decode_limits
   bool infer_padding_;
 };
 
-inline constexpr auto decode_node_capacity = alphabet_size * 2U;
+inline constexpr auto decode_node_capacity = model::alphabet_size * 2U;
 inline constexpr auto missing_decode_node = std::numeric_limits<std::uint16_t>::max();
 
 struct decode_node
@@ -34,7 +34,7 @@ struct decode_lookup
   explicit decode_lookup(canonical_codebook const &book)
   {
     std::uint16_t used = 1;
-    for (std::size_t symbol = 0; symbol < alphabet_size; ++symbol) {
+    for (std::size_t symbol = 0; symbol < model::alphabet_size; ++symbol) {
       auto const word = book.at(static_cast<std::uint8_t>(symbol));
       std::uint16_t node = 0;
       for (unsigned remaining = word.length_; remaining != 0; --remaining) {
