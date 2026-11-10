@@ -1,14 +1,13 @@
 # DAC1 arithmetic archives
 
-DAC1 is the arithmetic codec family's archive format. The current internal
-implementation supports static order-0 range coding and RAW frames through the
-shared block, frame parser, and verified stream infrastructure. This milestone
-covers internal archive infrastructure only. The public facade, umbrella header,
-CLI, public views, and optional parallel integration are a separate milestone.
+DAC1 supports static and adaptive order-0 range coding and RAW frames through
+shared block, frame parser, and verified stream infrastructure. The public
+facade, views, and optional parallel streams accept both range variants.
+The CLI's `arithmetic` selector uses static range coding; decompression reads
+either variant from its frame tag.
 
-The owned block currently holds optional metadata specifically for static range
-coding. Reserved variants are rejected before interpreting metadata; future
-variants will introduce their own metadata representation as they are implemented.
+Static range blocks carry an optional frequency model. Adaptive blocks carry
+no model metadata. Reserved variants are rejected before interpreting metadata.
 
 An archive starts with `44 41 43 31 00 00 00 00` (`DAC1` plus four zero bytes),
 contains zero or more data frames, and ends with one END frame. No bytes may
@@ -28,7 +27,7 @@ and little-endian.
 | --- | --- | --- |
 | `00` | RAW | Supported |
 | `01` | Static order-0 range | Supported |
-| `02` | Adaptive order-0 range | Reserved |
+| `02` | Adaptive order-0 range | Supported |
 | `03` | Binary arithmetic | Reserved |
 | `04` | Context-adaptive binary arithmetic | Reserved |
 | `ff` | END | Supported |
@@ -50,15 +49,22 @@ Entries must be strictly increasing by symbol. Absent symbols have zero
 frequency. Frequencies must sum to `1 << precision`. Metadata uses the existing
 [static model representation](range-coding.md); the decoder accepts the model's
 supported precisions from 1 through 16. At the default precision the normalized
-total is 4096. Each compressed frame carries its own complete model.
+total is 4096. Each static compressed frame carries its own complete model.
 
-The payload follows the model and uses the byte-oriented range engine's
+Adaptive range stores its payload immediately after the header, with no model
+metadata. All 256 frequencies start at one. After coding each byte, increment
+its frequency; when total exceeds 32768, replace each frequency with
+`(frequency + 1) / 2`. Reset the model at every frame boundary. This rule and
+threshold are part of the DAC1 tag `02` format contract.
+
+The static payload follows the model and uses the byte-oriented range engine's
 [initialization, carry handling, and finalization contract](range-coding.md).
 It contains at least five bytes. Coding state and the model are independent
 between frames. Exactly the declared number of bytes must decode, and the
 payload must satisfy the range decoder's termination checks.
 
-The encoder counts one histogram per block. The shared encoder chooses compressed
+The static encoder counts one histogram per block. The adaptive encoder updates
+its model while coding and counts no histogram. The shared encoder chooses compressed
 storage only when payload plus model metadata is strictly smaller than the
 source; ties use RAW. Both encodings have the same frame header overhead.
 

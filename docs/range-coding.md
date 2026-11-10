@@ -95,8 +95,10 @@ The model owns fixed-size tables and allocates no memory. Updates adjust the
 cumulative entries after the changed symbol; lookup uses binary search. Tests
 check exact threshold behavior, odd and even rounding, repeated rescaling against
 an independent frequency history, and synchronization through the existing range
-engine. This internal model does not yet enable the adaptive public selector or
-define its archive payload adapter.
+engine. `adaptive_range_codec.hpp` combines this model with the same range
+encoder and decoder. Select `entropy_coder::adaptive_range` through the public
+facade, streaming options, views, or optional parallel options. DAC1 tag `02`
+contains only the range payload, with no model metadata.
 
 `fenwick_adaptive_model.hpp` provides an alternative representation with the
 same initialization, updates and rescaling. Both expose `interval_for(symbol)`
@@ -189,3 +191,13 @@ They retain two `range / total` divisions plus one `code / unit` division per
 symbol. Thus redundant unit calculation survives in that configuration. A
 future prepared-step interface should preserve interval validation and reject
 stale steps; this change keeps the existing range-engine contract intact.
+
+The internal adaptive block adapters accept a model template parameter, defaulting
+to `adaptive_model`. `encode_adaptive_block<fenwick_adaptive_model>()` and
+`decode_adaptive_block<fenwick_adaptive_model>()` use the same range engine and
+wire format. Compatibility tests compare payload bytes and cross-decode both
+representations across multiple rescalings. The arithmetic benchmark target
+registers array and Fenwick block encoding and decoding on the same datasets;
+these timings include model initialization, updates, range coding and output
+allocation, while archive framing is measured separately with the public default.
+Model choice remains internal and adds no public coder selector.

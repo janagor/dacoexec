@@ -371,16 +371,19 @@ The ANS facade also supports `dacoexec::ans::entropy_coder::tans` through
 default. See [tANS format and options](docs/tans.md) for table-log limits,
 bitstream details, and compatibility with older DAN1 readers.
 
-Arithmetic coding uses the DAC1 archive format and a static order-0 integer range
-coder. Include `<dacoexec/arithmetic.hpp>` for `arithmetic::compress`,
+Arithmetic coding uses the DAC1 archive format and static or adaptive order-0
+integer range coding. Include `<dacoexec/arithmetic.hpp>` for `arithmetic::compress`,
 `decompress`, `compress_stream`, and `decompress_stream`. Options, byte range
 support, sink types, statistics, and verification follow the Huffman and ANS
 conventions. `stream_options::coder_` defaults to `entropy_coder::static_range`;
-reserved adaptive and binary selectors report `errc::unsupported_coder`.
+select `entropy_coder::adaptive_range` for a model updated after each byte,
+with no transmitted frequency table. Binary selectors report `errc::unsupported_coder`.
 
 ```cpp
 auto archive = dacoexec::arithmetic::compress(input, { .block_size_ = 65536 });
 auto restored = dacoexec::arithmetic::decompress(archive);
+auto adaptive = dacoexec::arithmetic::compress(
+    input, { .coder_ = dacoexec::arithmetic::entropy_coder::adaptive_range });
 auto lazy = input | dacoexec::views::encode::arithmetic()
                   | dacoexec::views::decode::arithmetic();
 ```
