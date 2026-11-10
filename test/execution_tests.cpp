@@ -1371,3 +1371,68 @@ TEST_CASE("Structured worker errors survive exception pointer completion", "[exe
   }
   CHECK(committed.empty());
 }
+
+TEST_CASE("Parallel decompression cancellation drains verified workers without writes", "[execution][decode]")
+{
+  auto check = []<class Format>() -> void {
+    constexpr std::size_t capacity = 2;
+    vector_sink archive;
+    bytes const input(block_size * (capacity + 1), std::byte{ 'A' });
+    static_cast<void>(dacoexec::detail::codec::compress_stream<Format>(input, archive, { .block_size_ = block_size }));
+    auto source = std::views::all(archive.bytes_);
+    using source_type = dacoexec::detail::codec::parallel_decode_source<decltype(source), vector_sink, Format>;
+    vector_sink output;
+    timed_gate entered(capacity);
+    timed_gate release(1);
+    std::atomic<std::size_t> finished{ 0 };
+    dacoexec::detail::codec::frame_decoder<Format> decode{ {} };
+    auto worker = [&](typename Format::frame_type frame) -> dacoexec::detail::byte_block {
+      entered.arrive();
+      if (!release.wait()) { throw std::runtime_error("Decode gate timed out"); }
+      auto result = decode(std::move(frame));
+      finished.fetch_add(1);
+      return result;
+    };
+    exec::static_thread_pool pool{ capacity };
+    stdexec::inplace_stop_source stop;
+    std::promise<int> promise;
+    auto future = promise.get_future();
+    auto operation = stdexec::connect(dacoexec::detail::execution::ordered_parallel_on(
+                                        pool.get_scheduler(), source_type{ source, &output, {} }, worker, capacity),
+      completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+    stdexec::start(operation);
+    bool const workers_entered = entered.wait();
+    stop.request_stop();
+    release.arrive();
+    REQUIRE(future.get() == stopped_completion);
+    REQUIRE(workers_entered);
+    REQUIRE(finished.load() == capacity);
+    REQUIRE(output.bytes_.empty());
+  };
+  check.operator()<dacoexec::detail::huffman::stream_format>();
+  check.operator()<dacoexec::detail::ans::stream_format>();
+}
+
+TEST_CASE("Parallel decompression stopped before start reads and writes nothing", "[execution][decode]")
+{
+  stdexec::inplace_stop_source stop;
+  stop.request_stop();
+  std::size_t reads = 0;
+  auto source = std::views::iota(0, 100) | std::views::transform([&](int) -> std::byte {
+    ++reads;
+    return std::byte{};
+  });
+  auto check = [&](auto sender) -> void {
+    std::promise<int> promise;
+    auto future = promise.get_future();
+    auto operation =
+      stdexec::connect(std::move(sender), completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
+    stdexec::start(operation);
+    REQUIRE(future.get() == stopped_completion);
+  };
+  bytes output;
+  check(dacoexec::huffman::decompress_parallel_on(stdexec::inline_scheduler{}, source, std::back_inserter(output)));
+  check(dacoexec::ans::decompress_parallel_on(stdexec::inline_scheduler{}, source, std::back_inserter(output)));
+  REQUIRE(reads == 0);
+  REQUIRE(output.empty());
+}
