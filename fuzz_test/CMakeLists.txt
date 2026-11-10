@@ -5,7 +5,7 @@ if(NOT
    "Clang"
    OR WIN32
    OR EMSCRIPTEN)
-  message(FATAL_ERROR "Huffman fuzzing requires Unix Clang with libFuzzer, ASan and UBSan runtimes")
+  message(FATAL_ERROR "Codec fuzzing requires Unix Clang with libFuzzer, ASan and UBSan runtimes")
 endif()
 if(dacoexec_ENABLE_SANITIZER_THREAD
    OR dacoexec_ENABLE_SANITIZER_MEMORY
@@ -38,7 +38,8 @@ foreach(
   ITEMS huffman_decoder
         frame_parser
         round_trip
-        ans_decoder)
+        ans_decoder
+        arithmetic_decoder)
   set(target dacoexec_fuzz_${harness})
   add_executable(${target} ${harness}.cpp)
   dacoexec_configure_linker(${target})
@@ -66,3 +67,18 @@ endforeach()
 add_executable(dacoexec_generate_corpus EXCLUDE_FROM_ALL generate_corpus.cpp)
 dacoexec_configure_linker(dacoexec_generate_corpus)
 target_link_libraries(dacoexec_generate_corpus PRIVATE dacoexec::dacoexec dacoexec_warnings)
+
+# Replay the complete committed DAC1 corpus before the coverage-guided campaign.
+# Keep a writable first corpus so libFuzzer never writes to source fixtures.
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/corpus/arithmetic_replay")
+add_test(
+  NAME fuzz.arithmetic_corpus
+  COMMAND dacoexec_fuzz_arithmetic_decoder "${CMAKE_CURRENT_BINARY_DIR}/corpus/arithmetic_replay"
+          "${CMAKE_CURRENT_SOURCE_DIR}/corpus/arithmetic_decoder" -runs=0 -max_len=65536 -timeout=5 -rss_limit_mb=512)
+set_tests_properties(
+  fuzz.arithmetic_corpus
+  PROPERTIES LABELS
+             fuzz
+             TIMEOUT
+             30)
+set_tests_properties(fuzz.arithmetic_decoder PROPERTIES DEPENDS fuzz.arithmetic_corpus)

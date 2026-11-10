@@ -1,9 +1,9 @@
-# Huffman fuzzing
+# Codec fuzzing
 
 Configure with `cmake --preset unixlike-clang-fuzz`, build that binary directory,
 and run `ctest --test-dir out/build/unixlike-clang-fuzz -L fuzz -V` in the Nix
 Clang shell. Requires Clang 22 and compiler-rt. Instrumentation remains private
-to the three executables; neither stdexec nor a test framework is needed.
+to the private fuzz executables; neither stdexec nor a test framework is needed.
 
 All harnesses cap input at 64 KiB. Decoder output is limited to 64 KiB; framing
 limits each frame to 64 KiB and total output to 256 KiB. Documented decode and
@@ -37,7 +37,7 @@ out/build/unixlike-clang-fuzz/fuzz_test/dacoexec_generate_corpus fuzz_test/corpu
 ```
 
 This adds fixed-seed repeated, alternating, uniform, skewed, text-like and full
-alphabet cases for all three harnesses. Generated frame archives use 256- and
+alphabet cases for the codec harnesses. Generated frame archives use 256- and
 1,024-byte blocks, producing multiple DATA frames and a partial final block from
 4,097-byte inputs. The committed `multi-frame-mixed` seed composes existing
 canonical and RAW golden DATA frames with a single END; its truncated companion
@@ -60,8 +60,33 @@ out/build/unixlike-clang-fuzz/fuzz_test/dacoexec_fuzz_frame_parser \
 Replay the minimized case before and after the fix, commit it under the relevant
 corpus, and add a focused Catch2 regression for meaningful semantic defects.
 Merge corpora with libFuzzer `-merge=1 destination sources...`; do not commit
-unreviewed generated corpora. All three binaries accept individual files for replay.
+unreviewed generated corpora. All fuzz binaries accept individual files for replay.
 
 `ans_decoder` exercises bounded DAN1 decompression and rANS and tANS block decoding.
 Its corpus includes empty, RAW, and single-symbol compressed archives. Output is
 limited to 64 KiB so malformed declarations cannot request unbounded allocations.
+
+`arithmetic_decoder` exercises bounded DAC1 archive decompression, standalone
+frame headers, static model deserialization, and arbitrary range payloads with a
+fixed valid binary-symbol model. Both per-frame and total decoded output are
+limited to 64 KiB. Archive rejections include reserved variant tags; argument
+errors are unexpected and fail the run. Seeds include independent empty, RAW,
+and complete static golden archives, truncated archives and range payloads,
+standalone headers, and valid and invalid model precision boundaries. The corpus
+utility also generates multi-frame DAC1 seeds from each dataset.
+
+Run just this target with:
+
+```sh
+cmake --build out/build/unixlike-clang-fuzz --target dacoexec_fuzz_arithmetic_decoder
+ASAN_OPTIONS=detect_leaks=0 ctest --test-dir out/build/unixlike-clang-fuzz -R '^fuzz[.]arithmetic_(corpus|decoder)$' -V
+```
+
+Disable leak detection only in environments where LeakSanitizer cannot run under
+process tracing; ASan and UBSan remain active.
+
+`fuzz.arithmetic_corpus` replays every committed DAC1 seed under ASan/UBSan
+before `fuzz.arithmetic_decoder` runs its bounded campaign. Both have the `fuzz`
+label, so the existing CI job runs them. Direct model decoding accepts only
+`invalid_payload` rejections; constructor argument errors are normalized inside
+`deserialize_model()` rather than permitted by the harness.

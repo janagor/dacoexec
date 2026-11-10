@@ -2,6 +2,8 @@
 #include "../benchmarks/fixtures.hpp"
 
 #include <dacoexec/ans.hpp>
+#include <dacoexec/detail/arithmetic/archive_format.hpp>
+#include <dacoexec/detail/codec/stream.hpp>
 #include <dacoexec/detail/huffman/stream.hpp>
 
 #include <array>
@@ -29,7 +31,7 @@ auto main(int argc, char **argv) -> int
   if (argc != 2) { return 1; }
   namespace huffman = dacoexec::detail::huffman;
   auto const root = std::filesystem::path(argv[1]);
-  for (auto directory : { "huffman_decoder", "frame_parser", "round_trip", "ans_decoder" }) {
+  for (auto directory : { "huffman_decoder", "frame_parser", "round_trip", "ans_decoder", "arithmetic_decoder" }) {
     std::filesystem::create_directories(root / directory);
   }
   constexpr std::size_t seed_size = 4097;
@@ -59,6 +61,10 @@ auto main(int argc, char **argv) -> int
       dacoexec::detail::io::iterator_sink sink{ std::back_inserter(archive) };
       static_cast<void>(huffman::compress_stream(input, sink, { .block_size_ = block_size }));
       save(root / "frame_parser" / (name + "-blocks-" + std::to_string(block_size)), archive);
+      archive.clear();
+      static_cast<void>(dacoexec::detail::codec::compress_stream<dacoexec::detail::arithmetic::stream_format>(
+        input, sink, { .block_size_ = block_size }));
+      save(root / "arithmetic_decoder" / (name + "-blocks-" + std::to_string(block_size) + ".dac"), archive);
     }
   }
   return 0;
