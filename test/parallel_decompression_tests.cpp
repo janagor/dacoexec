@@ -29,14 +29,28 @@ struct observed_sink
   auto write(std::span<std::byte const> data) -> void { bytes_.insert(bytes_.end(), data.begin(), data.end()); }
 };
 
-template<bool use_ans> struct codec
+enum class codec_family { huffman, ans, arithmetic };
+enum class coder_variant { primary, tans };
+
+template<codec_family family> struct codec
 {
-  static auto compress(bytes const &input, bool tans = false) -> bytes
+  static constexpr auto variants = [] {
+    if constexpr (family == codec_family::ans) {
+      return std::array{ coder_variant::primary, coder_variant::tans };
+    } else {
+      return std::array{ coder_variant::primary };
+    }
+  }();
+
+  static auto compress(bytes const &input, coder_variant variant = coder_variant::primary) -> bytes
   {
-    if constexpr (use_ans) {
+    if constexpr (family == codec_family::arithmetic) {
+      return dacoexec::arithmetic::compress(input, { .block_size_ = frame_size });
+    } else if constexpr (family == codec_family::ans) {
       return dacoexec::ans::compress(input,
         { .block_size_ = frame_size,
-          .coder_ = tans ? dacoexec::ans::entropy_coder::tans : dacoexec::ans::entropy_coder::rans });
+          .coder_ =
+            variant == coder_variant::tans ? dacoexec::ans::entropy_coder::tans : dacoexec::ans::entropy_coder::rans });
     } else {
       return dacoexec::huffman::compress(input, { .block_size_ = frame_size });
     }
@@ -50,7 +64,12 @@ template<bool use_ans> struct codec
     std::uint64_t output_limit = std::numeric_limits<std::uint64_t>::max(),
     std::size_t limit = frame_size)
   {
-    if constexpr (use_ans) {
+    if constexpr (family == codec_family::arithmetic) {
+      return dacoexec::arithmetic::decompress_parallel_on(std::move(scheduler),
+        std::forward<R>(source),
+        std::forward<Destination>(destination),
+        { .max_frame_size_ = limit, .max_output_bytes_ = output_limit, .max_in_flight_ = capacity });
+    } else if constexpr (family == codec_family::ans) {
       return dacoexec::ans::decompress_parallel_on(std::move(scheduler),
         std::forward<R>(source),
         std::forward<Destination>(destination),
@@ -64,7 +83,7 @@ template<bool use_ans> struct codec
   }
 };
 
-template<bool use_ans> auto check_round_trips() -> void
+template<codec_family family> auto check_round_trips() -> void
 {
   for (auto workers : { 1U, 4U }) {
     exec::static_thread_pool pool{ workers };
@@ -75,11 +94,11 @@ template<bool use_ans> auto check_round_trips() -> void
         for (std::size_t i = frame_size; i < std::min(size, frame_size * 2); ++i) {
           input[i] = static_cast<std::byte>(i % 256);
         }
-        for (bool tans : { false, true }) {
-          auto archive = codec<use_ans>::compress(input, tans);
+        for (auto variant : codec<family>::variants) {
+          auto archive = codec<family>::compress(input, variant);
           bytes output;
           auto result = stdexec::sync_wait(
-            codec<use_ans>::decode(pool.get_scheduler(), archive, std::back_inserter(output), capacity, size));
+            codec<family>::decode(pool.get_scheduler(), archive, std::back_inserter(output), capacity, size));
           REQUIRE(result.has_value());
           auto const &stats = std::get<0>(*result);
           CHECK(stats.input_bytes_ == archive.size());
@@ -92,11 +111,11 @@ template<bool use_ans> auto check_round_trips() -> void
   }
 }
 
-template<bool use_ans> auto check_failures() -> void
+template<codec_family family> auto check_failures() -> void
 {
   exec::static_thread_pool pool{ 2 };
   bytes const input(frame_size * 5, std::byte{ 'A' });
-  auto const archive = codec<use_ans>::compress(input);
+  auto const archive = codec<family>::compress(input);
   observed_sink output;
   auto expect_error = [&](auto source,
                         dacoexec::errc error,
@@ -104,7 +123,7 @@ template<bool use_ans> auto check_failures() -> void
                         std::uint64_t output_limit = std::numeric_limits<std::uint64_t>::max(),
                         std::size_t limit = frame_size) -> void {
     output.bytes_.clear();
-    REQUIRE_THROWS_MATCHES(stdexec::sync_wait(codec<use_ans>::decode(
+    REQUIRE_THROWS_MATCHES(stdexec::sync_wait(codec<family>::decode(
                              pool.get_scheduler(), std::move(source), output, capacity, output_limit, limit)),
       dacoexec::exception,
       dacoexec::test::error_is(error));
@@ -136,10 +155,12 @@ template<bool use_ans> auto check_failures() -> void
 
   // Corrupt the CRC of the third frame without affecting parsing.
   auto damaged = archive;
-  std::size_t const header_size =
-    use_ans ? dacoexec::detail::ans::archive_header_size : dacoexec::detail::huffman::archive_header_size;
-  std::size_t const frame_header =
-    use_ans ? dacoexec::detail::ans::frame_header_size : dacoexec::detail::huffman::frame_header_size;
+  std::size_t const header_size = family == codec_family::arithmetic ? dacoexec::detail::arithmetic::archive_header_size
+                                  : family == codec_family::ans      ? dacoexec::detail::ans::archive_header_size
+                                                                     : dacoexec::detail::huffman::archive_header_size;
+  std::size_t const frame_header = family == codec_family::arithmetic ? dacoexec::detail::arithmetic::frame_header_size
+                                   : family == codec_family::ans      ? dacoexec::detail::ans::frame_header_size
+                                                                      : dacoexec::detail::huffman::frame_header_size;
   // Identical input blocks produce identical serialized frame lengths.
   std::size_t const frame_bytes = (archive.size() - header_size - frame_header) / 5;
   std::size_t const crc_offset = dacoexec::detail::codec::crc_field_offset;
@@ -167,20 +188,20 @@ template<bool use_ans> auto check_failures() -> void
   } failing;
 
   REQUIRE_THROWS_WITH(
-    stdexec::sync_wait(codec<use_ans>::decode(pool.get_scheduler(), archive, failing)), "decode sink failed");
+    stdexec::sync_wait(codec<family>::decode(pool.get_scheduler(), archive, failing)), "decode sink failed");
 }
 
-template<bool use_ans> auto check_sources_and_destinations() -> void
+template<codec_family family> auto check_sources_and_destinations() -> void
 {
   bytes const input((frame_size * 3) + 1, std::byte{ 'Z' });
-  auto const archive = codec<use_ans>::compress(input);
+  auto const archive = codec<family>::compress(input);
   std::size_t reads = 0;
   auto source = archive | std::views::transform([&](std::byte value) -> std::byte {
     ++reads;
     return value;
   });
   observed_sink output;
-  auto sender = codec<use_ans>::decode(stdexec::inline_scheduler{}, source, output);
+  auto sender = codec<family>::decode(stdexec::inline_scheduler{}, source, output);
   CHECK(reads == 0);
   CHECK(output.bytes_.empty());
   REQUIRE(stdexec::sync_wait(std::move(sender)).has_value());
@@ -188,13 +209,13 @@ template<bool use_ans> auto check_sources_and_destinations() -> void
   CHECK(output.bytes_ == input);
 
   std::ostringstream stream;
-  REQUIRE(stdexec::sync_wait(codec<use_ans>::decode(stdexec::inline_scheduler{}, bytes(archive), stream)).has_value());
+  REQUIRE(stdexec::sync_wait(codec<family>::decode(stdexec::inline_scheduler{}, bytes(archive), stream)).has_value());
   CHECK(stream.str() == std::string(input.size(), 'Z'));
 
   auto encoded = std::string(reinterpret_cast<char const *>(archive.data()), archive.size());
   std::istringstream single_pass(encoded);
   bytes restored;
-  REQUIRE(stdexec::sync_wait(codec<use_ans>::decode(stdexec::inline_scheduler{},
+  REQUIRE(stdexec::sync_wait(codec<family>::decode(stdexec::inline_scheduler{},
                                std::ranges::istream_view<unsigned char>(single_pass >> std::noskipws),
                                std::back_inserter(restored)))
       .has_value());
@@ -204,18 +225,21 @@ template<bool use_ans> auto check_sources_and_destinations() -> void
 
 TEST_CASE("Parallel decompression round trips all frame kinds and reports statistics", "[execution][decode]")
 {
-  check_round_trips<false>();
-  check_round_trips<true>();
+  check_round_trips<codec_family::huffman>();
+  check_round_trips<codec_family::ans>();
+  check_round_trips<codec_family::arithmetic>();
 }
 
 TEST_CASE("Parallel decompression enforces limits, framing, checksums and sink errors", "[execution][decode]")
 {
-  check_failures<false>();
-  check_failures<true>();
+  check_failures<codec_family::huffman>();
+  check_failures<codec_family::ans>();
+  check_failures<codec_family::arithmetic>();
 }
 
 TEST_CASE("Parallel decompression is lazy and supports owned and single-pass sources", "[execution][decode]")
 {
-  check_sources_and_destinations<false>();
-  check_sources_and_destinations<true>();
+  check_sources_and_destinations<codec_family::huffman>();
+  check_sources_and_destinations<codec_family::ans>();
+  check_sources_and_destinations<codec_family::arithmetic>();
 }

@@ -217,7 +217,11 @@ if(dacoexec_BUILD_EXECUTION)
                  TRUE)
   endif()
 
-  add_executable(dacoexec_execution_tests execution_tests.cpp parallel_decompression_tests.cpp)
+  add_executable(
+    dacoexec_execution_tests
+    execution_tests.cpp
+    parallel_decompression_tests.cpp
+    arithmetic_execution_tests.cpp)
   dacoexec_suppress_stdexec_stack_escape(dacoexec_execution_tests)
   target_link_libraries(
     dacoexec_execution_tests

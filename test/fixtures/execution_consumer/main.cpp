@@ -1,6 +1,7 @@
 #include <array>
 #include <cstddef>
 #include <dacoexec/ans.hpp>
+#include <dacoexec/arithmetic.hpp>
 #include <dacoexec/execution.hpp>
 #include <dacoexec/huffman.hpp>
 #include <exec/static_thread_pool.hpp>
@@ -39,5 +40,16 @@ int main()
     dacoexec::ans::decompress_parallel_on(pool.get_scheduler(), archive, std::back_inserter(ans_decoded)));
   static_assert(
     std::is_same_v<std::remove_cvref_t<decltype(std::get<0>(*ans_decoded_result))>, dacoexec::ans::stream_statistics>);
-  return ans_result && ans_decoded_result && ans_decoded.size() == input.size() ? 0 : 1;
+  std::vector<std::byte> arithmetic_archive;
+  auto arithmetic_result = stdexec::sync_wait(
+    dacoexec::arithmetic::compress_parallel_on(pool.get_scheduler(), input, std::back_inserter(arithmetic_archive)));
+  std::vector<std::byte> arithmetic_decoded;
+  auto arithmetic_decoded_result = stdexec::sync_wait(dacoexec::arithmetic::decompress_parallel_on(
+    pool.get_scheduler(), arithmetic_archive, std::back_inserter(arithmetic_decoded)));
+  static_assert(std::is_same_v<std::remove_cvref_t<decltype(std::get<0>(*arithmetic_result))>,
+    dacoexec::arithmetic::stream_statistics>);
+  return ans_result && ans_decoded_result && ans_decoded.size() == input.size() && arithmetic_result
+             && arithmetic_decoded_result && arithmetic_decoded == std::vector<std::byte>(input.begin(), input.end())
+           ? 0
+           : 1;
 }
