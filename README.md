@@ -207,12 +207,37 @@ accept zero as well. Divisors must be positive and shifts less than 64.
 Integer adaptors stage one integer at a time and yield bool bits or uint64 values;
 iterator copies share a pass. They carry no archive framing or integer count.
 
+Signed input can be mapped lazily with `encode::zigzag()` and restored with
+`decode::zigzag()`. These accept signed and unsigned integers respectively,
+up to 64 bits, and yield `uint64_t` and `int64_t`. For Gamma/Delta, use
+`encode::positive()` to add one and `decode::positive()` to subtract one:
+
+```cpp
+std::vector<int> values{ -2, -1, 0, 1, 2 };
+auto restored = values
+    | dv::encode::zigzag()
+    | dv::encode::positive()
+    | dv::encode::gamma()
+    | dv::decode::gamma(values.size())
+    | dv::decode::positive()
+    | dv::decode::zigzag();
+```
+
+Mapping adaptors use `std::views::transform`: they compute on dereference
+without caching and preserve the source's traversal capabilities. Both call
+and pipe syntax are supported. Unsigned mappings reject signed input; all
+mappings reject bool and floating-point input. Positive encoding rejects
+`UINT64_MAX` with `errc::numeric_overflow`; positive decoding rejects zero with
+`errc::invalid_argument`. Errors occur on dereference. Consequently, ZigZag of
+`INT64_MIN` works with Rice/Golomb but cannot be shifted into Gamma/Delta's
+positive domain.
+
 `views::bits()` unpacks byte input as MSB-first bool bits. `<dacoexec/bit.hpp>`
 provides `bit_reader`, `bit_sequence`, `bit_writer`, and `bit_output_iterator`.
 The reader borrows a byte span with an explicit valid-bit count. The writer
 accepts an output iterator; call `finish()` to flush it and obtain the padding
 bit count. Retain that count when packing integer-encoded bits. Integer primitive
-functions and numeric mapping helpers are private.
+functions and scalar integer mapping helpers are private.
 
 ## Parallel execution
 
