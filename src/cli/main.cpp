@@ -1,7 +1,9 @@
 #include "temporary_output.hpp"
 #include <CLI/CLI.hpp>
 #include <dacoexec/ans.hpp>
+#include <dacoexec/arithmetic.hpp>
 #include <dacoexec/detail/ans/format.hpp>
+#include <dacoexec/detail/arithmetic/format.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 #include <dacoexec/error.hpp>
 #include <dacoexec/huffman.hpp>
@@ -132,6 +134,8 @@ auto process(process_options const &options) -> void
           .coder_ =
             options.algorithm_ == "tans" ? dacoexec::ans::entropy_coder::tans : dacoexec::ans::entropy_coder::rans,
           .table_log_ = options.table_log_ }));
+    } else if (options.algorithm_ == "arithmetic") {
+      static_cast<void>(dacoexec::arithmetic::compress_stream(source, output, { .block_size_ = options.block_size_ }));
     } else {
       static_cast<void>(dacoexec::huffman::compress_stream(source, output, { .block_size_ = options.block_size_ }));
     }
@@ -143,10 +147,18 @@ auto process(process_options const &options) -> void
                           prefix, dacoexec::detail::ans::archive_header_bytes, [](char left, std::byte right) -> bool {
                             return dacoexec::detail::support::to_byte(left) == right;
                           });
+    auto const is_arithmetic =
+      input.gcount() == static_cast<std::streamsize>(prefix.size())
+      && std::ranges::equal(prefix,
+        dacoexec::detail::arithmetic::archive_header_bytes,
+        [](char left, std::byte right) -> bool { return dacoexec::detail::support::to_byte(left) == right; });
     input.clear();
     input.seekg(0);
     if (!input) { throw ::dacoexec::exception(::dacoexec::errc::io_error, "Cannot rewind input file"); }
-    if (is_ans) {
+    if (is_arithmetic) {
+      static_cast<void>(
+        dacoexec::arithmetic::decompress_stream(source, output, { .max_output_bytes_ = options.output_limit_ }));
+    } else if (is_ans) {
       static_cast<void>(
         dacoexec::ans::decompress_stream(source, output, { .max_output_bytes_ = options.output_limit_ }));
     } else {
@@ -163,7 +175,7 @@ auto process(process_options const &options) -> void
 
 auto main(int argc, char **argv) -> int
 try {
-  CLI::App app{ "Sequential Huffman, rANS and tANS file compression" };
+  CLI::App app{ "Sequential Huffman, ANS and arithmetic file compression" };
   app.require_subcommand(1);
   std::string input;
   std::string output;
@@ -172,8 +184,10 @@ try {
   auto table_log = dacoexec::ans::stream_options{}.table_log_;
   auto block_size = dacoexec::huffman::stream_options{}.block_size_;
   auto output_limit = std::numeric_limits<std::uint64_t>::max();
-  auto *compress = app.add_subcommand("compress", "Compress a file to DHF1 or DAN1");
-  compress->add_option("--algorithm", algorithm)->required()->check(CLI::IsMember({ "huffman", "rans", "tans" }));
+  auto *compress = app.add_subcommand("compress", "Compress a file to DHF1, DAN1 or DAC1");
+  compress->add_option("--algorithm", algorithm)
+    ->required()
+    ->check(CLI::IsMember({ "huffman", "rans", "tans", "arithmetic" }));
   auto *table_log_option =
     compress->add_option("--table-log", table_log, "tANS precision (8-12); requires --algorithm tans");
   compress->add_option("--block-size", block_size)
@@ -181,7 +195,7 @@ try {
   compress->add_option("input", input)->required();
   compress->add_option("output", output)->required();
   compress->add_flag("--force", force);
-  auto *decompress = app.add_subcommand("decompress", "Decompress a DHF1 or DAN1 file");
+  auto *decompress = app.add_subcommand("decompress", "Decompress a DHF1, DAN1 or DAC1 file");
   decompress->add_option("--max-output-size", output_limit);
   decompress->add_option("input", input)->required();
   decompress->add_option("output", output)->required();
