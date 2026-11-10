@@ -4,6 +4,7 @@
 #define DACOEXEC_VIEWS_HPP
 #include <cstdint>
 #include <dacoexec/ans.hpp>
+#include <dacoexec/arithmetic.hpp>
 #include <dacoexec/detail/views/archive_decode.hpp>
 #include <dacoexec/detail/views/archive_encode.hpp>
 #include <dacoexec/detail/views/bits.hpp>
@@ -64,6 +65,14 @@ namespace encode {
     };
   }
 
+  //! Produces a complete DAC1 archive using static order-0 range coding.
+  [[nodiscard]] inline auto arithmetic(::dacoexec::arithmetic::stream_options options = {})
+  {
+    return ::dacoexec::detail::views::archive_encode_closure<::dacoexec::detail::arithmetic::stream_format>{
+      { .block_size_ = options.block_size_, .coder_ = options.coder_ }
+    };
+  }
+
   [[nodiscard]] constexpr auto gamma() { return ::dacoexec::detail::views::encode::gamma(); }
 
   [[nodiscard]] constexpr auto delta() { return ::dacoexec::detail::views::encode::delta(); }
@@ -96,6 +105,14 @@ namespace decode {
   [[nodiscard]] inline auto ans(::dacoexec::ans::decode_options options = {})
   {
     return ::dacoexec::detail::views::archive_decode_closure<::dacoexec::detail::ans::stream_format>{
+      { .max_frame_size_ = options.max_frame_size_, .max_output_bytes_ = options.max_output_bytes_ }
+    };
+  }
+
+  //! Decodes DAC1 frames with the same verification contract.
+  [[nodiscard]] inline auto arithmetic(::dacoexec::arithmetic::decode_options options = {})
+  {
+    return ::dacoexec::detail::views::archive_decode_closure<::dacoexec::detail::arithmetic::stream_format>{
       { .max_frame_size_ = options.max_frame_size_, .max_output_bytes_ = options.max_output_bytes_ }
     };
   }

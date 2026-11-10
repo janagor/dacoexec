@@ -106,6 +106,7 @@ add_executable(
   error_header.cpp
   huffman_header.cpp
   ans_header.cpp
+  arithmetic_header.cpp
   views_header.cpp
   bit_header.cpp)
 target_link_libraries(consumer PRIVATE dacoexec::dacoexec)
@@ -149,3 +150,7 @@ list(APPEND standalone_header_sources "${CMAKE_CURRENT_BINARY_DIR}/error_hpp.cpp
 add_library(installed_public_headers OBJECT ${standalone_header_sources})
 target_link_libraries(installed_public_headers PRIVATE dacoexec::dacoexec)
 set_target_properties(installed_public_headers PROPERTIES UNITY_BUILD OFF DISABLE_PRECOMPILE_HEADERS ON)
+
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/arithmetic_hpp.cpp"
+     CONTENT "#include <dacoexec/arithmetic.hpp>\n")
+target_sources(installed_public_headers PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/arithmetic_hpp.cpp")

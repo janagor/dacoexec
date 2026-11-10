@@ -3,6 +3,7 @@
 #ifndef DACOEXEC_DACOEXEC_HPP
 #define DACOEXEC_DACOEXEC_HPP
 #include <dacoexec/ans.hpp>
+#include <dacoexec/arithmetic.hpp>
 #include <dacoexec/bit.hpp>
 #include <dacoexec/error.hpp>
 #include <dacoexec/huffman.hpp>

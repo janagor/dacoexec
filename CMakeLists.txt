@@ -80,6 +80,7 @@ set(DACOEXEC_PUBLIC_HEADERS
     "${PROJECT_SOURCE_DIR}/include/dacoexec/dacoexec.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/huffman.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/ans.hpp"
+    "${PROJECT_SOURCE_DIR}/include/dacoexec/arithmetic.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/views.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/bit.hpp"
     "${PROJECT_SOURCE_DIR}/include/dacoexec/error.hpp")
