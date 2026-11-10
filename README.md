@@ -398,3 +398,5 @@ dacoexec decompress output.dac restored.bin
 
 The CLI detects DAC1 automatically and applies `--max-output-size` and atomic
 output publication in the same way as its other archive formats.
+See [static range benchmarks](docs/static-range-benchmarks.md) for stage timings
+and complete-archive comparisons against Huffman, rANS, and tANS.

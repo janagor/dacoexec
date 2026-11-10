@@ -54,6 +54,24 @@ Discard an engine after an exception other than an argument validation failure.
 
 Golden vectors in `test/arithmetic_range_tests.cpp` freeze the byte convention,
 including delayed carries, normalization boundaries, and finalization.
+An independent base-256 arbitrary-width lower endpoint also checks every binary
+word through length 12 under four explicit models, seeded changing intervals,
+and deferred carry chains through 1024 bytes. This oracle uses ordinary wide
+integer addition and final big-endian serialization, without the engine's
+cached-byte emission procedure. Decoding those independently produced payloads
+checks both sides against the oracle rather than relying solely on round trips.
+
+Archive tests additionally freeze a multi-symbol DAC1 fixture (equal frequencies
+for bytes 0 and 255), including normalized model bytes, renormalized payload,
+CRC32, and END. Every single-bit change in that fixture's payload is rejected
+before publishing the frame. Identical consecutive input blocks must reproduce
+identical complete frames, verifying model and engine reset. Existing tests cover
+malformed models, truncated and trailing data, mixed RAW/compressed frames,
+output limits, public views, single-pass streams, and ordered parallel encoding
+and decoding with bounded in-flight work.
+
+The stage and complete-archive benchmark methodology and initial cross-codec
+results are in [static range measurements](static-range-benchmarks.md).
 
 ## Static order-0 model
 
