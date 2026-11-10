@@ -51,3 +51,80 @@ Discard an engine after an exception other than an argument validation failure.
 
 Golden vectors in `test/arithmetic_range_tests.cpp` freeze the byte convention,
 including delayed carries, normalization boundaries, and finalization.
+
+## Static order-0 model
+
+`detail/arithmetic/static_model.hpp` reuses the shared 256-symbol
+`model::frequency_model` and its integer normalization. `make_static_model`
+counts the input once, defaults to 12-bit precision (total 4096), and preserves
+positive frequencies for every observed byte. Absent symbols stay at zero.
+Empty input has no distribution and reports `invalid_argument`. Shared model
+precisions from 1 through 16 bits are supported when the alphabet fits.
+
+`static_range_codec.hpp` combines that immutable model with a fresh range
+engine per block. `encode_block(input, model)` reads the input once in forward
+order; counting and encoding a single-pass source require separate passes or
+caller-owned buffering. Encoding a symbol absent from the model reports
+`invalid_argument`. `decode_block(payload, model, count, limit)` checks the
+required explicit output limit before allocation and validates engine termination. An empty block
+can use an existing model and produces the engine's five zero bytes.
+
+Models and payloads are separate. `serialize_model` writes one precision byte,
+a little-endian uint16 nonzero-entry count, then entries in ascending symbol
+order: one symbol byte and a little-endian uint16 frequency-minus-one. This
+matches the existing ANS metadata representation, including a single frequency
+of 65536 at 16-bit precision. `deserialize_model` accepts exactly one metadata
+span, rejects unsorted or duplicate entries, invalid totals, truncation and
+trailing bytes with `invalid_payload`. These helpers do not add archive framing.
+
+Decoding uses binary search over cumulative frequencies, skipping zero-width
+intervals. The optional `dacoexec_arithmetic_model_benchmarks` target compares
+this with a 4096-entry byte lookup table and measures table construction
+separately. It queries identical, uniformly distributed cumulative slots for
+2-, 16-, and 256-symbol models, with uniform or skewed histograms.
+
+`make_symbol_lookup(model)` builds the optional direct table used by the
+benchmarks. It uses one byte per cumulative slot: 256 bytes at precision 8,
+4 KiB at precision 12, and 64 KiB at precision 16. Tests compare its results
+against binary search for every slot at every supported precision.
+
+The `block_decode` benchmarks compare complete block decoding, including output
+allocation, interval validation, normalization, termination checks, and, for the
+direct variant, table allocation and construction on every block. Model counting,
+serialization, and encoding happen outside the timed loop. Both variants are
+checked against the original bytes before timing. The matrix covers 64-, 4096-,
+and 65536-byte blocks, 2- and 256-symbol source alphabets, and precisions 8, 12,
+and 16. Small blocks may observe fewer symbols than the source alphabet.
+
+A preliminary run on an Intel Core i5-12450H, Clang 22.1.5, C++20, `-O2`, on
+2026-11-10 measured these median full-block decoding rates at precision 12:
+
+| Block bytes | Source alphabet | Cumulative search (MiB/s) | Direct table (MiB/s) |
+| --- | --- | --- | --- |
+| 64 | 2 | 27.5 | 50.5 |
+| 64 | 256 | 27.1 | 35.0 |
+| 4096 | 2 | 21.8 | 69.4 |
+| 4096 | 256 | 27.0 | 61.4 |
+| 65536 | 2 | 22.0 | 71.4 |
+| 65536 | 256 | 27.0 | 66.1 |
+
+Reproduce with:
+
+```sh
+dacoexec_arithmetic_model_benchmarks --benchmark_filter=block_decode \
+  --benchmark_min_time=0.02s --benchmark_repetitions=3 \
+  --benchmark_report_aggregates_only=true
+```
+
+CPU scaling was enabled and build work was active. These results support a
+future direct-table decoding policy, but the production adapter retains binary
+search for now. Precision and block size matter: a 64-byte block with a
+256-symbol source alphabet at precision 16 measured 26.7 MiB/s for search and
+13.3 MiB/s for direct lookup, including the 64 KiB table setup.
+
+Inspection of Clang 22.1.5 `-O2` assembly for a wrapper calling `decode_block`
+with runtime model precision showed separate calls to `cumulative` and `decode`.
+They retain two `range / total` divisions plus one `code / unit` division per
+symbol. Thus redundant unit calculation survives in that configuration. A
+future prepared-step interface should preserve interval validation and reject
+stale steps; this change keeps the existing range-engine contract intact.
