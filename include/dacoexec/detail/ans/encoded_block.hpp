@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/ans/model_wire.hpp>
+#include <dacoexec/detail/ans/metadata.hpp>
 #include <dacoexec/detail/ans/rans/codec.hpp>
 #include <dacoexec/error.hpp>
 #include <optional>
@@ -29,7 +29,7 @@ struct encoded_block
 {
   if (block.encoding_ == block_encoding::raw) { return 0; }
   if (!block.model_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Missing ANS model"); }
-  return model_wire_size(*block.model_);
+  return metadata_size(*block.model_);
 }
 
 }// namespace dacoexec::detail::ans

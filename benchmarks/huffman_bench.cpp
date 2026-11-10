@@ -1,5 +1,5 @@
 #include "fixtures.hpp"
-#include <dacoexec/detail/ans/model_wire.hpp>
+#include <dacoexec/detail/ans/metadata.hpp>
 
 #include <benchmark/benchmark.h>
 #include <dacoexec/detail/ans/block.hpp>
@@ -166,7 +166,7 @@ auto bm_ans_compress_block(benchmark::State &state) -> void
   }
   metrics(state,
     input.size(),
-    reference.payload_.size() + (reference.model_.has_value() ? ans::model_wire_size(*reference.model_) : 0U));
+    reference.payload_.size() + (reference.model_.has_value() ? ans::metadata_size(*reference.model_) : 0U));
 }
 
 auto bm_ans_decompress_block(benchmark::State &state) -> void
@@ -187,7 +187,7 @@ auto bm_ans_decompress_block(benchmark::State &state) -> void
   }
   metrics(state,
     input.size(),
-    encoded.payload_.size() + (encoded.model_.has_value() ? ans::model_wire_size(*encoded.model_) : 0U));
+    encoded.payload_.size() + (encoded.model_.has_value() ? ans::metadata_size(*encoded.model_) : 0U));
 }
 
 auto bm_ans_compress_stream(benchmark::State &state) -> void

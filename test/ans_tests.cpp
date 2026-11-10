@@ -3,7 +3,7 @@
 #include <dacoexec/detail/ans/block.hpp>
 #include <dacoexec/detail/ans/encoded_block.hpp>
 #include <dacoexec/detail/ans/format.hpp>
-#include <dacoexec/detail/ans/model_wire.hpp>
+#include <dacoexec/detail/ans/metadata.hpp>
 #include <dacoexec/detail/ans/rans/codec.hpp>
 #include <dacoexec/detail/ans/stream.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
@@ -163,7 +163,7 @@ TEST_CASE("DAN1 validates framing, checksums, models and output limits", "[ans]"
     restore(corrupt), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
   corrupt = encoded;
   auto const first_frequency =
-    ans::archive_header_size + ans::frame_header_size + ans::model_prefix_size + sizeof(std::uint8_t);
+    ans::archive_header_size + ans::frame_header_size + ans::metadata_prefix_size + sizeof(std::uint8_t);
   corrupt.at(first_frequency) = std::byte{ 1 };
   REQUIRE_THROWS_MATCHES(
     restore(corrupt), dacoexec::exception, dacoexec::test::error_is(dacoexec::errc::invalid_frame));
@@ -261,10 +261,10 @@ TEST_CASE("DAN1 sparse model cost includes only present symbols", "[ans]")
   constexpr std::size_t dense_model_size = 771;
   auto const single =
     dacoexec::detail::model::make_model(dacoexec::detail::model::count_frequencies(bytes{ std::byte{ 'A' } }));
-  REQUIRE(ans::model_wire_size(single) == single_symbol_model_size);
+  REQUIRE(ans::metadata_size(single) == single_symbol_model_size);
   dacoexec::detail::model::frequency_table counts{};
   counts.fill(1);
-  REQUIRE(ans::model_wire_size(dacoexec::detail::model::make_model(counts)) == dense_model_size);
+  REQUIRE(ans::metadata_size(dacoexec::detail::model::make_model(counts)) == dense_model_size);
   bytes input(block_size, std::byte{ 'A' });
   auto const encoded = archive(input);
   REQUIRE(
@@ -302,8 +302,8 @@ TEST_CASE("DAN1 sparse models require unique sorted symbols", "[ans]")
   auto const encoded = archive(input);
   REQUIRE(restore(encoded) == input);
   auto const model_offset = ans::archive_header_size + ans::frame_header_size;
-  auto const first_symbol_offset = model_offset + ans::model_prefix_size;
-  auto const second_symbol_offset = first_symbol_offset + ans::model_entry_size;
+  auto const first_symbol_offset = model_offset + ans::metadata_prefix_size;
+  auto const second_symbol_offset = first_symbol_offset + ans::metadata_entry_size;
   auto duplicate = encoded;
   duplicate.at(second_symbol_offset) = duplicate.at(first_symbol_offset);
   REQUIRE_THROWS_MATCHES(
@@ -584,6 +584,6 @@ TEST_CASE("DAN1 writes sparse metadata in one sink call", "[ans][wire]")
   if (frame.block_.model_) {
     REQUIRE(sink.sizes_
             == std::vector<std::size_t>{
-              ans::frame_header_size, ans::model_wire_size(*frame.block_.model_), frame.block_.payload_.size() });
+              ans::frame_header_size, ans::metadata_size(*frame.block_.model_), frame.block_.payload_.size() });
   }
 }

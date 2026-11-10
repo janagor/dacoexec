@@ -22,7 +22,7 @@ public:
 
   [[nodiscard]] auto try_encode(std::span<std::byte const> input) const -> std::optional<encoded_block>
   {
-    if (input.size() <= ::dacoexec::detail::ans::min_model_wire_size) { return std::nullopt; }
+    if (input.size() <= ::dacoexec::detail::ans::min_metadata_size) { return std::nullopt; }
     encoded_block result;
     auto const model = model::make_model(
       model::count_frequencies(input), coder_ == entropy_coder::tans ? precision_ : model::default_precision_bits);

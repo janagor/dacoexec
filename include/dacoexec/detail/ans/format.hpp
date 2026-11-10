@@ -136,17 +136,17 @@ template<io::byte_output_sink S> inline auto write_frame(S &sink, encoded_frame 
   write_frame_header(sink, frame.header_);
   if (frame.header_.kind_ == frame_kind::rans || frame.header_.kind_ == frame_kind::tans) {
     if (!block.model_) { throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Missing ANS model"); }
-    constexpr auto max_model_wire_size = ::dacoexec::detail::ans::model_prefix_size
-                                       + (model::alphabet_size * ::dacoexec::detail::ans::model_entry_size);
-    std::array<std::byte, max_model_wire_size> metadata{};
+    constexpr auto max_metadata_size = ::dacoexec::detail::ans::metadata_prefix_size
+                                       + (model::alphabet_size * ::dacoexec::detail::ans::metadata_entry_size);
+    std::array<std::byte, max_metadata_size> metadata{};
     std::size_t position = 0;
     auto const append = [&metadata, &position](auto const &bytes) -> void {
       for (auto byte : bytes) { metadata.at(position++) = byte; }
     };
     metadata.at(position++) = static_cast<std::byte>(block.model_->precision_bits());
     auto const count =
-      (::dacoexec::detail::ans::model_wire_size(*block.model_) - ::dacoexec::detail::ans::model_prefix_size)
-      / ::dacoexec::detail::ans::model_entry_size;
+      (::dacoexec::detail::ans::metadata_size(*block.model_) - ::dacoexec::detail::ans::metadata_prefix_size)
+      / ::dacoexec::detail::ans::metadata_entry_size;
     append(dacoexec::detail::support::write_u16_le(static_cast<std::uint16_t>(count)));
     for (std::size_t symbol = 0; symbol < model::alphabet_size; ++symbol) {
       auto const frequency = block.model_->frequencies().at(symbol);
