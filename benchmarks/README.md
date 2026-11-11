@@ -147,8 +147,13 @@ sequential encoding before timing. `dacoexec_ans_stream_memory` accepts the same
 arguments as `dacoexec_stream_memory` for separate-process peak-RSS comparisons.
 No benchmark results are claimed until these executables have been built and run.
 
-`dacoexec_arithmetic_benchmarks` provides a common static-range/Huffman/rANS/tANS
-archive comparison and isolated static-range stages. Run it with:
+`dacoexec_arithmetic_benchmarks` provides a common static/adaptive-range, binary,
+Huffman, rANS, and tANS archive comparison and isolated static-range stages.
+Binary uses a two-symbol bit model and an E1/E2/E3 arithmetic engine, while
+static/adaptive range use a 256-symbol byte model and a byte-oriented range
+engine. These comparisons change both modeled alphabet and coding engine;
+performance differences cannot be attributed solely to bit versus byte modeling.
+Archive sizes and ratios include each codec's model metadata and framing. Run it with:
 
 ```sh
 taskset -c 2 out/build/unixlike-clang-bench/benchmarks/dacoexec_arithmetic_benchmarks \

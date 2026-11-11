@@ -22,7 +22,7 @@ namespace {
 namespace arithmetic = dacoexec::detail::arithmetic;
 namespace model = dacoexec::detail::model;
 enum class stage { histogram, normalization, encode, decode, serialize };
-enum class codec { static_range, huffman, rans, tans, adaptive_range };
+enum class codec { static_range, huffman, rans, tans, adaptive_range, binary };
 using bytes = std::vector<std::byte>;
 
 auto compress(bytes const &input, codec coder, std::size_t block_size) -> bytes
@@ -30,6 +30,9 @@ auto compress(bytes const &input, codec coder, std::size_t block_size) -> bytes
   switch (coder) {
   case codec::static_range:
     return dacoexec::arithmetic::compress(input, { .block_size_ = block_size });
+  case codec::binary:
+    return dacoexec::arithmetic::compress(
+      input, { .block_size_ = block_size, .coder_ = dacoexec::arithmetic::entropy_coder::binary });
   case codec::adaptive_range:
     return dacoexec::arithmetic::compress(
       input, { .block_size_ = block_size, .coder_ = dacoexec::arithmetic::entropy_coder::adaptive_range });
@@ -49,6 +52,7 @@ auto decompress(bytes const &archive, codec coder) -> bytes
   switch (coder) {
   case codec::static_range:
   case codec::adaptive_range:
+  case codec::binary:
     return dacoexec::arithmetic::decompress(archive);
   case codec::huffman:
     return dacoexec::huffman::decompress(archive);
@@ -228,6 +232,14 @@ void multi_matrix(benchmark::Benchmark *benchmark)
   benchmark->UseRealTime();
 }
 
+// Binary changes both the alphabet (bits) and the engine (E1/E2/E3);
+// range variants use byte symbols and the shared byte-oriented range engine.
+BENCHMARK_CAPTURE(changing_archive, binary_encode, codec::binary, false)->UseRealTime();
+BENCHMARK_CAPTURE(changing_archive, binary_decode, codec::binary, true)->UseRealTime();
+BENCHMARK_CAPTURE(archive, binary_encode, codec::binary, false, false)->Apply(archive_matrix);
+BENCHMARK_CAPTURE(archive, binary_decode, codec::binary, true, false)->Apply(archive_matrix);
+BENCHMARK_CAPTURE(archive, binary_multi_encode, codec::binary, false, true)->Apply(multi_matrix);
+BENCHMARK_CAPTURE(archive, binary_multi_decode, codec::binary, true, true)->Apply(multi_matrix);
 BENCHMARK_CAPTURE(changing_archive, static_range_encode, codec::static_range, false)->UseRealTime();
 BENCHMARK_CAPTURE(changing_archive, static_range_decode, codec::static_range, true)->UseRealTime();
 BENCHMARK_CAPTURE(changing_archive, adaptive_range_encode, codec::adaptive_range, false)->UseRealTime();
@@ -268,7 +280,7 @@ int main(int argc, char **argv)
   // Corpus files retain their natural order and length. Register them only
   // when requested so an ordinary synthetic run needs no external files.
   if (auto const *directory = std::getenv("DACOEXEC_BENCHMARK_CORPUS")) {
-    constexpr std::array names{ "static_range", "huffman", "rans", "tans", "adaptive_range" };
+    constexpr std::array names{ "static_range", "huffman", "rans", "tans", "adaptive_range", "binary" };
     for (std::size_t index = 0; index < names.size(); ++index) {
       for (auto const *dataset : { "text", "source", "binary", "structured" }) {
         for (bool decoding : { false, true }) {
