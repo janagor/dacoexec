@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <dacoexec/detail/arithmetic/binary_arithmetic_codec.hpp>
 #include <dacoexec/detail/arithmetic/static_model.hpp>
 
 #include <dacoexec/error.hpp>
@@ -28,13 +29,21 @@ struct encoded_block
   block_encoding encoding_ = block_encoding::raw;
   std::uint64_t uncompressed_size_ = 0;
   std::vector<std::byte> payload_;
-  //! Metadata for static_range only; adaptive_range has no transmitted model.
+  //! Separate fixed models for static range and binary frames.
   std::optional<static_model> model_;
+  std::optional<binary_model> binary_model_;
 };
 
 [[nodiscard]] inline auto model_metadata_size(encoded_block const &block) -> std::size_t
 {
   if (block.encoding_ == block_encoding::raw || block.encoding_ == block_encoding::adaptive_range) { return 0; }
+  if (block.encoding_ == block_encoding::binary) {
+    if (!block.binary_model_) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Missing binary model");
+    }
+    static_cast<void>(block.binary_model_->total());
+    return binary_model_metadata_size;
+  }
   if (block.encoding_ != block_encoding::static_range) {
     throw ::dacoexec::exception(::dacoexec::errc::unsupported_coder, "Unsupported arithmetic entropy coder");
   }

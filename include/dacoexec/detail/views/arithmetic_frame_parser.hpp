@@ -30,6 +30,11 @@ struct arithmetic_frame_format
   template<class Reader> static auto read_metadata(Reader &reader, frame_type &frame) -> void
   {
     frame.block_.encoding_ = static_cast<arithmetic::block_encoding>(frame.header_.kind_);
+    if (frame.header_.kind_ == arithmetic::frame_kind::binary) {
+      auto const metadata = reader.template read_array<arithmetic::binary_model_metadata_size>();
+      frame.block_.binary_model_ = arithmetic::deserialize_binary_model(metadata);
+      return;
+    }
     if (frame.header_.kind_ != arithmetic::frame_kind::static_range) { return; }
     auto const prefix = reader.template read_array<3>();
     auto const count = read_u16_le(std::span<std::byte const, 2>{ prefix.data() + 1, 2 });

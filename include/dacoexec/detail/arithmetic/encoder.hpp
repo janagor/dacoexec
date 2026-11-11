@@ -24,6 +24,14 @@ public:
   [[nodiscard]] auto try_encode(std::span<std::byte const> input) const -> std::optional<encoded_block>
   {
     auto const minimum = coder_ == entropy_coder::adaptive_range ? range_flush_bytes : minimum_compressed_size;
+    if (coder_ == entropy_coder::binary) {
+      if (input.size() <= binary_model_metadata_size + binary_min_payload_size) { return std::nullopt; }
+      encoded_block result;
+      result.binary_model_ = make_binary_model(input);
+      result.payload_ = encode_binary_block(input, *result.binary_model_);
+      result.encoding_ = block_encoding::binary;
+      return result;
+    }
     if (input.size() <= minimum) { return std::nullopt; }
     encoded_block result;
     if (coder_ == entropy_coder::adaptive_range) {

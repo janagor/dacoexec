@@ -4,6 +4,7 @@
 #define DACOEXEC_ARITHMETIC_DECODER_HPP
 
 #include <dacoexec/detail/arithmetic/adaptive_range_codec.hpp>
+#include <dacoexec/detail/arithmetic/binary_arithmetic_codec.hpp>
 #include <dacoexec/detail/arithmetic/encoded_block.hpp>
 #include <dacoexec/detail/arithmetic/static_range_codec.hpp>
 #include <dacoexec/detail/codec/decoder_base.hpp>
@@ -26,6 +27,16 @@ public:
 
   static auto validate(encoded_block const &block) -> void
   {
+    if ((block.encoding_ == block_encoding::binary) != block.binary_model_.has_value()) {
+      throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Invalid binary block metadata");
+    }
+    if (block.encoding_ == block_encoding::binary) {
+      if (block.model_) {
+        throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Unexpected static model metadata");
+      }
+      static_cast<void>(block.binary_model_->total());
+      return;
+    }
     if (is_raw(block) || block.encoding_ == block_encoding::adaptive_range) {
       if (block.model_) {
         throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Unexpected arithmetic model metadata");
@@ -37,6 +48,10 @@ public:
 
   [[nodiscard]] static auto decode_compressed(encoded_block const &block, std::size_t limit) -> std::vector<std::byte>
   {
+    if (block.encoding_ == block_encoding::binary) {
+      return decode_binary_block(
+        block.payload_, *block.binary_model_, static_cast<std::size_t>(block.uncompressed_size_), limit);
+    }
     if (block.encoding_ == block_encoding::adaptive_range) {
       return decode_adaptive_block(block.payload_, static_cast<std::size_t>(block.uncompressed_size_), limit);
     }

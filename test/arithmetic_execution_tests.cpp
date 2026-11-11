@@ -53,7 +53,7 @@ TEST_CASE("Arithmetic parallel compression matches sequential archive bytes", "[
   auto scheduler = stdexec::inline_scheduler{};
   REQUIRE_THROWS_MATCHES(
     stdexec::sync_wait(arithmetic::compress_parallel_on(
-      scheduler, bytes{}, std::back_inserter(output), { .coder_ = arithmetic::entropy_coder::binary })),
+      scheduler, bytes{}, std::back_inserter(output), { .coder_ = arithmetic::entropy_coder::context_binary })),
     dacoexec::exception,
     dacoexec::test::error_is(dacoexec::errc::unsupported_coder));
   CHECK(output.empty());
@@ -118,30 +118,32 @@ TEST_CASE("Arithmetic parallel compression preserves committed frames on sink fa
   }
 }
 
-TEST_CASE("Adaptive parallel streams reproduce sequential bytes and decode mixed frames", "[arithmetic][execution]")
+TEST_CASE("Adaptive and binary parallel streams reproduce sequential bytes and decode mixed frames",
+  "[arithmetic][execution]")
 {
   namespace arithmetic = dacoexec::arithmetic;
   using bytes = std::vector<std::byte>;
   bytes input(100000, std::byte{ 'A' });
   for (std::size_t i = 4096; i < 8192; ++i) { input[i] = static_cast<std::byte>(i % 256); }
-  auto const coder = arithmetic::entropy_coder::adaptive_range;
-  auto const expected = arithmetic::compress(input, { .block_size_ = 4096, .coder_ = coder });
-  for (auto workers : { 1U, 4U }) {
-    exec::static_thread_pool pool{ workers };
-    for (auto capacity : { 1U, 3U }) {
-      bytes archive;
-      REQUIRE(stdexec::sync_wait(arithmetic::compress_parallel_on(pool.get_scheduler(),
-                                   input,
-                                   std::back_inserter(archive),
-                                   { .block_size_ = 4096, .max_in_flight_ = capacity, .coder_ = coder }))
-          .has_value());
-      CHECK(archive == expected);
-      bytes output;
-      REQUIRE(
-        stdexec::sync_wait(arithmetic::decompress_parallel_on(
-                             pool.get_scheduler(), archive, std::back_inserter(output), { .max_in_flight_ = capacity }))
-          .has_value());
-      CHECK(output == input);
+  for (auto coder : { arithmetic::entropy_coder::adaptive_range, arithmetic::entropy_coder::binary }) {
+    auto const expected = arithmetic::compress(input, { .block_size_ = 4096, .coder_ = coder });
+    for (auto workers : { 1U, 4U }) {
+      exec::static_thread_pool pool{ workers };
+      for (auto capacity : { 1U, 3U }) {
+        bytes archive;
+        REQUIRE(stdexec::sync_wait(arithmetic::compress_parallel_on(pool.get_scheduler(),
+                                     input,
+                                     std::back_inserter(archive),
+                                     { .block_size_ = 4096, .max_in_flight_ = capacity, .coder_ = coder }))
+            .has_value());
+        CHECK(archive == expected);
+        bytes output;
+        REQUIRE(stdexec::sync_wait(
+          arithmetic::decompress_parallel_on(
+            pool.get_scheduler(), archive, std::back_inserter(output), { .max_in_flight_ = capacity }))
+            .has_value());
+        CHECK(output == input);
+      }
     }
   }
 }
