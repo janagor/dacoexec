@@ -86,6 +86,14 @@ with an independent Python arbitrary-width range implementation and checked
 against the corpus utility. The complete 67-byte repeated-symbol archive is also
 frozen as a Catch2 golden fixture, including CRC32 and END.
 
+The binary archive corpus includes complete tag `03` archives for 64 zero bytes,
+64 one bytes, and the two bytes `69 96` with a uniform model. These seeds were
+calculated with an independent Python integer arithmetic implementation; the
+zero-byte archive matches the Catch2 golden fixture. Malformed companions contain
+an excessive frequency total, a truncated four-byte model, and a valid but
+incorrect model with the zero and one frequencies exchanged. They exercise frame
+dispatch, model parsing, termination, and verified output before publication.
+
 Run just this target with:
 
 ```sh
