@@ -39,7 +39,8 @@ foreach(
         frame_parser
         round_trip
         ans_decoder
-        arithmetic_decoder)
+        arithmetic_decoder
+        binary_decoder)
   set(target dacoexec_fuzz_${harness})
   add_executable(${target} ${harness}.cpp)
   dacoexec_configure_linker(${target})

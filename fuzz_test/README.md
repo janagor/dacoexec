@@ -101,3 +101,19 @@ before `fuzz.arithmetic_decoder` runs its bounded campaign. Both have the `fuzz`
 label, so the existing CI job runs them. Direct model decoding accepts only
 `invalid_payload` rejections; constructor argument errors are normalized inside
 `deserialize_model()` rather than permitted by the harness.
+
+`binary_decoder` directly exercises the binary arithmetic engine, without an
+archive adapter or encoder in the fuzzing path. Its six-byte envelope contains
+three little-endian uint16 values: decoded bit count, zero-frequency seed, and
+one-frequency seed. The zero frequency is `1 + seed % 65535`; the one frequency
+is `1 + seed % (65536 - zero_frequency)`. Every envelope therefore supplies a
+valid model, including extreme ratios, and bounds decoding to 65535 bits. The
+remaining bytes are arbitrary payload; decoded output is discarded. Only
+`invalid_payload` is an expected rejection. Seeds use the independent binary
+golden payloads, including E3, rare outcomes, truncation, and trailing data.
+The existing `fuzz` CTest label includes this target in CI.
+
+```sh
+cmake --build out/build/unixlike-clang-fuzz --target dacoexec_fuzz_binary_decoder
+ASAN_OPTIONS=detect_leaks=0 ctest --test-dir out/build/unixlike-clang-fuzz -R '^fuzz[.]binary_decoder$' -V
+```
