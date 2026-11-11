@@ -46,6 +46,7 @@ add_executable(
   archive_view_tests.cpp
   ans_tests.cpp
   arithmetic_range_tests.cpp
+  arithmetic_binary_tests.cpp
   arithmetic_static_tests.cpp
   arithmetic_adaptive_model_tests.cpp
   arithmetic_adaptive_tests.cpp
