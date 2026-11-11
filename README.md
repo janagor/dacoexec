@@ -18,7 +18,7 @@ Only declarations documented in these facade headers are supported:
 | `<dacoexec/dacoexec.hpp>` | All dependency-free facades below |
 | `<dacoexec/huffman.hpp>` | Huffman archive compression and decompression |
 | `<dacoexec/ans.hpp>` | ANS archive compression and decompression |
-| `<dacoexec/arithmetic.hpp>` | Static order-0 range archive compression and decompression |
+| `<dacoexec/arithmetic.hpp>` | Static/adaptive range and binary arithmetic archives |
 | `<dacoexec/views.hpp>` | Archive, bit, and integer adaptors |
 | `<dacoexec/bit.hpp>` | MSB-first bit reader, writer, and output iterator |
 | `<dacoexec/error.hpp>` | Archive, I/O, and codec exceptions |
@@ -372,18 +372,22 @@ default. See [tANS format and options](docs/tans.md) for table-log limits,
 bitstream details, and compatibility with older DAN1 readers.
 
 Arithmetic coding uses the DAC1 archive format and static or adaptive order-0
-integer range coding. Include `<dacoexec/arithmetic.hpp>` for `arithmetic::compress`,
+integer range coding, or fixed-model binary arithmetic coding. Include `<dacoexec/arithmetic.hpp>` for `arithmetic::compress`,
 `decompress`, `compress_stream`, and `decompress_stream`. Options, byte range
 support, sink types, statistics, and verification follow the Huffman and ANS
 conventions. `stream_options::coder_` defaults to `entropy_coder::static_range`;
 select `entropy_coder::adaptive_range` for a model updated after each byte,
-with no transmitted frequency table. Binary selectors report `errc::unsupported_coder`.
+with no transmitted frequency table. Select `entropy_coder::binary` for MSB-first
+bit coding with one fixed binary model per frame. The context binary selector
+reports `errc::unsupported_coder`.
 
 ```cpp
 auto archive = dacoexec::arithmetic::compress(input, { .block_size_ = 65536 });
 auto restored = dacoexec::arithmetic::decompress(archive);
 auto adaptive = dacoexec::arithmetic::compress(
     input, { .coder_ = dacoexec::arithmetic::entropy_coder::adaptive_range });
+auto binary = dacoexec::arithmetic::compress(
+    input, { .coder_ = dacoexec::arithmetic::entropy_coder::binary });
 auto lazy = input | dacoexec::views::encode::arithmetic()
                   | dacoexec::views::decode::arithmetic();
 ```

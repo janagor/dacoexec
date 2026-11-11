@@ -24,7 +24,7 @@ Invalid precision is rejected before reading input, preserving single-pass sourc
 
 Construct the fixed model once over the complete frame and use it for every
 bit in that frame. Model serialization, archive tags, framing, and public codec
-selection belong to the codec adapter; these internal engines add none of them.
+selection belong to the codec adapter described below.
 
 ## Interval and normalization
 
@@ -93,3 +93,29 @@ Golden payloads in `test/arithmetic_binary_tests.cpp` freeze interval rounding,
 bit order, E1/E2/E3 handling, and finalization. Tests also exhaust short bit
 sequences under several probability models, exercise long pending-bit runs,
 and check changes of model between bits.
+
+## DAC1 binary frames
+
+Select `dacoexec::arithmetic::entropy_coder::binary` through `stream_options::coder_`
+for owning, streaming, lazy view, or parallel compression. Decoding selects the
+codec from each frame tag, allowing mixed static range, adaptive range, binary,
+and RAW frames. The CLI automatically recognizes these archives on decompression.
+
+Tag `0x03` uses the existing DAC1 frame header (tag, LE uint32 uncompressed byte
+count, payload byte count, and CRC32). Immediately after the header are four
+model bytes: LE uint16 `zero_frequency - 1`, then LE uint16 `one_frequency - 1`.
+Their decoded sum must be at most 65536; larger sums are invalid frame metadata.
+Model bytes are excluded from the payload byte count. The encoder uses the
+smoothed default 12-bit model above; readers accept all positive frequencies
+within the engine's total bound. These bytes precede the packed binary payload,
+which must contain at least four bytes. No bit count or end symbol is stored.
+
+The adapter decodes exactly eight MSB-first bits for each declared output byte,
+then checks the engine's canonical termination and the frame CRC32 before
+committing output. Model and interval state reset independently on each frame.
+Compression falls back to RAW unless payload plus four model bytes is strictly
+smaller than the source. Stream byte statistics include all model bytes.
+
+Binary coding uses a two-symbol bit model and the E1/E2/E3 engine; static and
+adaptive order-0 range coding use a 256-symbol byte model and a byte-oriented
+range engine. Comparisons between them change both alphabet and engine.

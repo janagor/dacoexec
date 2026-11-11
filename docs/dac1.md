@@ -1,13 +1,14 @@
 # DAC1 arithmetic archives
 
-DAC1 supports static and adaptive order-0 range coding and RAW frames through
+DAC1 supports static and adaptive order-0 range coding, binary arithmetic coding,
+and RAW frames through
 shared block, frame parser, and verified stream infrastructure. The public
-facade, views, and optional parallel streams accept both range variants.
+facade, views, and optional parallel streams accept all three coders.
 The CLI's `arithmetic` selector uses static range coding; decompression reads
-either variant from its frame tag.
+each coder from its frame tag.
 
-Static range blocks carry an optional frequency model. Adaptive blocks carry
-no model metadata. Reserved variants are rejected before interpreting metadata.
+Static range and binary blocks each carry a fixed frequency model. Adaptive
+blocks carry no model metadata. Reserved variants are rejected before interpreting metadata.
 
 An archive starts with `44 41 43 31 00 00 00 00` (`DAC1` plus four zero bytes),
 contains zero or more data frames, and ends with one END frame. No bytes may
@@ -28,7 +29,7 @@ and little-endian.
 | `00` | RAW | Supported |
 | `01` | Static order-0 range | Supported |
 | `02` | Adaptive order-0 range | Supported |
-| `03` | Binary arithmetic | Reserved |
+| `03` | Binary arithmetic | Supported |
 | `04` | Context-adaptive binary arithmetic | Reserved |
 | `ff` | END | Supported |
 
@@ -57,6 +58,20 @@ its frequency; when total exceeds 32768, replace each frequency with
 `(frequency + 1) / 2`. Reset the model at every frame boundary. This rule and
 threshold are part of the DAC1 tag `02` format contract.
 
+Binary arithmetic stores four model bytes immediately after its header: two
+LE uint16 frequency-minus-one values, zero followed by one. Both decoded
+frequencies must be positive and their sum must not exceed 65536. The encoder
+counts all source bits once, adds one pseudocount per outcome, and normalizes
+to total 4096 using the shared model normalizer. Metadata is excluded from the
+payload size. Readers accept any model satisfying the total bound.
+
+The binary payload follows these model bytes and uses the
+[binary engine's MSB-first packing and canonical termination](binary-arithmetic-coding.md).
+It contains at least four bytes. The decoder reconstructs exactly eight bits
+per declared output byte, then verifies termination. Model and coding state
+reset at each frame boundary. Public compression selects this format with
+`entropy_coder::binary`.
+
 The static payload follows the model and uses the byte-oriented range engine's
 [initialization, carry handling, and finalization contract](range-coding.md).
 It contains at least five bytes. Coding state and the model are independent
@@ -66,7 +81,7 @@ payload must satisfy the range decoder's termination checks.
 The static encoder counts one histogram per block. The adaptive encoder updates
 its model while coding and counts no histogram. The shared encoder chooses compressed
 storage only when payload plus model metadata is strictly smaller than the
-source; ties use RAW. Both encodings have the same frame header overhead.
+source; ties use RAW. All encodings have the same frame header overhead.
 
 The verified decoder checks output limits before decoding and CRC32 before
 writing each frame to the destination. Earlier verified frames may have been
