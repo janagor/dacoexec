@@ -45,6 +45,8 @@ add_executable(
   facade_tests.cpp
   archive_view_tests.cpp
   ans_tests.cpp
+  cross_codec_archive_tests.cpp
+  arithmetic_compatibility_tests.cpp
   arithmetic_range_tests.cpp
   arithmetic_binary_tests.cpp
   arithmetic_binary_codec_tests.cpp
