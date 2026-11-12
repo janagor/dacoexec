@@ -26,6 +26,31 @@ Construct the fixed model once over the complete frame and use it for every
 bit in that frame. Model serialization, archive tags, framing, and public codec
 selection belong to the codec adapter described below.
 
+## Adaptive context model
+
+The internal `binary/context/model.hpp` provides `context_model`, a probability
+policy for the same binary engine. Its 32 independent `binary_model` entries
+start with counts `(1, 1)`. Before each bit, `probabilities()` selects
+`(bit_position << 2) | previous_two_bits`, where position zero is the byte's
+MSB. After encoding or decoding, call `update(bit)` exactly once. It increments
+only the selected outcome in the selected context, then advances the two-bit
+history and byte position. History starts at zero and persists across byte
+boundaries; the position wraps after eight bits.
+
+Use the engine's single-bit `encode` and `decode` methods with this policy,
+selecting probabilities and updating the model after every bit. Do not pass
+`model.probabilities()` to `encode_byte` or `decode_byte`: those fixed-model
+helpers use the same probabilities for all eight bits and never update the
+context policy.
+
+Like the adaptive byte model, a context rescales only when its total exceeds
+32768, replacing each count with `(count + 1) / 2`. This threshold is a fixed
+binary-context convention independent of range-coder settings. Other contexts
+remain unchanged. Both outcomes retain positive width. Construct a fresh model or call
+`reset()` at every frame boundary to restore all counts, history, and position.
+The engine's interval and finalization rules remain unchanged. This model is
+an internal policy; archive selection and payload integration are separate.
+
 ## Interval and normalization
 
 Initialize `low = 0`, `high = 0xFFFFFFFF`. Let `Q = 0x40000000`, `H = 2*Q`,
