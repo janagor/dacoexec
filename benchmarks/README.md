@@ -221,3 +221,32 @@ ordinary `new`/`delete` replacements measure the standard-alignment allocations
 used here; they do not instrument aligned allocation or third-party `malloc`.
 Use separate processes for the memory probes and record peak RSS (for example
 with `/usr/bin/time -v` on Linux); total allocated bytes are not peak live memory.
+
+The archive matrix now includes `context_binary` alongside static range,
+adaptive range, binary, Huffman, rANS and tANS, including real files, changing
+distributions and multiple frames. Context binary uses 32 adaptive bit models
+and the same binary engine as fixed binary; their difference includes context
+selection, adaptation, and model update cost. Static versus adaptive range holds
+the byte engine constant. Neither comparison alone isolates every modeling cost.
+
+`dacoexec_codec_allocations` measures complete archive encoding and decoding for
+all seven configurations on identical 64 KiB/1 MiB synthetic fixtures. It emits
+CSV with archive bytes, allocation calls, and total requested allocation bytes.
+Input generation and archive preparation for decoding are outside each measured
+scope; each result is checked for exact restoration. Ordinary `new`/`delete`
+hooks exclude aligned allocations and direct `malloc`; requested bytes are not
+peak live memory. Run this separately from timed benchmarks:
+
+```sh
+cmake --build out/build/unixlike-clang-bench \
+  --target dacoexec_arithmetic_benchmarks dacoexec_codec_allocations
+out/build/unixlike-clang-bench/benchmarks/dacoexec_codec_allocations > allocations.csv
+```
+
+Keep the raw benchmark JSON and allocation CSV with compiler flags, CPU,
+Git revision, block sizes, affinity and corpus hashes. Archive bytes include all
+metadata, checksums, END and RAW fallback; stage counters describe candidate
+payload/model sizes and must not be subtracted from RAW archives to infer
+framing overhead. Old synthetic/real case counts above predate the expanded
+codec matrix. Timing smoke checks establish executability, not a performance
+ranking; use repeated pinned runs for conclusions.
