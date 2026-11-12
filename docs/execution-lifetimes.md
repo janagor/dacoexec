@@ -1,9 +1,9 @@
 # Ordered execution lifetime review
 
-This is a source review against NVIDIA/stdexec revision
-`ead186b1d8db3ebe37a946ff84a6ce08bf795153`, not a sanitizer result.
+This review uses NVIDIA/stdexec revision
+`ead186b1d8db3ebe37a946ff84a6ce08bf795153`.
 The implementation intentionally allows terminal completion to destroy the
-currently completing child operation and its parent operation.
+currently completing batch operation and its parent operation.
 
 ## Pinned completion paths
 
@@ -14,6 +14,16 @@ The upstream files below are relative to that revision's source tree:
   task after the call. `_opstate::do_execute_()` retrieves the receiver's stop
   token before dispatching value or stopped completion. Each branch ends with
   the terminal receiver call; it does not access `op` afterward.
+- `include/exec/static_thread_pool.hpp`: the parallel `bulk` customization
+  distributes a batch through `bulk_enqueue()`, including when submission comes
+  from a pool worker. `_bulk_shared_state::bulk_task::do_execute_()` runs its
+  share of the indices, increments the completed-agent count, and the last
+  agent tail-calls the batch receiver. It does not access shared state after
+  terminal completion. The local processing function is `noexcept`, recording
+  errors in per-index slots rather than throwing through the bulk algorithm.
+- `include/stdexec/__detail/__bulk.hpp`: the generic implementation runs the
+  indices before forwarding terminal completion; it does not access the batch
+  state after that callback. Inline schedulers use this path.
 - `include/stdexec/__detail/__basic_sender.hpp`: `__rcvr::set_value()`,
   `set_error()`, and `set_stopped()` delegate to the sender's completion
   implementation and perform no subsequent state access.
@@ -32,11 +42,18 @@ Upstream source: [pinned stdexec tree](https://github.com/NVIDIA/stdexec/tree/ea
 
 ## Local invariants
 
-Every worker completion finishes writing its slot before decrementing
-`remaining_`. The dispatch sentinel keeps the count nonzero until every
-started child has been stored. The final acquire/release decrement synchronizes
-slot writes before inspection. Each receiver tail-calls `settled()` and never
-uses its receiver or parent afterward.
+Each batch is submitted as `bulk(schedule(scheduler), par, count, process)`.
+Submitting separate schedule operations from the last completing pool worker
+can leave small batches on its private queue: the pinned pool's default steal
+block contains eight tasks, while the default batch contains four. Bulk
+submission distributes those tasks across the pool instead.
+
+Each index owns a distinct result slot. The bulk sender joins its agents before
+completing, so slot writes are visible before ordered commit. A dispatch
+sentinel prevents inline completion from destroying the batch operation before
+`start()` returns. The batch receiver tail-calls `settled()` and never uses its
+receiver or parent afterward. The parent releases the bulk operation, input
+buffers, and results before acquiring the next batch.
 
 `driving_` permits only one coordinator to advance at a time. Inline child
 completion queues another iteration rather than entering the next batch
@@ -45,16 +62,17 @@ the caller may destroy the entire parent from within that completion.
 
 Custom schedulers must likewise permit their operation state to be destroyed
 inside a terminal receiver invocation. The executor forwards the original
-receiver environment to child operations, including its cancellation token.
+receiver environment to the batch operation, including its cancellation token.
 
-Internal failure stops further dispatch and drains every started sibling
-without requesting sibling cancellation. The lowest acquired index with a
-recorded error wins. A recorded error takes precedence over external stop;
+Internal failure skips indices that have not begun processing and drains
+running siblings without requesting sibling cancellation. Scheduling or
+connecting a batch can fail before any of its indices run; earlier batches
+remain committed. The lowest acquired index with a recorded error wins. A recorded error takes precedence over external stop;
 when no error was recorded, external stop or a stopped child produces stopped
 completion. A cancellation that prevents a worker from running cannot produce
 that worker's hypothetical error.
 
-## Verification still required
+## Regression coverage
 
 `test/execution_tests.cpp` includes concurrent short-operation stress, inline
 and asynchronous destructive receivers, queued stopped children, and mixed
@@ -63,10 +81,11 @@ can be reported without an indefinitely blocked gate. Existing latch-based
 cases retain the CTest timeout as their final guard.
 
 The execution target participates in the compiler matrix, ASan/UBSan job, and
-TSan job. These tests and jobs have not been run during this source review:
-compilation, formatting, and lint checks were explicitly prohibited by the user.
-The static trace supports retaining the architecture, but sanitizer and CI
-success remain merge prerequisites.
+TSan job. The concurrency regression gates every full batch, including batches
+submitted by a completing worker, until all four indices are running. The gates
+have deadlines so a regression fails instead of waiting indefinitely. A short
+final batch also verifies ordered completion. Submission-failure coverage checks
+that a failed later batch retains earlier commits.
 
 ## Static-analysis scope
 
@@ -101,3 +120,12 @@ followed by another completion attempt. The focused test “Finish failure deliv
 one error to a destructive receiver” exercises this catch path, verifies one
 terminal completion, and checks that destruction is safe. It remains unexecuted
 until an authorized C++ build is available.
+
+## Bulk dispatch validation (2026-11-12)
+
+After switching batch submission to parallel `bulk`, all 43 execution tests
+(2,728 assertions) passed in the Clang 22 Debug, ASan/UBSan, and TSan builds.
+The execution public header also compiled on its own. The sanitizer runs include
+the destructive-receiver, cancellation, lowest-index failure, and repeated-batch
+concurrency tests described above. ASan/UBSan ran outside the sandbox because
+LeakSanitizer cannot inspect threads under its tracing restrictions.

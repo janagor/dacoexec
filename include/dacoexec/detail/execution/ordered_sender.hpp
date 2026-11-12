@@ -61,67 +61,68 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
     using result_type = Source::result_type;
     using stop_token = stdexec::stop_token_of_t<stdexec::env_of_t<Receiver>>;
 
-    struct worker_receiver
+    struct batch_receiver
     {
       using receiver_concept = stdexec::receiver_tag;
       operation *owner_;
-      std::size_t index_;
 
       // Cancellation uses the parent's token unchanged, so preserve its
       // entire environment, including allocator and domain queries.
       [[nodiscard]] auto get_env() const noexcept -> stdexec::env_of_t<Receiver>
       { return stdexec::get_env(owner_->receiver_); }
 
-      template<class Value> auto set_value(Value &&value) noexcept -> void
-      {
-        auto *owner = owner_;
-        try {
-          owner->slots_.at(index_).value_.emplace(std::forward<Value>(value));
-        } catch (...) {
-          owner->slots_.at(index_).error_ = std::current_exception();
-        }
-        if (owner->slots_.at(index_).error_) { owner->failed_.store(true, std::memory_order_release); }
-        owner->settled();
-      }
+      auto set_value() noexcept -> void { owner_->settled(); }
 
       template<class Error> auto set_error(Error &&error) noexcept -> void
       {
         auto *owner = owner_;
         if constexpr (std::is_same_v<std::remove_cvref_t<Error>, std::exception_ptr>) {
-          owner->slots_.at(index_).error_ = std::forward<Error>(error);
+          owner->error_ = std::forward<Error>(error);
         } else {
           try {
-            owner->slots_.at(index_).error_ = std::make_exception_ptr(std::forward<Error>(error));
+            owner->error_ = std::make_exception_ptr(std::forward<Error>(error));
           } catch (...) {
-            owner->slots_.at(index_).error_ = std::current_exception();
+            owner->error_ = std::current_exception();
           }
         }
-        owner->failed_.store(true, std::memory_order_release);
-        // Drain this batch before reporting the lowest-index error. Do not
-        // cancel siblings: a lower-index scheduled job may also fail.
         owner->settled();
       }
 
       auto set_stopped() noexcept -> void
       {
         auto *owner = owner_;
-        owner->slots_.at(index_).stopped_ = true;
-        owner->failed_.store(true, std::memory_order_release);
+        owner->stopped_ = true;
         owner->settled();
       }
     };
 
     struct work_function
     {
-      Process *process_;
-      input_type input_;
+      operation *owner_;
 
-      auto operator()() -> result_type { return std::invoke(*process_, std::move(input_)); }
+      auto operator()(std::size_t index) const noexcept -> void
+      {
+        auto &slot = owner_->slots_.at(index);
+        if (owner_->stop_requested() || owner_->failed_.load(std::memory_order_acquire)) {
+          slot.stopped_ = true;
+          return;
+        }
+        try {
+          slot.value_.emplace(std::invoke(owner_->process_, std::move(owner_->inputs_.at(index))));
+        } catch (...) {
+          slot.error_ = std::current_exception();
+          // Drain running siblings without cancelling them: a lower-index
+          // block may still fail and must take precedence at ordered commit.
+          owner_->failed_.store(true, std::memory_order_release);
+        }
+      }
     };
 
-    using work_sender =
-      decltype(stdexec::then(stdexec::schedule(std::declval<Scheduler &>()), std::declval<work_function>()));
-    using child_operation = stdexec::connect_result_t<work_sender, worker_receiver>;
+    using work_sender = decltype(stdexec::bulk(stdexec::schedule(std::declval<Scheduler &>()),
+      stdexec::par,
+      std::size_t{},
+      std::declval<work_function>()));
+    using child_operation = stdexec::connect_result_t<work_sender, batch_receiver>;
 
     operation(Scheduler scheduler, Source source, Process process, std::size_t capacity, Receiver receiver)
       : scheduler_(std::move(scheduler)), source_(std::move(source)), process_(std::move(process)), capacity_(capacity),
@@ -149,7 +150,7 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
       drive();
     }
 
-    // The last completion may destroy its own child and this parent. Each
+    // Batch completion may destroy its operation and this parent. Each
     // completion path must tail-call settled() and never inspect state after
     // it returns. See docs/execution-lifetimes.md for the pinned sender trace.
     auto settled() noexcept -> void
@@ -157,8 +158,8 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
       if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) { drive(); }
     }
 
-    // A dispatch sentinel prevents an inline completion from inspecting a
-    // partially constructed batch. The work counter trampolines synchronous
+    // A dispatch sentinel keeps inline completion from releasing the batch
+    // operation before start() returns. The work counter trampolines synchronous
     // schedulers and serializes all source/commit calls without a mutex.
     auto drive() noexcept -> void
     {
@@ -204,28 +205,19 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
       return inputs;
     }
 
-    auto dispatch_batch(std::vector<input_type> &inputs) -> void
+    auto dispatch_batch(std::vector<input_type> inputs) -> void
     {
-      slots_.resize(inputs.size());
-      children_.reserve(inputs.size());
+      inputs_ = std::move(inputs);
+      slots_.resize(inputs_.size());
       failed_.store(false, std::memory_order_release);
-      remaining_.store(1, std::memory_order_release);// dispatch sentinel
+      // Submit the entire batch so schedulers can distribute it directly.
+      // Individual schedule() calls from the completing worker can stay on
+      // its private queue, serializing batches smaller than its steal block.
+      auto work = stdexec::bulk(stdexec::schedule(scheduler_), stdexec::par, inputs_.size(), work_function{ this });
+      batch_.reset(new child_operation(stdexec::connect(std::move(work), batch_receiver{ this })));
+      remaining_.store(2, std::memory_order_release);// batch completion plus dispatch sentinel
       batch_active_ = true;
-      for (std::size_t index = 0; index < inputs.size(); ++index) {
-        if (stop_requested() || failed_.load(std::memory_order_acquire)) { break; }
-        try {
-          auto work =
-            stdexec::then(stdexec::schedule(scheduler_), work_function{ &process_, std::move(inputs.at(index)) });
-          auto child = std::unique_ptr<child_operation>(
-            new child_operation(stdexec::connect(std::move(work), worker_receiver{ this, index })));
-          children_.push_back(std::move(child));
-          remaining_.fetch_add(1, std::memory_order_relaxed);
-          stdexec::start(*children_.back());
-        } catch (...) {
-          slots_.at(index).error_ = std::current_exception();
-          break;
-        }
-      }
+      stdexec::start(*batch_);
       settled();// release sentinel; a ready batch queues another drive
     }
 
@@ -235,7 +227,8 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
         if (batch_active_) {
           if (remaining_.load(std::memory_order_acquire) != 0) { return false; }
           commit_batch();
-          children_.clear();
+          batch_.reset();
+          inputs_.clear();
           slots_.clear();
           batch_active_ = false;
         }
@@ -246,7 +239,7 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
           return complete();
         }
         if (inputs.empty()) { return complete(); }
-        dispatch_batch(inputs);
+        dispatch_batch(std::move(inputs));
         return false;
       } catch (...) {
         error_ = std::current_exception();
@@ -257,7 +250,8 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
     auto complete() noexcept -> bool
     {
       // All paths here have either not dispatched or fully drained a batch.
-      children_.clear();
+      batch_.reset();
+      inputs_.clear();
       slots_.clear();
       if (error_) {
         stdexec::set_error(std::move(receiver_), std::move(error_));
@@ -291,7 +285,8 @@ template<class Scheduler, class Source, class Process> struct ordered_sender
     stop_token token_;
     bool stopped_ = false;
     std::vector<result_slot<result_type>> slots_;
-    std::vector<std::unique_ptr<child_operation>> children_;
+    std::vector<input_type> inputs_;
+    std::unique_ptr<child_operation> batch_;
     std::atomic<std::size_t> remaining_{ 0 };
     std::atomic<std::size_t> driving_{ 0 };
     std::exception_ptr error_;

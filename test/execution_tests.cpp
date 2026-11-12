@@ -378,6 +378,39 @@ TEST_CASE("Ordered batches bound acquisition and tolerate reversed completion", 
   REQUIRE(committed == expected);
 }
 
+TEST_CASE("Every ordered batch distributes work across pool workers", "[execution][hardening]")
+{
+  exec::static_thread_pool pool{ batch_size };
+  constexpr std::size_t full_batches = 3;
+  constexpr std::size_t count = (full_batches * batch_size) + 1;
+  std::array<timed_gate, full_batches> entered{
+    timed_gate{ batch_size }, timed_gate{ batch_size }, timed_gate{ batch_size }
+  };
+  std::atomic<bool> timed_out{ false };
+  std::atomic<std::size_t> acquired{ 0 };
+  std::vector<std::size_t> committed;
+  auto const completed = stdexec::sync_wait(dacoexec::detail::execution::ordered_parallel_on(
+    pool.get_scheduler(),
+    integer_source{ .count_ = count, .committed_ = &committed, .acquired_ = &acquired },
+    [&](std::size_t index) -> std::size_t {
+      auto const batch = index / batch_size;
+      if (batch < full_batches) {
+        // Each full batch must run all four jobs together. In particular,
+        // batches launched from a pool worker must not stay on its local queue.
+        entered.at(batch).arrive();
+        if (!entered.at(batch).wait()) { timed_out.store(true); }
+      }
+      return index;
+    },
+    batch_size));
+  REQUIRE(completed.has_value());
+  REQUIRE_FALSE(timed_out.load());
+  REQUIRE(acquired.load() == count);
+  std::vector<std::size_t> expected(count);
+  std::ranges::copy(std::views::iota(std::size_t{ 0 }, count), expected.begin());
+  REQUIRE(committed == expected);
+}
+
 TEST_CASE("Worker failures drain the batch and select its lowest failing index", "[execution]")
 {
   exec::static_thread_pool pool{ batch_size };
@@ -505,7 +538,7 @@ TEST_CASE("Source and sink exceptions end parallel encoding", "[execution]")
   REQUIRE(failing.writes_ == header_and_failed_frame);
 }
 
-TEST_CASE("Submission failures retain and drain previously started operations", "[execution]")
+TEST_CASE("Batch submission failures preserve earlier committed batches", "[execution]")
 {
   exec::static_thread_pool pool{ 1 };
   std::size_t submissions = 0;
@@ -519,7 +552,7 @@ TEST_CASE("Submission failures retain and drain previously started operations", 
   std::latch entered(1);
   std::latch release(1);
   auto process = [&](std::size_t index) -> std::size_t {
-    entered.count_down();
+    if (index == 0) { entered.count_down(); }
     release.wait();
     finished.fetch_add(1);
     return index;
@@ -529,7 +562,7 @@ TEST_CASE("Submission failures retain and drain previously started operations", 
   auto future = promise.get_future();
   auto operation =
     stdexec::connect(dacoexec::detail::execution::ordered_parallel_on(scheduler,
-                       integer_source{ .count_ = batch_size, .committed_ = &committed, .acquired_ = &acquired },
+                       integer_source{ .count_ = batch_size * 2, .committed_ = &committed, .acquired_ = &acquired },
                        process,
                        batch_size),
       completion_receiver{ .promise_ = &promise, .token_ = stop.get_token() });
@@ -539,8 +572,12 @@ TEST_CASE("Submission failures retain and drain previously started operations", 
   release.count_down();
   REQUIRE_THROWS_WITH(future.get(), "submission failed");
   REQUIRE(before_release == std::future_status::timeout);
-  REQUIRE(finished.load() == failing_submission);
-  REQUIRE(committed.empty());
+  REQUIRE(finished.load() == batch_size);
+  REQUIRE(acquired.load() == batch_size * 2);
+  REQUIRE(submissions == failing_submission + 1);
+  std::vector<std::size_t> expected(batch_size);
+  std::ranges::copy(std::views::iota(std::size_t{ 0 }, batch_size), expected.begin());
+  REQUIRE(committed == expected);
 }
 
 TEST_CASE("Huffman block staging does not read into an active batch's successor", "[execution]")
@@ -1277,11 +1314,11 @@ template<bool use_ans> auto check_public_failures() -> void
 
   observed_sink submission_sink;
   std::size_t submissions = 0;
-  throwing_scheduler const scheduler{ .scheduler_ = pool.get_scheduler(), .submissions_ = &submissions, .fail_at_ = 1 };
+  throwing_scheduler const scheduler{ .scheduler_ = pool.get_scheduler(), .submissions_ = &submissions, .fail_at_ = 0 };
   REQUIRE_THROWS_WITH(
     stdexec::sync_wait(public_parallel<use_ans>(scheduler, bytes(block_size * batch_size), submission_sink)),
     "submission failed");
-  REQUIRE(submission_sink.writes_ == 1);// A successful sibling cannot commit a failed batch.
+  REQUIRE(submission_sink.writes_ == 1);// A failed batch submission cannot commit any frame.
 
   bytes output;
   auto owner = std::make_shared<int>(0);

@@ -19,8 +19,9 @@ inline constexpr std::size_t default_max_in_flight = 4;
  * Returns a lazy, single-use sender owning scheduler, source, and process.
  * Source defines input_type/result_type and initialize(), next(), commit(T),
  * finish(); next() yields optional<input_type>, finish() supplies the result.
- * Inputs are acquired in batches and processed concurrently, then committed
- * in acquisition order. Process is shared and must be safe for concurrent calls.
+ * Inputs are acquired in batches and submitted with parallel bulk execution,
+ * then committed in acquisition order. Process is shared and must be safe for
+ * concurrent calls.
  * A failing batch is drained before reporting its lowest-index worker error;
  * that batch is not committed. Earlier commits are not rolled back. Source or
  * commit exceptions complete with std::exception_ptr. A stop request prevents
