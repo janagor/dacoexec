@@ -53,7 +53,7 @@ TEST_CASE("Arithmetic parallel compression matches sequential archive bytes", "[
   auto scheduler = stdexec::inline_scheduler{};
   REQUIRE_THROWS_MATCHES(
     stdexec::sync_wait(arithmetic::compress_parallel_on(
-      scheduler, bytes{}, std::back_inserter(output), { .coder_ = arithmetic::entropy_coder::context_binary })),
+      scheduler, bytes{}, std::back_inserter(output), { .coder_ = static_cast<arithmetic::entropy_coder>(255) })),
     dacoexec::exception,
     dacoexec::test::error_is(dacoexec::errc::unsupported_coder));
   CHECK(output.empty());
@@ -125,7 +125,9 @@ TEST_CASE("Adaptive and binary parallel streams reproduce sequential bytes and d
   using bytes = std::vector<std::byte>;
   bytes input(100000, std::byte{ 'A' });
   for (std::size_t i = 4096; i < 8192; ++i) { input[i] = static_cast<std::byte>(i % 256); }
-  for (auto coder : { arithmetic::entropy_coder::adaptive_range, arithmetic::entropy_coder::binary }) {
+  for (auto coder : { arithmetic::entropy_coder::adaptive_range,
+         arithmetic::entropy_coder::binary,
+         arithmetic::entropy_coder::context_binary }) {
     auto const expected = arithmetic::compress(input, { .block_size_ = 4096, .coder_ = coder });
     for (auto workers : { 1U, 4U }) {
       exec::static_thread_pool pool{ workers };

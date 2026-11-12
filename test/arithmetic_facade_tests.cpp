@@ -70,8 +70,7 @@ TEST_CASE("Arithmetic public entry points validate options and archives", "[arit
 {
   bytes const input(4096, std::byte{ 'A' });
   auto archive = arithmetic::compress(input);
-  for (auto coder : { arithmetic::entropy_coder::context_binary,
-         static_cast<arithmetic::entropy_coder>(255) }) {
+  for (auto coder : { static_cast<arithmetic::entropy_coder>(255) }) {
     sink output;
     REQUIRE_THROWS_MATCHES(arithmetic::compress_stream(bytes{}, output, { .coder_ = coder }),
       dacoexec::exception,
