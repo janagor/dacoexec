@@ -5,7 +5,9 @@ and run `ctest --test-dir out/build/unixlike-clang-fuzz -L fuzz -V` in the Nix
 Clang shell. Requires Clang 22 and compiler-rt. Instrumentation remains private
 to the private fuzz executables; neither stdexec nor a test framework is needed.
 
-All harnesses cap input at 64 KiB. Decoder output is limited to 64 KiB; framing
+Harnesses cap input at 64 KiB except the cross-codec round-trip target
+(4096 bytes) and arithmetic payload round-trip target (4097 bytes including
+the selector). CTest supplies matching libFuzzer `-max_len` values. Decoder output is limited to 64 KiB; framing
 limits each frame to 64 KiB and total output to 256 KiB. Documented decode and
 format errors are expected rejections. Unexpected exceptions, assertion failures,
 resource failures and sanitizer diagnostics fail the run. The decoder and parser
@@ -124,4 +126,37 @@ The existing `fuzz` CTest label includes this target in CI.
 ```sh
 cmake --build out/build/unixlike-clang-fuzz --target dacoexec_fuzz_binary_decoder
 ASAN_OPTIONS=detect_leaks=0 ctest --test-dir out/build/unixlike-clang-fuzz -R '^fuzz[.]binary_decoder$' -V
+```
+
+`cross_codec_round_trip` checks all four arithmetic selectors, Huffman, rANS,
+and tANS on the same bounded input. It requires exact decoding, with 1–8 KiB frames selected from the input.
+It encodes once per codec and caps input at 4 KiB to improve mutation throughput.
+The committed zero seed asserts compressed tags for all seven codecs, so RAW
+fallback cannot silently replace that seed's compressed decoder coverage.
+Determinism is checked by compatibility tests and benchmark preflights.
+Valid encoder output must decode: this harness catches no exceptions. Seeds include the full alphabet,
+a mixed distribution, and 4096 zero bytes. The existing fuzz CTest loop and CI
+budgets include this harness. The arithmetic decoder also exercises arbitrary
+context-binary payloads using the same bounded two-byte count envelope as
+adaptive range. Context archive seeds freeze zero and mixed-bit reference cases.
+
+```sh
+ASAN_OPTIONS=detect_leaks=0 ctest --test-dir out/build/unixlike-clang-fuzz \
+  -R '^fuzz[.](cross_codec_round_trip|arithmetic_corpus|arithmetic_decoder)$' -V
+```
+
+`arithmetic_payload_round_trip` bypasses archive framing and RAW selection for
+all four arithmetic variants. Its first byte selects the coder modulo four;
+the next 1–4096 bytes are the plain input. Each mutation performs one encode
+and one decode, with exact restoration required and no expected exceptions.
+Alphabet and zero seeds cover every selector. This complements the malformed
+payload decoder campaigns (including the existing Huffman and ANS harnesses).
+Large adaptive/context rescaling and deterministic encoding remain covered by
+the codec tests and frozen fixtures, outside the fuzzing hot path. Committed
+round-trip seeds fit their respective input limits. A normal unit test also
+checks compressed frame tags for all seven codecs using fixed zero input.
+
+```sh
+ASAN_OPTIONS=detect_leaks=0 ctest --test-dir out/build/unixlike-clang-fuzz \
+  -R '^fuzz[.](cross_codec_round_trip|arithmetic_payload_round_trip)$' -V
 ```

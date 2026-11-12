@@ -38,6 +38,8 @@ foreach(
   ITEMS huffman_decoder
         frame_parser
         round_trip
+        arithmetic_payload_round_trip
+        cross_codec_round_trip
         ans_decoder
         arithmetic_decoder
         binary_decoder)
@@ -50,11 +52,17 @@ foreach(
   target_link_options(${target} PRIVATE -fsanitize=fuzzer,address,undefined)
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/corpus/${harness}"
        "${CMAKE_CURRENT_BINARY_DIR}/artifacts/${harness}")
+  set(fuzz_max_len 65536)
+  if(harness STREQUAL "cross_codec_round_trip")
+    set(fuzz_max_len 4096)
+  elseif(harness STREQUAL "arithmetic_payload_round_trip")
+    set(fuzz_max_len 4097)
+  endif()
   add_test(
     NAME fuzz.${harness}
     COMMAND
       ${target} "${CMAKE_CURRENT_BINARY_DIR}/corpus/${harness}" "${CMAKE_CURRENT_SOURCE_DIR}/corpus/${harness}"
-      -max_total_time=${dacoexec_FUZZ_SECONDS} -max_len=65536 -timeout=5 -rss_limit_mb=512
+      -max_total_time=${dacoexec_FUZZ_SECONDS} -max_len=${fuzz_max_len} -timeout=5 -rss_limit_mb=512
       "-artifact_prefix=${CMAKE_CURRENT_BINARY_DIR}/artifacts/${harness}/" -print_final_stats=1)
   math(EXPR fuzz_timeout "${dacoexec_FUZZ_SECONDS} + 30")
   set_tests_properties(
