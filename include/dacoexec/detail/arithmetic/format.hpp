@@ -1,7 +1,7 @@
 //! \file
 //! DAC1: eight-byte magic (DAC1 and four zero bytes), followed by frames.
 //! Each frame has a tag and little-endian uint32 output size, payload size,
-//! and uncompressed IEEE CRC32. RAW=0, static range=1, adaptive range=2, binary=3, reserved context binary=4,
+//! and uncompressed IEEE CRC32. RAW=0, static range=1, adaptive range=2, binary=3, context binary=4,
 //! END=255. END fields are zero and no bytes follow. Static range stores a
 //! precision byte, LE uint16 entry count, and sorted (symbol, LE uint16
 //! frequency-minus-one) entries before the payload, excluded from payload size.
@@ -10,6 +10,9 @@
 //! Binary frames store two LE uint16 frequency-minus-one values before their
 //! payload, excluded from its size. The sum must be <= 65536. Exactly eight
 //! MSB-first bits per output byte use the binary engine termination contract.
+//! Context binary has no metadata: 32 initially uniform models use MSB position
+//! and two-bit history, persisting across bytes. Update after each bit and
+//! rescale above 32768 by rounding halves upward; reset all state per frame.
 //! Range payloads use the five-byte initialization/finalization contract of the
 //! range engine. Both sizes are bounded to 16 MiB; models reset at each frame.
 
@@ -90,11 +93,9 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
     }
     return;
   }
-  if (header.kind_ == frame_kind::context_binary) {
-    throw ::dacoexec::exception(::dacoexec::errc::unsupported_coder, "Unsupported arithmetic entropy coder");
-  }
   if (header.kind_ != frame_kind::raw && header.kind_ != frame_kind::static_range
-      && header.kind_ != frame_kind::adaptive_range && header.kind_ != frame_kind::binary) {
+      && header.kind_ != frame_kind::adaptive_range && header.kind_ != frame_kind::binary
+      && header.kind_ != frame_kind::context_binary) {
     throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Unknown frame type");
   }
   if (header.uncompressed_size_ == 0 || header.payload_size_ == 0 || header.uncompressed_size_ > max_frame_size
@@ -108,7 +109,8 @@ inline auto validate_frame_header(frame_header const &header, std::size_t limit 
       && header.payload_size_ < range_flush_bytes) {
     throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Truncated range state");
   }
-  if (header.kind_ == frame_kind::binary && header.payload_size_ < binary_min_payload_size) {
+  if ((header.kind_ == frame_kind::binary || header.kind_ == frame_kind::context_binary)
+      && header.payload_size_ < binary_min_payload_size) {
     throw ::dacoexec::exception(::dacoexec::errc::invalid_frame, "Truncated binary state");
   }
   if (header.kind_ == frame_kind::raw && header.payload_size_ != header.uncompressed_size_) {

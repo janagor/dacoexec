@@ -3,6 +3,7 @@
 #ifndef DACOEXEC_ARITHMETIC_ENCODER_HPP
 #define DACOEXEC_ARITHMETIC_ENCODER_HPP
 
+#include <dacoexec/detail/arithmetic/binary/context/codec.hpp>
 #include <dacoexec/detail/arithmetic/coder.hpp>
 #include <dacoexec/detail/arithmetic/encoded_block.hpp>
 #include <dacoexec/detail/arithmetic/range/adaptive/codec.hpp>
@@ -23,6 +24,13 @@ public:
 
   [[nodiscard]] auto try_encode(std::span<std::byte const> input) const -> std::optional<encoded_block>
   {
+    if (coder_ == entropy_coder::context_binary) {
+      if (input.size() <= binary_min_payload_size) { return std::nullopt; }
+      encoded_block result;
+      result.payload_ = encode_context_binary_block(input);
+      result.encoding_ = block_encoding::context_binary;
+      return result;
+    }
     auto const minimum = coder_ == entropy_coder::adaptive_range ? range_flush_bytes : minimum_compressed_size;
     if (coder_ == entropy_coder::binary) {
       if (input.size() <= binary_model_metadata_size + binary_min_payload_size) { return std::nullopt; }

@@ -36,7 +36,10 @@ struct encoded_block
 
 [[nodiscard]] inline auto model_metadata_size(encoded_block const &block) -> std::size_t
 {
-  if (block.encoding_ == block_encoding::raw || block.encoding_ == block_encoding::adaptive_range) { return 0; }
+  if (block.encoding_ == block_encoding::raw || block.encoding_ == block_encoding::adaptive_range
+      || block.encoding_ == block_encoding::context_binary) {
+    return 0;
+  }
   if (block.encoding_ == block_encoding::binary) {
     if (!block.binary_model_) {
       throw ::dacoexec::exception(::dacoexec::errc::invalid_payload, "Missing binary model");
