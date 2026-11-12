@@ -1,14 +1,14 @@
 # DAC1 arithmetic archives
 
-DAC1 supports static and adaptive order-0 range coding, binary arithmetic coding,
-and RAW frames through
-shared block, frame parser, and verified stream infrastructure. The public
-facade, views, and optional parallel streams accept all three coders.
+DAC1 supports static and adaptive order-0 range coding, fixed and context-adaptive
+binary arithmetic coding, and RAW frames through shared block, frame parser,
+and verified stream infrastructure. The public facade, views, and optional
+parallel streams accept all four coders.
 The CLI's `arithmetic` selector uses static range coding; decompression reads
 each coder from its frame tag.
 
 Static range and binary blocks each carry a fixed frequency model. Adaptive
-blocks carry no model metadata. Reserved variants are rejected before interpreting metadata.
+range and context binary blocks carry no model metadata.
 
 An archive starts with `44 41 43 31 00 00 00 00` (`DAC1` plus four zero bytes),
 contains zero or more data frames, and ends with one END frame. No bytes may
@@ -30,12 +30,13 @@ and little-endian.
 | `01` | Static order-0 range | Supported |
 | `02` | Adaptive order-0 range | Supported |
 | `03` | Binary arithmetic | Supported |
-| `04` | Context-adaptive binary arithmetic | Reserved |
+| `04` | Context-adaptive binary arithmetic | Supported |
 | `ff` | END | Supported |
 
 END has zero size and CRC fields and no body. Data frame sizes must be nonzero
 and at most 16 MiB each. A configured frame limit further bounds both sizes.
-Reserved variants report `unsupported_coder`; unknown tags report `invalid_frame`.
+Unknown tags report `invalid_frame`; unknown public coder selectors report
+`unsupported_coder`.
 
 RAW stores the source bytes immediately after its header, without model
 metadata. Its payload and uncompressed counts must match.
@@ -71,6 +72,18 @@ It contains at least four bytes. The decoder reconstructs exactly eight bits
 per declared output byte, then verifies termination. Model and coding state
 reset at each frame boundary. Public compression selects this format with
 `entropy_coder::binary`.
+
+Context-adaptive binary stores its payload immediately after the header, without
+model metadata. Select it with `entropy_coder::context_binary`. Its 32 binary
+models start with frequencies `(1, 1)`. Bits are processed MSB-first, using
+`context = (bit_position << 2) | previous_two_bits`, with position zero at the
+MSB. History starts at zero and persists across byte boundaries. After each
+bit, increment the selected outcome's frequency; if that context's total exceeds
+32768, replace both frequencies with `(frequency + 1) / 2`. Then advance history
+and bit position. Every frame resets all probabilities, history, and coding state.
+The payload uses the same binary engine termination contract and four-byte
+minimum as fixed binary coding. These rules are frozen by tag `04`; a future
+bitstream-changing context scheme requires a distinct format identifier.
 
 The static payload follows the model and uses the byte-oriented range engine's
 [initialization, carry handling, and finalization contract](range-coding.md).

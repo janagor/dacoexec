@@ -48,8 +48,9 @@ Like the adaptive byte model, a context rescales only when its total exceeds
 binary-context convention independent of range-coder settings. Other contexts
 remain unchanged. Both outcomes retain positive width. Construct a fresh model or call
 `reset()` at every frame boundary to restore all counts, history, and position.
-The engine's interval and finalization rules remain unchanged. This model is
-an internal policy; archive selection and payload integration are separate.
+The engine's interval and finalization rules remain unchanged. The
+`binary/context/codec.hpp` adapter combines this policy with the shared engine. Public archives select it with `entropy_coder::context_binary`, using
+DAC1 tag `04` without model metadata. See [DAC1 framing](dac1.md).
 
 ## Interval and normalization
 
