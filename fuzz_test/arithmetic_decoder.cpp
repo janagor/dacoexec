@@ -1,8 +1,8 @@
 #include "error_policy.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/arithmetic/adaptive_range_codec.hpp>
 #include <dacoexec/detail/arithmetic/archive_format.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/codec.hpp>
 #include <dacoexec/detail/codec/stream.hpp>
 #include <span>
 

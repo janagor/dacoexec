@@ -4,8 +4,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/arithmetic/range_decoder.hpp>
-#include <dacoexec/detail/arithmetic/range_encoder.hpp>
+#include <dacoexec/detail/arithmetic/range/decoder.hpp>
+#include <dacoexec/detail/arithmetic/range/encoder.hpp>
 #include <initializer_list>
 #include <limits>
 #include <random>

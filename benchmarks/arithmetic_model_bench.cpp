@@ -1,5 +1,5 @@
 #include <benchmark/benchmark.h>
-#include <dacoexec/detail/arithmetic/static_range_codec.hpp>
+#include <dacoexec/detail/arithmetic/range/static/codec.hpp>
 
 #include <array>
 #include <cstdint>

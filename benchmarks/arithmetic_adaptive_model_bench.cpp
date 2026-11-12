@@ -1,6 +1,6 @@
 #include <benchmark/benchmark.h>
-#include <dacoexec/detail/arithmetic/adaptive_model.hpp>
-#include <dacoexec/detail/arithmetic/fenwick_adaptive_model.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/fenwick_model.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/model.hpp>
 
 #include <array>
 #include <cstddef>

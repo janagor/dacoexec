@@ -3,8 +3,8 @@
 #define DACOEXEC_ARITHMETIC_BINARY_ARITHMETIC_CODEC_HPP
 
 #include <array>
-#include <dacoexec/detail/arithmetic/binary_decoder.hpp>
-#include <dacoexec/detail/arithmetic/binary_encoder.hpp>
+#include <dacoexec/detail/arithmetic/binary/decoder.hpp>
+#include <dacoexec/detail/arithmetic/binary/encoder.hpp>
 #include <dacoexec/detail/support/endian.hpp>
 #include <ranges>
 #include <span>

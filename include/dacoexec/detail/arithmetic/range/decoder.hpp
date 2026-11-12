@@ -3,7 +3,7 @@
 #ifndef DACOEXEC_ARITHMETIC_RANGE_DECODER_HPP
 #define DACOEXEC_ARITHMETIC_RANGE_DECODER_HPP
 
-#include <dacoexec/detail/arithmetic/range_common.hpp>
+#include <dacoexec/detail/arithmetic/range/common.hpp>
 #include <span>
 
 namespace dacoexec::detail::arithmetic {

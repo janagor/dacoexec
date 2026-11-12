@@ -75,7 +75,7 @@ results are in [static range measurements](static-range-benchmarks.md).
 
 ## Adaptive order-0 model
 
-`detail/arithmetic/adaptive_model.hpp` supplies a separate mutable model for
+`detail/arithmetic/range/adaptive/model.hpp` supplies a separate mutable model for
 the same range engine. Construct a fresh `adaptive_model` at each frame boundary.
 Its 256 byte frequencies start at one (total 256); no histogram is needed.
 `frequencies()`, `cumulative()`, and `total()` expose the current intervals,
@@ -117,7 +117,7 @@ combined transitions; the array remains the default internal model.
 
 ## Static order-0 model
 
-`detail/arithmetic/static_model.hpp` reuses the shared 256-symbol
+`detail/arithmetic/range/static/model.hpp` reuses the shared 256-symbol
 `model::frequency_model` and its integer normalization. `make_static_model`
 counts the input once, defaults to 12-bit precision (total 4096), and preserves
 positive frequencies for every observed byte. Absent symbols stay at zero.

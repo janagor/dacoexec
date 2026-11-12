@@ -3,8 +3,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/arithmetic/binary_decoder.hpp>
-#include <dacoexec/detail/arithmetic/binary_encoder.hpp>
+#include <dacoexec/detail/arithmetic/binary/decoder.hpp>
+#include <dacoexec/detail/arithmetic/binary/encoder.hpp>
 #include <initializer_list>
 #include <iterator>
 #include <limits>

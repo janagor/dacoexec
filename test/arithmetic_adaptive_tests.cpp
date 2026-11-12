@@ -2,9 +2,9 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <dacoexec/arithmetic.hpp>
-#include <dacoexec/detail/arithmetic/adaptive_range_codec.hpp>
 #include <dacoexec/detail/arithmetic/archive_format.hpp>
-#include <dacoexec/detail/arithmetic/fenwick_adaptive_model.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/codec.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/fenwick_model.hpp>
 #include <dacoexec/views.hpp>
 #include <iterator>
 #include <sstream>

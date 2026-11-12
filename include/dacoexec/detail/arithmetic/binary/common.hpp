@@ -4,7 +4,7 @@
 #define DACOEXEC_ARITHMETIC_BINARY_COMMON_HPP
 
 #include <cstdint>
-#include <dacoexec/detail/arithmetic/binary_model.hpp>
+#include <dacoexec/detail/arithmetic/binary/model.hpp>
 #include <limits>
 
 namespace dacoexec::detail::arithmetic {

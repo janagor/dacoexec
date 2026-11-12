@@ -1,6 +1,6 @@
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/arithmetic/binary_decoder.hpp>
+#include <dacoexec/detail/arithmetic/binary/decoder.hpp>
 #include <span>
 
 namespace {

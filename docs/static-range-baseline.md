@@ -27,7 +27,7 @@ cmake --preset unixlike-clang-bench
 cmake --build out/build/unixlike-clang-bench --target dacoexec_arithmetic_benchmarks
 mkdir -p out/results/static-range-review/corpus
 cp README.md out/results/static-range-review/corpus/text
-cp include/dacoexec/detail/arithmetic/range_decoder.hpp out/results/static-range-review/corpus/source
+cp include/dacoexec/detail/arithmetic/range/decoder.hpp out/results/static-range-review/corpus/source
 cp CMakePresets.json out/results/static-range-review/corpus/structured
 cp out/build/unixlike-clang-bench/benchmarks/dacoexec_arithmetic_benchmarks \
   out/results/static-range-review/corpus/binary
@@ -63,7 +63,7 @@ fixed-64-KiB real-file cases are smoke-tested but excluded from the longer run.
 | Corpus name | Source | Bytes | SHA-256 |
 | --- | --- | ---: | --- |
 | text | README.md | 18,399 | `f1b736fba539f2823239df3a91d24ea67910371098abad71fe23829baaf8ff4b` |
-| source | include/dacoexec/detail/arithmetic/range_decoder.hpp | 2,724 | `29b983a4f7595d75e508daf6246d05b43f97c30f32922dc9712e732ec5971733` |
+| source | include/dacoexec/detail/arithmetic/range/decoder.hpp | 2,724 | `29b983a4f7595d75e508daf6246d05b43f97c30f32922dc9712e732ec5971733` |
 | structured | CMakePresets.json | 10,888 | `6eddbd879313d1b9d654e378a1abadbad67e88d1ef66f7de8f6aafea22b68f0a` |
 | binary | Release benchmark executable | 613,856 | `53e79337203cafd3f09b85f6fbcd8e52654271679cff07a3195136ab0bdeace4` |
 

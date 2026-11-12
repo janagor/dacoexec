@@ -5,7 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/arithmetic/binary_common.hpp>
+#include <dacoexec/detail/arithmetic/binary/common.hpp>
 #include <span>
 
 namespace dacoexec::detail::arithmetic {

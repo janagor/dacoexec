@@ -3,9 +3,9 @@
 #ifndef DACOEXEC_ARITHMETIC_STATIC_RANGE_CODEC_HPP
 #define DACOEXEC_ARITHMETIC_STATIC_RANGE_CODEC_HPP
 
-#include <dacoexec/detail/arithmetic/range_decoder.hpp>
-#include <dacoexec/detail/arithmetic/range_encoder.hpp>
-#include <dacoexec/detail/arithmetic/static_model.hpp>
+#include <dacoexec/detail/arithmetic/range/decoder.hpp>
+#include <dacoexec/detail/arithmetic/range/encoder.hpp>
+#include <dacoexec/detail/arithmetic/range/static/model.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 
 #include <cstddef>

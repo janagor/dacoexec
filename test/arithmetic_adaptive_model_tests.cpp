@@ -1,10 +1,10 @@
 #include "error_test_utils.hpp"
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <dacoexec/detail/arithmetic/adaptive_model.hpp>
-#include <dacoexec/detail/arithmetic/fenwick_adaptive_model.hpp>
-#include <dacoexec/detail/arithmetic/range_decoder.hpp>
-#include <dacoexec/detail/arithmetic/range_encoder.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/fenwick_model.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/model.hpp>
+#include <dacoexec/detail/arithmetic/range/decoder.hpp>
+#include <dacoexec/detail/arithmetic/range/encoder.hpp>
 
 #include <array>
 #include <numeric>

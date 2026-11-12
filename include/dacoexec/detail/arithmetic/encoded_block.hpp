@@ -6,8 +6,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <dacoexec/detail/arithmetic/binary_arithmetic_codec.hpp>
-#include <dacoexec/detail/arithmetic/static_model.hpp>
+#include <dacoexec/detail/arithmetic/binary/codec.hpp>
+#include <dacoexec/detail/arithmetic/range/static/model.hpp>
 
 #include <dacoexec/error.hpp>
 #include <optional>

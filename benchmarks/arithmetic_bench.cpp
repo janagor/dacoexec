@@ -2,8 +2,8 @@
 #include <benchmark/benchmark.h>
 #include <dacoexec/ans.hpp>
 #include <dacoexec/arithmetic.hpp>
-#include <dacoexec/detail/arithmetic/fenwick_adaptive_model.hpp>
-#include <dacoexec/detail/arithmetic/static_range_codec.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/fenwick_model.hpp>
+#include <dacoexec/detail/arithmetic/range/static/codec.hpp>
 #include <dacoexec/huffman.hpp>
 
 #include <algorithm>

@@ -16,9 +16,9 @@
 #ifndef DACOEXEC_ARITHMETIC_FORMAT_HPP
 #define DACOEXEC_ARITHMETIC_FORMAT_HPP
 
-#include <dacoexec/detail/arithmetic/binary_arithmetic_codec.hpp>
+#include <dacoexec/detail/arithmetic/binary/codec.hpp>
 #include <dacoexec/detail/arithmetic/block.hpp>
-#include <dacoexec/detail/arithmetic/range_common.hpp>
+#include <dacoexec/detail/arithmetic/range/common.hpp>
 #include <dacoexec/detail/codec/frame_header.hpp>
 #include <dacoexec/detail/io/output_sink.hpp>
 #include <dacoexec/detail/support/endian.hpp>

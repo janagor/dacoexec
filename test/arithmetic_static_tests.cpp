@@ -1,6 +1,6 @@
 #include "error_test_utils.hpp"
 #include <catch2/catch_test_macros.hpp>
-#include <dacoexec/detail/arithmetic/static_range_codec.hpp>
+#include <dacoexec/detail/arithmetic/range/static/codec.hpp>
 
 #include <array>
 #include <initializer_list>

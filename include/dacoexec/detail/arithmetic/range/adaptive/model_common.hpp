@@ -3,7 +3,7 @@
 #ifndef DACOEXEC_ARITHMETIC_ADAPTIVE_MODEL_COMMON_HPP
 #define DACOEXEC_ARITHMETIC_ADAPTIVE_MODEL_COMMON_HPP
 
-#include <dacoexec/detail/arithmetic/range_common.hpp>
+#include <dacoexec/detail/arithmetic/range/common.hpp>
 #include <dacoexec/detail/model/frequency.hpp>
 #include <dacoexec/error.hpp>
 

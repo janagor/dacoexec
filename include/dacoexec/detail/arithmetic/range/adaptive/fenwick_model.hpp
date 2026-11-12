@@ -3,7 +3,7 @@
 #ifndef DACOEXEC_ARITHMETIC_FENWICK_ADAPTIVE_MODEL_HPP
 #define DACOEXEC_ARITHMETIC_FENWICK_ADAPTIVE_MODEL_HPP
 
-#include <dacoexec/detail/arithmetic/adaptive_model_common.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/model_common.hpp>
 
 #include <array>
 #include <cstddef>

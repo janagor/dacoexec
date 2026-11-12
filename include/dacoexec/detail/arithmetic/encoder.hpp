@@ -3,10 +3,10 @@
 #ifndef DACOEXEC_ARITHMETIC_ENCODER_HPP
 #define DACOEXEC_ARITHMETIC_ENCODER_HPP
 
-#include <dacoexec/detail/arithmetic/adaptive_range_codec.hpp>
 #include <dacoexec/detail/arithmetic/coder.hpp>
 #include <dacoexec/detail/arithmetic/encoded_block.hpp>
-#include <dacoexec/detail/arithmetic/static_range_codec.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/codec.hpp>
+#include <dacoexec/detail/arithmetic/range/static/codec.hpp>
 #include <dacoexec/detail/codec/encoder_base.hpp>
 #include <span>
 

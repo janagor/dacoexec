@@ -4,7 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <dacoexec/arithmetic.hpp>
 #include <dacoexec/detail/arithmetic/archive_format.hpp>
-#include <dacoexec/detail/arithmetic/binary_arithmetic_codec.hpp>
+#include <dacoexec/detail/arithmetic/binary/codec.hpp>
 #include <dacoexec/views.hpp>
 #include <iterator>
 #include <limits>

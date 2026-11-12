@@ -3,9 +3,9 @@
 #define DACOEXEC_ARITHMETIC_ADAPTIVE_RANGE_CODEC_HPP
 
 #include <cstddef>
-#include <dacoexec/detail/arithmetic/adaptive_model.hpp>
-#include <dacoexec/detail/arithmetic/range_decoder.hpp>
-#include <dacoexec/detail/arithmetic/range_encoder.hpp>
+#include <dacoexec/detail/arithmetic/range/adaptive/model.hpp>
+#include <dacoexec/detail/arithmetic/range/decoder.hpp>
+#include <dacoexec/detail/arithmetic/range/encoder.hpp>
 #include <dacoexec/detail/support/byte.hpp>
 #include <ranges>
 #include <span>
